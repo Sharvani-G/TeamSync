@@ -15,7 +15,7 @@ class ProjectSyncApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'ProjectSync',
+      title: 'TeamSync',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       onGenerateRoute: generateRoute,

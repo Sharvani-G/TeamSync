@@ -10,6 +10,7 @@ import '../screens/chat_home_screen.dart';
 import '../screens/chat_channel_screen.dart';
 import '../screens/notifications_screen.dart';
 import '../screens/profile_screen.dart';
+import '../screens/entry_screen.dart';
 
 Route<dynamic> generateRoute(RouteSettings settings) {
   final name = settings.name ?? '/';
@@ -73,6 +74,8 @@ Route<dynamic> generateRoute(RouteSettings settings) {
 
   switch (name) {
     case '/':
+      return _fade(const EntryScreen(), settings);
+    case '/main':
       return _fade(const MainShell(), settings);
     case '/create-project':
       return _slide(const CreateProjectScreen(), settings);
