@@ -160,7 +160,7 @@ class UserAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = color ?? AppTheme.primary.withValues(alpha: 0.15);
+    final bgColor = color ?? AppTheme.primary.withOpacity(0.15);
     return Container(
       width: size,
       height: size,

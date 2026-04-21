@@ -11,6 +11,8 @@ import '../screens/chat_channel_screen.dart';
 import '../screens/notifications_screen.dart';
 import '../screens/profile_screen.dart';
 import '../screens/entry_screen.dart';
+import '../screens/forgot_password_screen.dart';
+import '../screens/reset_password_screen.dart';
 
 Route<dynamic> generateRoute(RouteSettings settings) {
   final name = settings.name ?? '/';
@@ -77,6 +79,10 @@ Route<dynamic> generateRoute(RouteSettings settings) {
       return _fade(const EntryScreen(), settings);
     case '/main':
       return _fade(const MainShell(), settings);
+    case '/forgot-password':
+      return _slide(const ForgotPasswordScreen(), settings);
+    case '/reset-password':
+      return _slide(const ResetPasswordScreen(), settings);
     case '/create-project':
       return _slide(const CreateProjectScreen(), settings);
     case '/notifications':
