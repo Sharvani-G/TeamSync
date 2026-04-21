@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "108015783477",
+    "project_id": "teamsync04",
+    "storage_bucket": "teamsync04.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:108015783477:android:f345c920030413327f6b7c",
+        "android_client_info": {
+          "package_name": "com.example.teamsync"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD4QD5vjJuOG6bUDNTrb6Y66QbCruaQ8_s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
