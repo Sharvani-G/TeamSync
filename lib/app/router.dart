@@ -12,7 +12,7 @@ import '../screens/notifications_screen.dart';
 import '../screens/profile_screen.dart';
 import '../screens/entry_screen.dart';
 import '../screens/forgot_password_screen.dart';
-import '../screens/reset_password_screen.dart';
+import '../screens/check_email_screen.dart';
 
 Route<dynamic> generateRoute(RouteSettings settings) {
   final name = settings.name ?? '/';
@@ -81,8 +81,9 @@ Route<dynamic> generateRoute(RouteSettings settings) {
       return _fade(const MainShell(), settings);
     case '/forgot-password':
       return _slide(const ForgotPasswordScreen(), settings);
-    case '/reset-password':
-      return _slide(const ResetPasswordScreen(), settings);
+    case '/check-email':
+      final email = settings.arguments as String? ?? '';
+      return _slide(CheckEmailScreen(email: email), settings);
     case '/create-project':
       return _slide(const CreateProjectScreen(), settings);
     case '/notifications':

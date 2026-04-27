@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -10,13 +11,14 @@ class ForgotPasswordScreen extends StatefulWidget {
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
     with SingleTickerProviderStateMixin {
+  static const _androidPackageName = 'com.example.teamsync';
+  static const _resetContinueUrl = 'https://teamsync-6a35e.firebaseapp.com';
+
   late final AnimationController _animationController;
   late final Animation<double> _fadeAnimation;
-  late final TextEditingController _codeController;
-  bool _isCodeValid = true;
-  bool _isResendLocked = true;
-  int _resendSeconds = 30;
-  late String _verificationCode;
+  late final TextEditingController _emailController;
+  final _formKey = GlobalKey<FormState>();
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -29,64 +31,68 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
       parent: _animationController,
       curve: Curves.easeOut,
     );
-    _codeController = TextEditingController();
-    _verificationCode = '123456';
-    _startResendTimer();
-  }
-
-  void _startResendTimer() {
-    _isResendLocked = true;
-    _resendSeconds = 30;
-    Future.doWhile(() async {
-      await Future.delayed(const Duration(seconds: 1));
-      if (!mounted) return false;
-      setState(() {
-        _resendSeconds -= 1;
-      });
-      return _resendSeconds > 0;
-    }).then((_) {
-      if (!mounted) return;
-      setState(() {
-        _isResendLocked = false;
-      });
-    });
+    _emailController = TextEditingController();
   }
 
   @override
   void dispose() {
     _animationController.dispose();
-    _codeController.dispose();
+    _emailController.dispose();
     super.dispose();
   }
 
-  void _verifyCode() {
-    final text = _codeController.text.trim();
-    setState(() {
-      _isCodeValid = text == _verificationCode;
-    });
-    if (_isCodeValid) {
-      Navigator.pushReplacementNamed(context, '/reset-password');
+  Future<void> _sendResetLink() async {
+    if (!(_formKey.currentState?.validate() ?? false) || _isSubmitting) {
+      return;
     }
-  }
 
-  void _resendCode() {
-    if (_isResendLocked) return;
-    setState(() {
-      _isCodeValid = true;
-      _codeController.clear();
-      _verificationCode = '123456';
-      _startResendTimer();
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'A new OTP has been sent to your email and phone.',
-          style: GoogleFonts.dmSans(),
-        ),
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      ),
+    final email = _emailController.text.trim();
+    final actionCodeSettings = ActionCodeSettings(
+      url: _resetContinueUrl,
+      handleCodeInApp: false,
+      androidPackageName: _androidPackageName,
+      androidInstallApp: true,
     );
+
+    setState(() => _isSubmitting = true);
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(
+        email: email,
+        actionCodeSettings: actionCodeSettings,
+      );
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, '/check-email', arguments: email);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Reset link sent successfully.',
+            style: GoogleFonts.dmSans(),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
+      );
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      var message = 'Unable to send reset email. Please try again.';
+      if (e.code == 'invalid-email') {
+        message = 'Please enter a valid email address.';
+      } else if (e.code == 'user-not-found') {
+        message = 'No account found for this email.';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message, style: GoogleFonts.dmSans()),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
   }
 
   @override
@@ -173,7 +179,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Almost there',
+                        'Forgot Password?',
                         style: GoogleFonts.dmSans(
                           fontSize: 34,
                           fontWeight: FontWeight.w800,
@@ -182,103 +188,50 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Please enter the 6-digit code sent to your email',
+                        'Enter your email to receive a reset link.',
                         style: GoogleFonts.dmSans(
                           fontSize: 14,
                           height: 1.7,
                           color: const Color(0xFF6B7280),
                         ),
                       ),
-                      const SizedBox(height: 6),
-                      RichText(
-                        text: TextSpan(
-                          style: GoogleFonts.dmSans(
-                            fontSize: 14,
-                            height: 1.7,
-                            color: const Color(0xFF6B7280),
-                          ),
-                          children: [
-                            const TextSpan(text: 'Please enter the 6-digit code sent to your email '),
-                            TextSpan(
-                              text: 'contact.uiuxexperts@gmail.com',
-                              style: GoogleFonts.dmSans(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: const Color(0xFFEF4444),
-                              ),
-                            ),
-                            const TextSpan(text: ' and phone number for verification.'),
-                          ],
-                        ),
-                      ),
                       const SizedBox(height: 26),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: List.generate(6, (index) {
-                          final digits = _codeController.text.padRight(6).split('');
-                          final showDigit = digits[index] != ' ';
-                          return AnimatedContainer(
-                            duration: const Duration(milliseconds: 250),
-                            width: 48,
-                            height: 58,
-                            decoration: BoxDecoration(
-                              color: showDigit ? const Color(0xFFFEE4E2) : const Color(0xFFF7F7F8),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: _isCodeValid ? const Color(0xFFE5E7EB) : const Color(0xFFEF4444),
-                                width: 1.5,
-                              ),
+                      Form(
+                        key: _formKey,
+                        child: TextFormField(
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          textInputAction: TextInputAction.done,
+                          style: GoogleFonts.dmSans(
+                            fontSize: 16,
+                            color: const Color(0xFF111827),
+                          ),
+                          validator: (value) {
+                            final text = (value ?? '').trim();
+                            if (text.isEmpty) return 'Email is required.';
+                            final isValid = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+                                .hasMatch(text);
+                            if (!isValid) return 'Please enter a valid email address.';
+                            return null;
+                          },
+                          decoration: InputDecoration(
+                            hintText: 'Enter your email',
+                            filled: true,
+                            fillColor: const Color(0xFFF7F7F8),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 18,
                             ),
-                            alignment: Alignment.center,
-                            child: Text(
-                              showDigit ? digits[index] : '',
-                              style: GoogleFonts.dmSans(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: const Color(0xFF111827),
-                              ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide.none,
                             ),
-                          );
-                        }),
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _codeController,
-                        keyboardType: TextInputType.number,
-                        maxLength: 6,
-                        onChanged: (_) {
-                          setState(() {});
-                        },
-                        style: GoogleFonts.dmSans(
-                          fontSize: 18,
-                          color: const Color(0xFF111827),
-                        ),
-                        decoration: InputDecoration(
-                          counterText: '',
-                          hintText: 'Enter code here',
-                          filled: true,
-                          fillColor: const Color(0xFFF7F7F8),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide.none,
                           ),
                         ),
                       ),
-                      if (!_isCodeValid)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 6, left: 4),
-                          child: Text(
-                            'Please enter a valid 6-digit code.',
-                            style: GoogleFonts.dmSans(
-                              fontSize: 12,
-                              color: const Color(0xFFEF4444),
-                            ),
-                          ),
-                        ),
                       const SizedBox(height: 24),
                       GestureDetector(
-                        onTap: _verifyCode,
+                        onTap: _isSubmitting ? null : _sendResetLink,
                         child: Container(
                           width: double.infinity,
                           height: 52,
@@ -298,43 +251,38 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                             ],
                           ),
                           child: Center(
-                            child: Text(
-                              'Verify',
-                              style: GoogleFonts.dmSans(
-                                fontSize: 16,
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+                            child: _isSubmitting
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : Text(
+                                    'Send Reset Link',
+                                    style: GoogleFonts.dmSans(
+                                      fontSize: 16,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                           ),
                         ),
                       ),
                       const SizedBox(height: 18),
                       Center(
-                        child: Column(
-                          children: [
-                            Text(
-                              "Didn't receive any code?",
-                              style: GoogleFonts.dmSans(
-                                fontSize: 13,
-                                color: const Color(0xFF6B7280),
-                              ),
+                        child: GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: Text(
+                            'Back to Login',
+                            style: GoogleFonts.dmSans(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFFEF4444),
                             ),
-                            const SizedBox(height: 6),
-                            GestureDetector(
-                              onTap: _isResendLocked ? null : _resendCode,
-                              child: Text(
-                                _isResendLocked
-                                    ? 'Request a new code in 00:${_resendSeconds.toString().padLeft(2, '0')}'
-                                    : 'Resend Again',
-                                style: GoogleFonts.dmSans(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: _isResendLocked ? const Color(0xFF9CA3AF) : const Color(0xFFEF4444),
-                                ),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ],

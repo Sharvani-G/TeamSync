@@ -1,4 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class EntryScreen extends StatefulWidget {
@@ -110,10 +114,25 @@ class _EntryScreenState extends State<EntryScreen>
         duration: const Duration(milliseconds: 420),
         curve: Curves.easeOutCubic,
       );
-      return;
     }
+  }
+
+  Future<void> _goToSignIn() async {
     if (!mounted) return;
-    Navigator.pushReplacementNamed(context, '/main');
+    await _pageController.animateToPage(
+      _pages.length - 2,
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  Future<void> _goToRegister() async {
+    if (!mounted) return;
+    await _pageController.animateToPage(
+      _pages.length - 1,
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   @override
@@ -156,7 +175,7 @@ class _EntryScreenState extends State<EntryScreen>
                       floatAnimation: _floatAnimation,
                       currentPage: _currentPage,
                       totalPages: _pages.length,
-                      onRegister: _goNext,
+                      onRegister: _goToRegister,
                     );
                   }
                   if (index == _pages.length - 1) {
@@ -165,6 +184,7 @@ class _EntryScreenState extends State<EntryScreen>
                       floatAnimation: _floatAnimation,
                       currentPage: _currentPage,
                       totalPages: _pages.length,
+                      onRegistered: _goToSignIn,
                     );
                   }
                   return _OnboardingPane(
@@ -356,6 +376,7 @@ class _SignInPaneState extends State<_SignInPane>
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _rememberMe = false;
+  bool _isSubmitting = false;
   late final AnimationController _fadeController;
   late final Animation<double> _fadeAnimation;
 
@@ -379,9 +400,37 @@ class _SignInPaneState extends State<_SignInPane>
     super.dispose();
   }
 
-  void _submit() {
-    if (_formKey.currentState?.validate() ?? false) {
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false) || _isSubmitting) return;
+
+    setState(() => _isSubmitting = true);
+    try {
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+      if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/main');
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      var message = 'Sign in failed. Please try again.';
+      if (e.code == 'invalid-credential' ||
+          e.code == 'wrong-password' ||
+          e.code == 'user-not-found') {
+        message = 'Invalid email or password.';
+      } else if (e.code == 'invalid-email') {
+        message = 'Please enter a valid email address.';
+      } else if (e.code == 'too-many-requests') {
+        message = 'Too many attempts. Try again later.';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
     }
   }
 
@@ -536,7 +585,7 @@ class _SignInPaneState extends State<_SignInPane>
                       ),
                       const SizedBox(height: 20),
                       GestureDetector(
-                        onTap: _submit,
+                        onTap: _isSubmitting ? null : _submit,
                         child: Container(
                           width: double.infinity,
                           height: 48,
@@ -552,15 +601,27 @@ class _SignInPaneState extends State<_SignInPane>
                             ],
                           ),
                           child: Center(
-                            child: Text(
-                              'Next  >',
-                              style: GoogleFonts.dmSans(
-                                fontSize: 15,
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.3,
-                              ),
-                            ),
+                            child: _isSubmitting
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor:
+                                          AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
+                                    ),
+                                  )
+                                : Text(
+                                    'Next  >',
+                                    style: GoogleFonts.dmSans(
+                                      fontSize: 15,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
                           ),
                         ),
                       ),
@@ -660,12 +721,14 @@ class _RegisterPane extends StatefulWidget {
     required this.floatAnimation,
     required this.currentPage,
     required this.totalPages,
+    required this.onRegistered,
   });
 
   final _OnboardingData page;
   final Animation<double> floatAnimation;
   final int currentPage;
   final int totalPages;
+  final Future<void> Function() onRegistered;
 
   @override
   State<_RegisterPane> createState() => _RegisterPaneState();
@@ -679,6 +742,7 @@ class _RegisterPaneState extends State<_RegisterPane>
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _agreeTerms = false;
+  bool _isSubmitting = false;
   late final AnimationController _fadeController;
   late final Animation<double> _fadeAnimation;
 
@@ -704,9 +768,80 @@ class _RegisterPaneState extends State<_RegisterPane>
     super.dispose();
   }
 
-  void _submit() {
-    if ((_formKey.currentState?.validate() ?? false) && _agreeTerms) {
-      Navigator.pushReplacementNamed(context, '/main');
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false) ||
+        !_agreeTerms ||
+        _isSubmitting) {
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+    try {
+      final email = _emailController.text.trim();
+      final password = _passwordController.text.trim();
+      final credential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
+            email: email,
+            password: password,
+          );
+
+      debugPrint(
+        'Signup success: uid=${credential.user?.uid}, email=${credential.user?.email}',
+      );
+
+      unawaited(
+        FirebaseFirestore.instance
+            .collection('users')
+            .doc(credential.user!.uid)
+            .set({
+              'uid': credential.user!.uid,
+              'name': _nameController.text.trim(),
+              'email': _emailController.text.trim(),
+              'phone': _phoneController.text.trim(),
+              'createdAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true))
+            .catchError((error) {
+              debugPrint('Signup profile save failed: $error');
+            }),
+      );
+
+      await FirebaseAuth.instance.signOut();
+
+      if (!mounted) return;
+      await widget.onRegistered();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Account created. Please sign in to continue.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } on FirebaseAuthException catch (e) {
+      debugPrint('Signup failed [${e.code}]: ${e.message}');
+      if (!mounted) return;
+      var message = 'Sign up failed. Please try again.';
+      if (e.code == 'email-already-in-use') {
+        message = 'This email is already registered.';
+      } else if (e.code == 'weak-password') {
+        message = 'Password is too weak. Use at least 6 characters.';
+      } else if (e.code == 'invalid-email') {
+        message = 'Please enter a valid email address.';
+      } else if (e.code == 'operation-not-allowed') {
+        message =
+            'Email/Password sign-in is disabled in Firebase Authentication.';
+      } else if (e.code == 'network-request-failed') {
+        message = 'Network error. Please check your connection and try again.';
+      } else if ((e.message ?? '').isNotEmpty) {
+        message = e.message!;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
     }
   }
 
@@ -892,7 +1027,7 @@ class _RegisterPaneState extends State<_RegisterPane>
                       ),
                       const SizedBox(height: 20),
                       GestureDetector(
-                        onTap: _submit,
+                        onTap: _isSubmitting ? null : _submit,
                         child: Container(
                           width: double.infinity,
                           height: 48,
@@ -908,18 +1043,30 @@ class _RegisterPaneState extends State<_RegisterPane>
                             ],
                           ),
                           child: Center(
-                            child: Text(
-                              'Next  >',
-                              style: GoogleFonts.dmSans(
-                                fontSize: 15,
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.3,
-                              ),
+                            child: _isSubmitting
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor:
+                                          AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
+                                    ),
+                                  )
+                                : Text(
+                                    'Next  >',
+                                    style: GoogleFonts.dmSans(
+                                      fontSize: 15,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
                             ),
                           ),
                         ),
-                      ),
                     ],
                   ),
                 ),
