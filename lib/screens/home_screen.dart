@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/mock_data.dart';
+import '../models/models.dart';
+import '../services/user_profile_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
 
@@ -67,10 +69,19 @@ class HomeScreen extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.only(right: 12),
-            child: GestureDetector(
-              onTap: () => Navigator.pushNamed(context, '/profile'),
-              child: const UserAvatar(
-                  name: 'Alex Morgan', size: 32, color: AppTheme.primary),
+            child: StreamBuilder<AppUser>(
+              stream: UserProfileService.instance.watchCurrentUser(),
+              builder: (context, snapshot) {
+                final user = snapshot.data ?? currentUser;
+                return GestureDetector(
+                  onTap: () => Navigator.pushNamed(context, '/profile'),
+                  child: UserAvatar(
+                    name: user.name,
+                    size: 32,
+                    color: AppTheme.primary,
+                  ),
+                );
+              },
             ),
           ),
         ],

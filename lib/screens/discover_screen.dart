@@ -65,7 +65,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
               subtitle: 'Try a different search term',
             )
           : ListView.separated(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
               itemCount: filtered.length,
               separatorBuilder: (_, __) => const SizedBox(height: 12),
               itemBuilder: (context, index) {

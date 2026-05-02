@@ -253,3 +253,69 @@ const List<String> weeklyReportHighlights = [
   'Conducted 2 team meetings',
   'Added 5 new feature ideas',
 ];
+
+final List<Meeting> meetings = [
+  const Meeting(
+    id: '1',
+    title: 'Team Standup',
+    time: '10:00 AM',
+    participants: ['Alex Morgan', 'Sarah Chen', 'Rahul', 'Megha'],
+    projectId: '1',
+    isActive: true,
+  ),
+  const Meeting(
+    id: '2',
+    title: 'Sprint Planning',
+    time: '2:00 PM',
+    participants: ['Alex Morgan', 'Mike Johnson'],
+    projectId: '1',
+    isActive: false,
+  ),
+  const Meeting(
+    id: '3',
+    title: 'Design Review',
+    time: '3:30 PM',
+    participants: ['Alex Morgan', 'Sarah Chen'],
+    projectId: '2',
+    isActive: false,
+  ),
+];
+
+final List<Reminder> reminders = [
+  const Reminder(
+    id: '1',
+    title: 'Team Standup',
+    description: 'Daily team sync-up meeting',
+    type: 'meeting',
+    time: 'Now',
+    isRead: false,
+    data: null,
+  ),
+  const Reminder(
+    id: '2',
+    title: 'New message from Rahul',
+    description: 'In ProjectSync App general chat',
+    type: 'chat',
+    time: '5 minutes ago',
+    isRead: false,
+    data: null,
+  ),
+  const Reminder(
+    id: '3',
+    title: 'Sprint Planning meeting',
+    description: 'Starting at 2:00 PM',
+    type: 'meeting',
+    time: '2 hours from now',
+    isRead: true,
+    data: null,
+  ),
+  const Reminder(
+    id: '4',
+    title: 'Project deadline: E-Commerce Platform',
+    description: 'Due in 3 days',
+    type: 'deadline',
+    time: '3 days',
+    isRead: true,
+    data: null,
+  ),
+];

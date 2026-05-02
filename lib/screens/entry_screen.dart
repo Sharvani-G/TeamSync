@@ -165,6 +165,9 @@ class _EntryScreenState extends State<EntryScreen>
               ),
               PageView.builder(
                 controller: _pageController,
+                physics: _currentPage == _pages.length - 1
+                    ? const NeverScrollableScrollPhysics()
+                    : const BouncingScrollPhysics(),
                 itemCount: _pages.length,
                 onPageChanged: (index) => setState(() => _currentPage = index),
                 itemBuilder: (context, index) {
@@ -789,33 +792,22 @@ class _RegisterPaneState extends State<_RegisterPane>
         'Signup success: uid=${credential.user?.uid}, email=${credential.user?.email}',
       );
 
-      unawaited(
-        FirebaseFirestore.instance
-            .collection('users')
-            .doc(credential.user!.uid)
-            .set({
-              'uid': credential.user!.uid,
-              'name': _nameController.text.trim(),
-              'email': _emailController.text.trim(),
-              'phone': _phoneController.text.trim(),
-              'createdAt': FieldValue.serverTimestamp(),
-            }, SetOptions(merge: true))
-            .catchError((error) {
-              debugPrint('Signup profile save failed: $error');
-            }),
-      );
+      await credential.user?.updateDisplayName(_nameController.text.trim());
 
-      await FirebaseAuth.instance.signOut();
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(credential.user!.uid)
+          .set({
+            'uid': credential.user!.uid,
+            'name': _nameController.text.trim(),
+            'email': _emailController.text.trim(),
+            'phone': _phoneController.text.trim(),
+            'createdAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
 
+      
       if (!mounted) return;
-      await widget.onRegistered();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Account created. Please sign in to continue.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      Navigator.pushReplacementNamed(context, '/main');
     } on FirebaseAuthException catch (e) {
       debugPrint('Signup failed [${e.code}]: ${e.message}');
       if (!mounted) return;

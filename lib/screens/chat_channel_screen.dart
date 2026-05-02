@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../data/mock_data.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
@@ -38,7 +39,15 @@ class _ChatChannelScreenState extends State<ChatChannelScreen> {
   void _sendMessage() {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
-    setState(() => _messages.add(_LocalMessage(text: text, time: _now())));
+    setState(
+      () => _messages.add(
+        _LocalMessage(
+          text: text,
+          time: _now(),
+          username: FirebaseAuth.instance.currentUser?.displayName ?? currentUser.name,
+        ),
+      ),
+    );
     _controller.clear();
     Future.delayed(const Duration(milliseconds: 100), () {
       if (_scrollController.hasClients) {
@@ -110,7 +119,7 @@ class _ChatChannelScreenState extends State<ChatChannelScreen> {
                             isMe: msg.userId == '1',
                           )),
                       ..._messages.map((msg) => _MessageBubble(
-                            username: 'Alex',
+                            username: msg.username,
                             message: msg.text,
                             timestamp: msg.time,
                             isMe: true,
@@ -133,7 +142,13 @@ class _ChatChannelScreenState extends State<ChatChannelScreen> {
 class _LocalMessage {
   final String text;
   final String time;
-  const _LocalMessage({required this.text, required this.time});
+  final String username;
+
+  const _LocalMessage({
+    required this.text,
+    required this.time,
+    required this.username,
+  });
 }
 
 class _MessageBubble extends StatelessWidget {
