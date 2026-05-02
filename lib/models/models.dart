@@ -135,3 +135,41 @@ class AppUser {
     required this.tasksCompleted,
   });
 }
+
+class Meeting {
+  final String id;
+  final String title;
+  final String time;
+  final List<String> participants;
+  final String projectId;
+  final bool isActive;
+
+  const Meeting({
+    required this.id,
+    required this.title,
+    required this.time,
+    required this.participants,
+    required this.projectId,
+    required this.isActive,
+  });
+}
+
+class Reminder {
+  final String id;
+  final String title;
+  final String description;
+  final String type; // 'meeting', 'chat', 'deadline'
+  final String time;
+  final bool isRead;
+  final dynamic data; // Can contain Meeting or Chat info
+
+  const Reminder({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.type,
+    required this.time,
+    required this.isRead,
+    required this.data,
+  });
+}

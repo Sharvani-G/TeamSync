@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../screens/home_screen.dart';
+import '../screens/home_dashboard_screen.dart';
 import '../screens/discover_screen.dart';
 import '../screens/notifications_screen.dart';
 import '../screens/profile_screen.dart';
@@ -16,7 +16,7 @@ class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
 
   static const List<Widget> _screens = [
-    HomeScreen(),
+    HomeDashboardScreen(),
     DiscoverScreen(),
     NotificationsScreen(),
     ProfileScreen(),
@@ -37,7 +37,7 @@ class _MainShellState extends State<MainShell> {
             BottomNavigationBarItem(
                 icon: Icon(Icons.folder_outlined),
                 activeIcon: Icon(Icons.folder),
-                label: 'Projects'),
+                label: 'Dashboard'),
             BottomNavigationBarItem(
                 icon: Icon(Icons.explore_outlined),
                 activeIcon: Icon(Icons.explore),
