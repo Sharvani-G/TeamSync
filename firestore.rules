@@ -1,0 +1,78 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ============ USERS COLLECTION ============
+    match /users/{userId} {
+      // Users can read and write their own documents
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ============ PROJECTS COLLECTION ============
+    match /projects/{projectId} {
+      // Anyone authenticated can read public projects
+      allow read: if request.auth != null && 
+                     (resource.data.visibility == 'public' || 
+                      resource.data.createdBy == request.auth.uid || 
+                      request.auth.uid in resource.data.collaborators);
+      
+      // Only creator can write/update projects
+      allow update, delete: if request.auth != null && 
+                             resource.data.createdBy == request.auth.uid;
+      
+      // Authenticated users can create projects
+      allow create: if request.auth != null && 
+                       request.resource.data.createdBy == request.auth.uid &&
+                       request.resource.data.visibility in ['public', 'private'];
+    }
+
+    // ============ JOIN REQUESTS COLLECTION ============
+    match /joinRequests/{requestId} {
+      // Users can read their own requests
+      allow read: if request.auth != null && 
+                     (request.auth.uid == resource.data.requestedBy ||
+                      // Admin can read all requests for their projects
+                      exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
+                      get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.createdBy == request.auth.uid);
+      
+      // Users can create join requests
+      allow create: if request.auth != null && 
+                       request.resource.data.requestedBy == request.auth.uid &&
+                       request.resource.data.status == 'pending';
+      
+      // Only project admin can update join request status
+      allow update: if request.auth != null &&
+                       exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
+                       get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.createdBy == request.auth.uid &&
+                       (request.resource.data.status == 'accepted' || 
+                        request.resource.data.status == 'rejected') &&
+                       resource.data.status == 'pending';
+    }
+
+    // ============ CHAT MESSAGES COLLECTION ============
+    match /projects/{projectId}/messages/{messageId} {
+      // Only collaborators/creator can read messages
+      allow read: if request.auth != null &&
+                     exists(/databases/$(database)/documents/projects/$(projectId)) &&
+                     (get(/databases/$(database)/documents/projects/$(projectId)).data.createdBy == request.auth.uid ||
+                      request.auth.uid in get(/databases/$(database)/documents/projects/$(projectId)).data.collaborators);
+      
+      // Only collaborators/creator can create messages
+      allow create: if request.auth != null &&
+                       request.resource.data.userId == request.auth.uid &&
+                       exists(/databases/$(database)/documents/projects/$(projectId)) &&
+                       (get(/databases/$(database)/documents/projects/$(projectId)).data.createdBy == request.auth.uid ||
+                        request.auth.uid in get(/databases/$(database)/documents/projects/$(projectId)).data.collaborators);
+    }
+
+    // ============ DENY ALL OTHER ACCESS ============
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

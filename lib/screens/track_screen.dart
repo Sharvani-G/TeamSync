@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/mock_data.dart';
+import '../models/models.dart';
+import '../services/project_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
 
@@ -9,45 +11,67 @@ class TrackScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final project = projects.firstWhere((p) => p.id == projectId,
-        orElse: () => projects.first);
-    final overallProgress = project.levels.isEmpty
-        ? 0
-        : project.levels.map((l) => l.progress).reduce((a, b) => a + b) ~/
-            project.levels.length;
+    return StreamBuilder<Project?>(
+      stream: ProjectService.instance.watchProject(projectId),
+      builder: (context, snapshot) {
+        // Handle loading state
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Scaffold(
+            appBar: const SimpleAppBar(title: 'Track Progress'),
+            body: const Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
 
-    final stats = [
-      _Stat(
-          icon: Icons.check_circle_outline,
-          label: 'Tasks Completed',
-          value: '${project.stats.tasksCompleted}',
-          color: const Color(0xFF16A34A),
-          bg: const Color(0xFFDCFCE7)),
-      _Stat(
-          icon: Icons.lightbulb_outline,
-          label: 'Ideas Added',
-          value: '${project.stats.ideasAdded}',
-          color: const Color(0xFFCA8A04),
-          bg: const Color(0xFFFEF9C3)),
-      _Stat(
-          icon: Icons.people_outline,
-          label: 'Meetings Conducted',
-          value: '${project.stats.meetingsConducted}',
-          color: AppTheme.primary,
-          bg: const Color(0xFFEFF6FF)),
-      _Stat(
-          icon: Icons.chat_bubble_outline,
-          label: 'Messages Sent',
-          value: '${project.stats.messagesSent}',
-          color: AppTheme.secondary,
-          bg: const Color(0xFFF5F3FF)),
-    ];
+        // Handle error or no project found
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data == null) {
+          return Scaffold(
+            appBar: const SimpleAppBar(title: 'Track Progress'),
+            body: const Center(
+              child: Text('Project not found'),
+            ),
+          );
+        }
 
-    return Scaffold(
-      appBar: const SimpleAppBar(title: 'Track Progress'),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
+        final project = snapshot.data!;
+        final overallProgress = project.levels.isEmpty
+            ? 0
+            : project.levels.map((l) => l.progress).reduce((a, b) => a + b) ~/
+                project.levels.length;
+
+        final stats = [
+          _Stat(
+              icon: Icons.check_circle_outline,
+              label: 'Tasks Completed',
+              value: '${project.stats.tasksCompleted}',
+              color: const Color(0xFF16A34A),
+              bg: const Color(0xFFDCFCE7)),
+          _Stat(
+              icon: Icons.lightbulb_outline,
+              label: 'Ideas Added',
+              value: '${project.stats.ideasAdded}',
+              color: const Color(0xFFCA8A04),
+              bg: const Color(0xFFFEF9C3)),
+          _Stat(
+              icon: Icons.people_outline,
+              label: 'Meetings Conducted',
+              value: '${project.stats.meetingsConducted}',
+              color: AppTheme.primary,
+              bg: const Color(0xFFEFF6FF)),
+          _Stat(
+              icon: Icons.chat_bubble_outline,
+              label: 'Messages Sent',
+              value: '${project.stats.messagesSent}',
+              color: AppTheme.secondary,
+              bg: const Color(0xFFF5F3FF)),
+        ];
+
+        return Scaffold(
+          appBar: const SimpleAppBar(title: 'Track Progress'),
+          body: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
           // Stats grid
           GridView.count(
             crossAxisCount: 2,
@@ -170,8 +194,10 @@ class TrackScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-        ],
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

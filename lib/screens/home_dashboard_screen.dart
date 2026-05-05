@@ -4,6 +4,7 @@ import '../models/models.dart';
 import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
 import '../services/user_profile_service.dart';
+import '../services/project_service.dart';
 import 'dart:math' as math;
 
 class HomeDashboardScreen extends StatefulWidget {
@@ -19,11 +20,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
   late AnimationController _slideController;
   late AnimationController _scaleController;
   final ScrollController _scrollController = ScrollController();
-  
-  int totalProjects = 0;
-  int completedProjects = 0;
-  int runningProjects = 0;
-  int pendingProjects = 0;
 
   @override
   void initState() {
@@ -46,37 +42,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
     Future.delayed(const Duration(milliseconds: 200), () {
       _scaleController.forward();
     });
-
-    _calculateProjectStats();
-  }
-
-  void _calculateProjectStats() {
-    setState(() {
-      totalProjects = projects.length;
-      runningProjects = projects.where((p) {
-        final avgProgress = p.levels.isNotEmpty
-            ? p.levels.map((l) => l.progress).reduce((a, b) => a + b) ~/
-                p.levels.length
-            : 0;
-        return avgProgress > 0 && avgProgress < 100;
-      }).length;
-      
-      completedProjects = projects.where((p) {
-        final avgProgress = p.levels.isNotEmpty
-            ? p.levels.map((l) => l.progress).reduce((a, b) => a + b) ~/
-                p.levels.length
-            : 0;
-        return avgProgress == 100;
-      }).length;
-      
-      pendingProjects = projects.where((p) {
-        final avgProgress = p.levels.isNotEmpty
-            ? p.levels.map((l) => l.progress).reduce((a, b) => a + b) ~/
-                p.levels.length
-            : 0;
-        return avgProgress == 0;
-      }).length;
-    });
   }
 
   @override
@@ -88,16 +53,61 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
     super.dispose();
   }
 
+  Widget _buildEmptyProjectsState(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            height: 200,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.folder_open_outlined,
+                  size: 64,
+                  color: Colors.grey[300],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No projects yet',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Create a project or discover public ones',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[500],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () => Navigator.pushNamed(context, '/create-project'),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Create Project'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final unreadNotifications =
-        notifications.where((n) => !n.read).length;
     final unreadReminders =
         reminders.where((r) => !r.isRead).length;
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
-      appBar: _buildAnimatedAppBar(unreadNotifications, context),
+      appBar: _buildAnimatedAppBar(context),
       body: SingleChildScrollView(
         controller: _scrollController,
         child: Column(
@@ -117,12 +127,27 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
             _buildActionButtons(context),
             const SizedBox(height: 24),
 
-            // Project Stats Cards
-            _buildStatsSection(),
+            // Project Stats Cards with Firebase Data
+            StreamBuilder<List<Project>>(
+              stream: ProjectService.instance.watchMyProjects(),
+              builder: (context, snapshot) {
+                final projects = snapshot.data ?? [];
+                return _buildStatsSection(projects);
+              },
+            ),
             const SizedBox(height: 32),
 
-            // Progress & Projects Section
-            _buildProjectsAndProgressSection(),
+            // Progress & Projects Section with Firebase Data
+            StreamBuilder<List<Project>>(
+              stream: ProjectService.instance.watchMyProjects(),
+              builder: (context, snapshot) {
+                final projects = snapshot.data ?? [];
+                if (projects.isEmpty) {
+                  return _buildEmptyProjectsState(context);
+                }
+                return _buildProjectsAndProgressSection(projects);
+              },
+            ),
             const SizedBox(height: 32),
 
             // Reminders Section
@@ -134,7 +159,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
     );
   }
 
-  PreferredSizeWidget _buildAnimatedAppBar(int unreadCount, BuildContext context) {
+  PreferredSizeWidget _buildAnimatedAppBar(BuildContext context) {
+    final unreadNotifications =
+        notifications.where((n) => !n.read).length;
     return AppBar(
       automaticallyImplyLeading: false,
       elevation: 0,
@@ -411,7 +438,33 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
     );
   }
 
-  Widget _buildStatsSection() {
+  Widget _buildStatsSection(List<Project> projects) {
+    // Calculate stats from projects
+    final totalProjects = projects.length;
+    final completedProjects = projects.where((p) {
+      final avgProgress = p.levels.isNotEmpty
+          ? p.levels.map((l) => l.progress).reduce((a, b) => a + b) ~/
+              p.levels.length
+          : 0;
+      return avgProgress == 100;
+    }).length;
+
+    final runningProjects = projects.where((p) {
+      final avgProgress = p.levels.isNotEmpty
+          ? p.levels.map((l) => l.progress).reduce((a, b) => a + b) ~/
+              p.levels.length
+          : 0;
+      return avgProgress > 0 && avgProgress < 100;
+    }).length;
+
+    final pendingProjects = projects.where((p) {
+      final avgProgress = p.levels.isNotEmpty
+          ? p.levels.map((l) => l.progress).reduce((a, b) => a + b) ~/
+              p.levels.length
+          : 0;
+      return avgProgress == 0;
+    }).length;
+
     final stats = [
       {'label': 'Total Projects', 'count': totalProjects, 'color': AppTheme.primary, 'icon': Icons.folder},
       {'label': 'Completed', 'count': completedProjects, 'color': const Color(0xFF10B981), 'icon': Icons.check_circle},
@@ -503,7 +556,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
     );
   }
 
-  Widget _buildProjectsAndProgressSection() {
+  Widget _buildProjectsAndProgressSection(List<Project> projects) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
