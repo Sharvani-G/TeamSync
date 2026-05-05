@@ -9,14 +9,20 @@ const AppUser currentUser = AppUser(
 );
 
 final List<Project> projects = [
-  const Project(
+  Project(
     id: '1',
     title: 'ProjectSync App',
     description:
         'A collaboration platform combining GitHub-style project management with Discord-style communication',
-    collaborators: 4,
-    isPrivate: true,
+    createdBy: '1',
+    collaborators: {},
+    visibility: 'private',
+    isOpenForRequests: false,
+    requiredCollaborators: 0,
+    requiredSkills: [],
+    contactEmail: 'contact@teamsync.com',
     lastUpdated: '2 hours ago',
+    createdAt: DateTime(2025, 1, 1),
     levels: [
       ProjectLevel(
         id: '1',
@@ -95,13 +101,19 @@ final List<Project> projects = [
         meetingsConducted: 7,
         messagesSent: 234),
   ),
-  const Project(
+  Project(
     id: '2',
     title: 'E-Commerce Platform',
     description: 'Building a modern online store with React and Node.js',
-    collaborators: 3,
-    isPrivate: false,
+    createdBy: '2',
+    collaborators: {},
+    visibility: 'public',
+    isOpenForRequests: true,
+    requiredCollaborators: 3,
+    requiredSkills: ['React', 'Node.js'],
+    contactEmail: 'commerce@example.com',
     lastUpdated: '1 day ago',
+    createdAt: DateTime(2024, 12, 15),
     levels: [
       ProjectLevel(
           id: '1', name: 'Problem Statement', progress: 100, documents: []),
@@ -200,13 +212,19 @@ final List<AppNotification> notifications = [
 ];
 
 final List<Project> discoverProjects = [
-  const Project(
+  Project(
     id: '3',
     title: 'AI Study Assistant',
     description: 'An AI-powered study tool for students',
-    collaborators: 2,
-    isPrivate: false,
+    createdBy: '3',
+    collaborators: {},
+    visibility: 'public',
+    isOpenForRequests: true,
+    requiredCollaborators: 2,
+    requiredSkills: ['AI', 'Flutter'],
+    contactEmail: 'ai.study@example.com',
     lastUpdated: '3 hours ago',
+    createdAt: DateTime(2025, 4, 1),
     levels: [],
     stats: ProjectStats(
         tasksCompleted: 0,
@@ -214,13 +232,19 @@ final List<Project> discoverProjects = [
         meetingsConducted: 0,
         messagesSent: 0),
   ),
-  const Project(
+  Project(
     id: '4',
     title: 'Fitness Tracker App',
     description: 'Track workouts and nutrition with ease',
-    collaborators: 1,
-    isPrivate: false,
+    createdBy: '4',
+    collaborators: {},
+    visibility: 'public',
+    isOpenForRequests: true,
+    requiredCollaborators: 1,
+    requiredSkills: ['Flutter', 'Firebase'],
+    contactEmail: 'fitness@example.com',
     lastUpdated: '5 hours ago',
+    createdAt: DateTime(2025, 3, 20),
     levels: [],
     stats: ProjectStats(
         tasksCompleted: 0,
@@ -228,13 +252,19 @@ final List<Project> discoverProjects = [
         meetingsConducted: 0,
         messagesSent: 0),
   ),
-  const Project(
+  Project(
     id: '5',
     title: 'Recipe Sharing Platform',
     description: 'A community app for sharing recipes and meal plans',
-    collaborators: 5,
-    isPrivate: false,
+    createdBy: '5',
+    collaborators: {},
+    visibility: 'public',
+    isOpenForRequests: true,
+    requiredCollaborators: 5,
+    requiredSkills: ['Flutter', 'UI/UX'],
+    contactEmail: 'recipes@example.com',
     lastUpdated: '1 day ago',
+    createdAt: DateTime(2025, 2, 10),
     levels: [],
     stats: ProjectStats(
         tasksCompleted: 0,

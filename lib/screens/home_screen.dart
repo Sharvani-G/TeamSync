@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../data/mock_data.dart';
 import '../models/models.dart';
 import '../services/user_profile_service.dart';
+import '../services/project_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
 
@@ -88,29 +89,53 @@ class HomeScreen extends StatelessWidget {
         bottom: const PreferredSize(
             preferredSize: Size.fromHeight(1), child: Divider(height: 1)),
       ),
-      body: projects.isEmpty
-          ? const EmptyState(
+      body: StreamBuilder<List<Project>>(
+        stream: ProjectService.instance.watchMyProjects(),
+        builder: (context, snapshot) {
+          // Handle loading state
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
+          }
+
+          // Handle error state
+          if (snapshot.hasError) {
+            return Center(
+              child: Text('Error: ${snapshot.error}'),
+            );
+          }
+
+          // Handle empty state
+          final projects = snapshot.data ?? [];
+          if (projects.isEmpty) {
+            return const EmptyState(
               icon: Icons.people_outline,
               title: 'No current projects',
               subtitle: 'Create your first project to get started.',
-            )
-          : ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: projects.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final project = projects[index];
-                return ProjectCard(
-                  title: project.title,
-                  description: project.description,
-                  collaborators: project.collaborators,
-                  isPrivate: project.isPrivate,
-                  lastUpdated: project.lastUpdated,
-                  onTap: () =>
-                      Navigator.pushNamed(context, '/project/${project.id}'),
-                );
-              },
-            ),
+            );
+          }
+
+          // Display projects list
+          return ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: projects.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            itemBuilder: (context, index) {
+              final project = projects[index];
+              return ProjectCard(
+                title: project.title,
+                description: project.description,
+                collaborators: project.collaborators.length + 1, // +1 for creator
+                isPrivate: project.visibility == 'private',
+                lastUpdated: project.lastUpdated,
+                onTap: () =>
+                    Navigator.pushNamed(context, '/project/${project.id}'),
+              );
+            },
+          );
+        },
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => Navigator.pushNamed(context, '/create-project'),
         backgroundColor: AppTheme.primary,
