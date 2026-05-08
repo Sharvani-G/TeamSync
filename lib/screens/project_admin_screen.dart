@@ -42,6 +42,7 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> {
         children: [
           _JoinRequestsTab(projectId: widget.projectId),
           _CollaboratorsTab(projectId: widget.projectId, project: widget.project),
+          _LevelsTab(projectId: widget.projectId),
           _SettingsTab(projectId: widget.projectId, project: widget.project),
         ],
       ),
@@ -54,6 +55,10 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.people),
             label: 'Collaborators',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.view_list),
+            label: 'Levels',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings),
@@ -108,6 +113,8 @@ class _JoinRequestsTab extends StatelessWidget {
           separatorBuilder: (_, __) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
             final request = pendingRequests[index];
+            final githubLink = request.githubLink ?? '';
+            final linkedinLink = request.linkedinLink ?? '';
             return Card(
               child: Padding(
                 padding: const EdgeInsets.all(14),
@@ -130,17 +137,17 @@ class _JoinRequestsTab extends StatelessWidget {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                request.requestedByEmail,
+                                'Skills: ${request.skills}',
                                 style: const TextStyle(
                                   fontSize: 12,
-                                  color: AppTheme.textMuted,
+                                  color: AppTheme.textSecondary,
                                 ),
                               ),
                             ],
                           ),
                         ),
                         Text(
-                          'Requested',
+                          _formatDate(request.createdAt),
                           style: const TextStyle(
                             fontSize: 11,
                             color: AppTheme.textMuted,
@@ -148,7 +155,41 @@ class _JoinRequestsTab extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
+                    Text(
+                      request.message,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                    if (githubLink.isNotEmpty || linkedinLink.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          if (githubLink.isNotEmpty)
+                            const Icon(Icons.link, size: 14, color: AppTheme.primary),
+                          const SizedBox(width: 4),
+                          if (githubLink.isNotEmpty)
+                            const Text('GitHub', style: TextStyle(fontSize: 11, color: AppTheme.primary)),
+                          const SizedBox(width: 12),
+                          if (linkedinLink.isNotEmpty)
+                            const Icon(Icons.link, size: 14, color: AppTheme.primary),
+                          const SizedBox(width: 4),
+                          if (linkedinLink.isNotEmpty)
+                            const Text('LinkedIn', style: TextStyle(fontSize: 11, color: AppTheme.primary)),
+                        ],
+                      ),
+                    ],
+                    if (request.fileUrls.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        '${request.fileUrls.length} files attached',
+                        style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                      ),
+                    ],
+                    const Divider(height: 20),
                     Row(
                       children: [
                         Expanded(
@@ -178,6 +219,10 @@ class _JoinRequestsTab extends StatelessWidget {
         );
       },
     );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}';
   }
 
   Future<void> _acceptRequest(BuildContext context, String requestId) async {
@@ -235,8 +280,14 @@ class _CollaboratorsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final allCollaborators = [
-      (project.createdBy, 'Creator', true), // (userId, role, isAdmin)
-      ...project.collaborators.entries.map((e) => (e.key, e.value, false)),
+      (
+        project.createdBy,
+        project.collaborators[project.createdBy] ?? 'admin',
+        true,
+      ), // (userId, role, isAdmin)
+      ...project.collaborators.entries
+          .where((entry) => entry.key != project.createdBy)
+          .map((e) => (e.key, e.value, false)),
     ];
 
     return ListView(
@@ -321,6 +372,279 @@ class _CollaboratorsTab extends StatelessWidget {
       );
     } catch (e) {
       if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+}
+
+class _LevelsTab extends StatefulWidget {
+  final String projectId;
+
+  const _LevelsTab({required this.projectId});
+
+  @override
+  State<_LevelsTab> createState() => _LevelsTabState();
+}
+
+class _LevelsTabState extends State<_LevelsTab> {
+  final TextEditingController _levelTitleController = TextEditingController();
+
+  @override
+  void dispose() {
+    _levelTitleController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<Project?>(
+      stream: ProjectService.instance.watchProject(widget.projectId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+
+        final project = snapshot.data;
+        if (project == null) {
+          return const Center(child: Text('Project not found'));
+        }
+
+        final orderedLevels = [...project.levels]
+          ..sort((a, b) => a.order.compareTo(b.order));
+
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const Text(
+              'Project Levels',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Only the project admin can modify levels. Changes sync instantly for everyone.',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _levelTitleController,
+              decoration: const InputDecoration(
+                labelText: 'New level title',
+                hintText: 'Enter a level name',
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _addLevel,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add Level'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton(
+                  onPressed: orderedLevels.isEmpty ? _restoreDefaults : null,
+                  child: const Text('Restore Defaults'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (orderedLevels.isEmpty)
+              const EmptyState(
+                icon: Icons.view_list_outlined,
+                title: 'No levels yet',
+                subtitle: 'Restore the default set or add a new level',
+              )
+            else
+              ...orderedLevels.map((level) {
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.border),
+                  ),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: AppTheme.primary.withOpacity(0.12),
+                      foregroundColor: AppTheme.primary,
+                      child: Text('${level.order}'),
+                    ),
+                    title: Text(level.title),
+                    subtitle: Text('Created ${level.createdAt.month}/${level.createdAt.day}/${level.createdAt.year}'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined),
+                          onPressed: () => _renameLevel(level.id, level.title),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () => _deleteLevel(level.id),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _addLevel() async {
+    final title = _levelTitleController.text.trim();
+    if (title.isEmpty) {
+      return;
+    }
+
+    try {
+      await ProjectService.instance.addProjectLevel(
+        projectId: widget.projectId,
+        title: title,
+      );
+      _levelTitleController.clear();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Level added'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _restoreDefaults() async {
+    try {
+      await ProjectService.instance.replaceProjectLevels(
+        projectId: widget.projectId,
+        levels: const [],
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Default levels restored'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _renameLevel(String levelId, String currentTitle) async {
+    final controller = TextEditingController(text: currentTitle);
+    final newTitle = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Rename Level'),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(labelText: 'Level title'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    controller.dispose();
+
+    if (newTitle == null || newTitle.isEmpty) {
+      return;
+    }
+
+    try {
+      await ProjectService.instance.renameProjectLevel(
+        projectId: widget.projectId,
+        levelId: levelId,
+        title: newTitle,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteLevel(String levelId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete Level'),
+          content: const Text('Remove this level? Orders will be rebalanced automatically.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      await ProjectService.instance.removeProjectLevel(
+        projectId: widget.projectId,
+        levelId: levelId,
+      );
+    } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: ${e.toString()}'),

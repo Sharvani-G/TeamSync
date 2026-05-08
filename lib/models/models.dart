@@ -30,15 +30,15 @@ class ProjectDocument {
 
 class ProjectLevel {
   final String id;
-  final String name;
-  final int progress;
-  final List<ProjectDocument> documents;
+  final String title;
+  final int order;
+  final DateTime createdAt;
 
   const ProjectLevel({
     required this.id,
-    required this.name,
-    required this.progress,
-    required this.documents,
+    required this.title,
+    required this.order,
+    required this.createdAt,
   });
 }
 
@@ -98,6 +98,37 @@ class Project {
 
   // Helper to get collaborator count
   int get collaboratorCount => collaborators.length + 1; // +1 for creator
+
+  // Helper to check if project is private
+  bool get isPrivate => visibility == 'private';
+
+  // Helper to check if requests are allowed
+  bool get acceptingRequests => isOpenForRequests && visibility == 'public';
+
+  int get safeCollaboratorCount =>
+      collaborators.length + (collaborators.containsKey(createdBy) ? 0 : 1);
+}
+
+extension ProjectDisplayValues on Project {
+  String get displayTitle =>
+      title.trim().isNotEmpty ? title.trim() : 'Untitled Project';
+
+  String get displayDescription =>
+      description.trim().isNotEmpty ? description.trim() : 'No description added yet.';
+
+  String get displayVisibility =>
+      visibility.trim().isNotEmpty ? visibility.trim() : 'private';
+
+  String get displayLastUpdated =>
+      lastUpdated.trim().isNotEmpty ? lastUpdated.trim() : 'Recently';
+
+  double get progressValue {
+    if (stats.tasksCompleted <= 0) {
+      return 0;
+    }
+
+    return (stats.tasksCompleted % 100) / 100;
+  }
 }
 
 class ChatMessage {
@@ -144,17 +175,21 @@ class AppNotification {
 
 class AppUser {
   final String id;
+  final String username; // For @ mentions and lookups
   final String name;
   final String email;
   final int projectsJoined;
   final int tasksCompleted;
+  final DateTime createdAt;
 
   const AppUser({
     required this.id,
+    required this.username,
     required this.name,
     required this.email,
     required this.projectsJoined,
     required this.tasksCompleted,
+    required this.createdAt,
   });
 }
 
@@ -202,8 +237,15 @@ class JoinRequest {
   final String requestedBy; // userId
   final String requestedByEmail;
   final String requestedByName;
+  final String requestedByUsername;
+  final List<String> skills; // User's skills
+  final String message; // Cover letter / motivation
+  final String? githubLink;
+  final String? linkedinLink;
+  final List<String> fileUrls; // Portfolio files from Firebase Storage
   final String status; // 'pending', 'accepted', 'rejected'
   final DateTime createdAt;
+  final DateTime? respondedAt;
 
   const JoinRequest({
     required this.id,
@@ -211,7 +253,14 @@ class JoinRequest {
     required this.requestedBy,
     required this.requestedByEmail,
     required this.requestedByName,
+    required this.requestedByUsername,
+    required this.skills,
+    required this.message,
+    this.githubLink,
+    this.linkedinLink,
+    required this.fileUrls,
     required this.status,
     required this.createdAt,
+    this.respondedAt,
   });
 }

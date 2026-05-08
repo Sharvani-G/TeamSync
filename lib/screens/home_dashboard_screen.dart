@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../data/mock_data.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
@@ -20,6 +19,12 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
   late AnimationController _slideController;
   late AnimationController _scaleController;
   final ScrollController _scrollController = ScrollController();
+  final ScrollController _projectsScrollController = ScrollController();
+  
+  int totalProjects = 0;
+  int completedProjects = 0;
+  int runningProjects = 0;
+  int pendingProjects = 0;
 
   @override
   void initState() {
@@ -50,118 +55,136 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
     _slideController.dispose();
     _scaleController.dispose();
     _scrollController.dispose();
+    _projectsScrollController.dispose();
     super.dispose();
-  }
-
-  Widget _buildEmptyProjectsState(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          SizedBox(
-            height: 200,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.folder_open_outlined,
-                  size: 64,
-                  color: Colors.grey[300],
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'No projects yet',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[600],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Create a project or discover public ones',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[500],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  onPressed: () => Navigator.pushNamed(context, '/create-project'),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Create Project'),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final unreadReminders =
-        reminders.where((r) => !r.isRead).length;
+    return StreamBuilder<List<Project>>(
+      stream: ProjectService.instance.watchMyProjects(),
+      builder: (context, snapshot) {
+        // Debug logging
+        print('HomeDashboard StreamBuilder state: ${snapshot.connectionState}');
+        print('Has data: ${snapshot.hasData}, data length: ${snapshot.data?.length ?? 0}');
+        if (snapshot.hasError) {
+          print('Error in watchMyProjects: ${snapshot.error}');
+        }
 
-    return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: _buildAnimatedAppBar(context),
-      body: SingleChildScrollView(
-        controller: _scrollController,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Welcome Section with Animation
-            StreamBuilder<AppUser>(
-              stream: UserProfileService.instance.watchCurrentUser(),
-              builder: (context, snapshot) {
-                final user = snapshot.data ?? currentUser;
-                return _buildWelcomeSection(user);
-              },
+        if (snapshot.hasError) {
+          return Scaffold(
+            backgroundColor: Colors.grey[50],
+            appBar: _buildAnimatedAppBar(0, context),
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.error_outline,
+                        size: 48, color: AppTheme.danger),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Could not load your projects',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${snapshot.error}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            const SizedBox(height: 24),
+          );
+        }
 
-            // Action Buttons
-            _buildActionButtons(context),
-            const SizedBox(height: 24),
-
-            // Project Stats Cards with Firebase Data
-            StreamBuilder<List<Project>>(
-              stream: ProjectService.instance.watchMyProjects(),
-              builder: (context, snapshot) {
-                final projects = snapshot.data ?? [];
-                return _buildStatsSection(projects);
-              },
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Scaffold(
+            backgroundColor: Colors.grey[50],
+            appBar: _buildAnimatedAppBar(0, context),
+            body: const Center(
+              child: CircularProgressIndicator(),
             ),
-            const SizedBox(height: 32),
+          );
+        }
 
-            // Progress & Projects Section with Firebase Data
-            StreamBuilder<List<Project>>(
-              stream: ProjectService.instance.watchMyProjects(),
-              builder: (context, snapshot) {
-                final projects = snapshot.data ?? [];
-                if (projects.isEmpty) {
-                  return _buildEmptyProjectsState(context);
-                }
-                return _buildProjectsAndProgressSection(projects);
-              },
+        final projects = snapshot.data ?? [];
+        
+        final totalProjects = projects.length;
+        final projectsWithLevels = projects.where((p) => p.levels.isNotEmpty).length;
+        final projectsWithoutLevels = totalProjects - projectsWithLevels;
+        final totalLevels = projects.fold<int>(0, (sum, project) => sum + project.levels.length);
+
+        const int unreadNotifications = 0;
+
+        return Scaffold(
+          backgroundColor: Colors.grey[50],
+          appBar: _buildAnimatedAppBar(unreadNotifications, context),
+          body: SingleChildScrollView(
+            controller: _scrollController,
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).padding.bottom + 96,
             ),
-            const SizedBox(height: 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Welcome Section with Animation
+                StreamBuilder<AppUser?>(
+                  stream: UserProfileService.instance.watchCurrentUser(),
+                  builder: (context, snapshot) {
+                    final user = snapshot.data ?? AppUser(
+                      id: '',
+                      username: 'loading',
+                      name: 'Loading...',
+                      email: '',
+                      projectsJoined: 0,
+                      tasksCompleted: 0,
+                      createdAt: DateTime.now(),
+                    );
+                    return _buildWelcomeSection(user, totalProjects);
+                  },
+                ),
+                const SizedBox(height: 24),
 
-            // Reminders Section
-            _buildRemindersSection(context),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
+                _buildProjectsSection(projects),
+                const SizedBox(height: 24),
+
+                // Action Buttons
+                _buildActionButtons(context),
+                const SizedBox(height: 24),
+
+                // Project Stats Cards
+                _buildStatsSection(
+                  total: totalProjects,
+                  completed: projectsWithLevels,
+                  running: totalLevels,
+                  pending: projectsWithoutLevels,
+                ),
+                const SizedBox(height: 32),
+
+                // Progress Section
+                _buildProgressSection(projects),
+                const SizedBox(height: 32),
+
+                // Reminders Section (Empty for now as mock data is gone)
+                _buildRemindersSection(context),
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
-  PreferredSizeWidget _buildAnimatedAppBar(BuildContext context) {
-    final unreadNotifications =
-        notifications.where((n) => !n.read).length;
+  PreferredSizeWidget _buildAnimatedAppBar(int unreadCount, BuildContext context) {
     return AppBar(
       automaticallyImplyLeading: false,
       elevation: 0,
@@ -195,10 +218,18 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
                           width: 2,
                         ),
                       ),
-                      child: StreamBuilder<AppUser>(
+                      child: StreamBuilder<AppUser?>(
                         stream: UserProfileService.instance.watchCurrentUser(),
                         builder: (context, snapshot) {
-                          final user = snapshot.data ?? currentUser;
+                          final user = snapshot.data ?? AppUser(
+                            id: '',
+                            username: 'user',
+                            name: 'User',
+                            email: '',
+                            projectsJoined: 0,
+                            tasksCompleted: 0,
+                            createdAt: DateTime.now(),
+                          );
                           return UserAvatar(
                             name: user.name,
                             size: 36,
@@ -297,7 +328,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
     );
   }
 
-  Widget _buildWelcomeSection(AppUser user) {
+  Widget _buildWelcomeSection(AppUser user, int totalProjects) {
     return FadeTransition(
       opacity: Tween<double>(begin: 0, end: 1).animate(
         CurvedAnimation(parent: _fadeController, curve: const Interval(0.2, 1)),
@@ -438,38 +469,17 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
     );
   }
 
-  Widget _buildStatsSection(List<Project> projects) {
-    // Calculate stats from projects
-    final totalProjects = projects.length;
-    final completedProjects = projects.where((p) {
-      final avgProgress = p.levels.isNotEmpty
-          ? p.levels.map((l) => l.progress).reduce((a, b) => a + b) ~/
-              p.levels.length
-          : 0;
-      return avgProgress == 100;
-    }).length;
-
-    final runningProjects = projects.where((p) {
-      final avgProgress = p.levels.isNotEmpty
-          ? p.levels.map((l) => l.progress).reduce((a, b) => a + b) ~/
-              p.levels.length
-          : 0;
-      return avgProgress > 0 && avgProgress < 100;
-    }).length;
-
-    final pendingProjects = projects.where((p) {
-      final avgProgress = p.levels.isNotEmpty
-          ? p.levels.map((l) => l.progress).reduce((a, b) => a + b) ~/
-              p.levels.length
-          : 0;
-      return avgProgress == 0;
-    }).length;
-
+  Widget _buildStatsSection({
+    required int total,
+    required int completed,
+    required int running,
+    required int pending,
+  }) {
     final stats = [
-      {'label': 'Total Projects', 'count': totalProjects, 'color': AppTheme.primary, 'icon': Icons.folder},
-      {'label': 'Completed', 'count': completedProjects, 'color': const Color(0xFF10B981), 'icon': Icons.check_circle},
-      {'label': 'Running', 'count': runningProjects, 'color': const Color(0xFFF59E0B), 'icon': Icons.play_circle},
-      {'label': 'Pending', 'count': pendingProjects, 'color': const Color(0xFFEF4444), 'icon': Icons.schedule},
+      {'label': 'Total Projects', 'count': total, 'color': AppTheme.primary, 'icon': Icons.folder},
+      {'label': 'With Levels', 'count': completed, 'color': const Color(0xFF10B981), 'icon': Icons.view_list},
+      {'label': 'Total Levels', 'count': running, 'color': const Color(0xFFF59E0B), 'icon': Icons.view_week},
+      {'label': 'Without Levels', 'count': pending, 'color': const Color(0xFFEF4444), 'icon': Icons.remove_circle_outline},
     ];
 
     return Container(
@@ -556,7 +566,152 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
     );
   }
 
-  Widget _buildProjectsAndProgressSection(List<Project> projects) {
+  Widget _buildProjectsSection(List<Project> projects) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Your Projects',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 20),
+          _buildProjectsList(projects),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProjectsList(List<Project> projects) {
+    if (projects.isEmpty) {
+      return SizedBox(
+        height: 180,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.folder_open, color: Colors.grey[500], size: 40),
+                const SizedBox(height: 8),
+                Text(
+                  'No projects yet',
+                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final colors = [
+      AppTheme.primary,
+      const Color(0xFF10B981),
+      const Color(0xFFF59E0B),
+      const Color(0xFFEF4444),
+      const Color(0xFF8B5CF6),
+    ];
+
+    return SizedBox(
+      height: 180,
+      child: SingleChildScrollView(
+        key: const PageStorageKey<String>('dashboard-projects-row'),
+        controller: _projectsScrollController,
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        child: Row(
+          children: [
+            for (final entry in projects.asMap().entries) ...[
+              SizedBox(
+                width: 160,
+                height: 180,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0.5, 0),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(
+                      parent: _slideController,
+                      curve: Interval(0.3 + (entry.key * 0.1), 1),
+                    ),
+                  ),
+                  child: _buildEnhancedProjectCard(
+                    context: context,
+                    project: entry.value,
+                    color: colors[entry.key % colors.length],
+                    index: entry.key,
+                  ),
+                ),
+              ),
+              if (entry.key != projects.length - 1) const SizedBox(width: 12),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProjectPlaceholderCard(int index) {
+    return Column(
+      children: [
+        Expanded(
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.grey[300]!, width: 1),
+            ),
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Icon(
+                  Icons.folder_open,
+                  color: Colors.grey[500],
+                  size: 32,
+                ),
+                Text(
+                  'No data yet',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: Text(
+            'Project ${index + 1}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[700],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProgressSection(List<Project> projects) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
@@ -584,82 +739,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
           const SizedBox(height: 16),
 
           // Simple Progress Visualization
-          _buildProgressGraph(),
-          const SizedBox(height: 28),
-
-          // Current Projects with Add Button
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Your Projects',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.black87,
-                ),
-              ),
-              if (projects.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${projects.length} total',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.primary,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 20),
-
-          // Projects Grid with Names Below
-          SizedBox(
-            height: 180,
-            child: GridView.builder(
-              scrollDirection: Axis.horizontal,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 1,
-                childAspectRatio: 1.2,
-                mainAxisSpacing: 16,
-              ),
-              itemCount: projects.length,
-              itemBuilder: (context, index) {
-                final project = projects[index];
-                final colors = [
-                  AppTheme.primary,
-                  const Color(0xFF10B981),
-                  const Color(0xFFF59E0B),
-                  const Color(0xFFEF4444),
-                  const Color(0xFF8B5CF6),
-                ];
-                
-                return SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0.5, 0),
-                    end: Offset.zero,
-                  ).animate(
-                    CurvedAnimation(
-                      parent: _slideController,
-                      curve: Interval(0.3 + (index * 0.1), 1),
-                    ),
-                  ),
-                  child: _buildEnhancedProjectCard(
-                    context: context,
-                    project: project,
-                    color: colors[index % colors.length],
-                    index: index,
-                  ),
-                );
-              },
-            ),
-          ),
+          _buildProgressGraph(projects),
         ],
       ),
     );
@@ -671,168 +751,255 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
     required Color color,
     required int index,
   }) {
-    final avgProgress = project.levels.isNotEmpty
-        ? project.levels.map((l) => l.progress).reduce((a, b) => a + b) ~/
-            project.levels.length
-        : 0;
+    try {
+      final title = project.displayTitle;
+      final description = project.displayDescription;
+      final visibility = project.displayVisibility;
+      final lastUpdated = project.displayLastUpdated;
+      final levelCount = project.levels.length;
+      final collaboratorCount = project.safeCollaboratorCount;
+      final progressValue = project.progressValue;
+      final progressPercent = (progressValue * 100).round().toString().padLeft(2, '0');
 
-    return MouseRegion(
-      onEnter: (_) => setState(() {}),
-      onExit: (_) => setState(() {}),
-      child: Column(
-        children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                Navigator.pushNamed(context, '/project/${project.id}');
-              },
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      color,
-                      color.withOpacity(0.7),
+      return GestureDetector(
+        onTap: () {
+          Navigator.pushNamed(context, '/project/${project.id}');
+        },
+        child: Column(
+            children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        color,
+                        color.withOpacity(0.72),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: color.withOpacity(0.4),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      ),
                     ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: color.withOpacity(0.4),
-                      blurRadius: 12,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Top Section
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.folder,
-                          color: Colors.white,
-                          size: 32,
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.folder,
+                            color: Colors.white,
+                            size: 32,
                           ),
-                          decoration: BoxDecoration(
-                            color: Colors.white24,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            '$avgProgress%',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    // Bottom Section
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Progress Bar
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: LinearProgressIndicator(
-                            value: avgProgress / 100,
-                            minHeight: 4,
-                            backgroundColor: Colors.white24,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white70),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        // Collaborators Info
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.people_outline,
-                              size: 14,
-                              color: Colors.white70,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${project.collaborators} collaborators',
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white24,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  visibility == 'public' ? 'Public' : 'Private',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                  ),
+                                ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 6),
+                              Text(
+                                '$levelCount levels',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          height: 1.35,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(3),
+                        child: LinearProgressIndicator(
+                          value: progressValue,
+                          minHeight: 4,
+                          backgroundColor: Colors.white24,
+                          valueColor: const AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.people_outline,
+                                size: 14,
+                                color: Colors.white70,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '$collaboratorCount collaborators',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Text(
+                            '$progressPercent%',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Updated $lastUpdated',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[800],
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          // Project Name Below
-          SizedBox(
-            width: double.infinity,
-            child: Text(
-              project.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[800],
+        );
+    } catch (e) {
+      print('⚠️ Failed to render project card ${project.id}: $e');
+      return _buildProjectFallbackCard(project, color);
+    }
+  }
+
+  Widget _buildProjectFallbackCard(Project project, Color color) {
+    return Column(
+      children: [
+        Expanded(
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [color.withOpacity(0.75), color.withOpacity(0.5)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            padding: const EdgeInsets.all(14),
+            child: const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.white, size: 30),
+                  SizedBox(height: 8),
+                  Text(
+                    'Project unavailable',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: Text(
+            project.displayTitle,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[800],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildProgressGraph() {
-    final List<int> progressData = projects.map((p) {
-      if (p.levels.isEmpty) return 0;
-      return p.levels.map((l) => l.progress).reduce((a, b) => a + b) ~/
-          p.levels.length;
-    }).toList();
-
+  Widget _buildProgressGraph(List<Project> projects) {
+    final levelCounts = projects.map((project) => project.levels.length).toList();
     final totalProjectsCount = projects.length;
-    final completedProjectsCount = progressData.where((value) => value == 100).length;
-    final runningProjectsCount = progressData.where((value) => value > 0 && value < 100).length;
-    final pendingProjectsCount = progressData.where((value) => value == 0).length;
-
-    final overallProgress = progressData.isNotEmpty
-        ? progressData.reduce((a, b) => a + b) ~/ progressData.length
-        : 0;
-
-    final ringValues = [
-      completedProjectsCount,
-      runningProjectsCount,
-      pendingProjectsCount,
-    ];
-
-    const colors = [
-      Color(0xFF10B981),
-      Color(0xFFF59E0B),
-      Color(0xFFEF4444),
-    ];
+    final projectsWithLevels = levelCounts.where((count) => count > 0).length;
+    final projectsWithoutLevels = totalProjectsCount - projectsWithLevels;
+    final totalLevels = levelCounts.fold<int>(0, (sum, count) => sum + count);
 
     return Container(
-      height: 360,
+      height: 260,
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [Colors.white, const Color(0xFFF8FAFF)],
@@ -859,7 +1026,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Project Progress',
+                    'Level Overview',
                     style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.w700,
@@ -868,7 +1035,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Dynamic overview of project status',
+                    'All levels come directly from Firebase',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.grey[600],
@@ -883,7 +1050,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  '$overallProgress%',
+                  '$totalLevels levels',
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -894,95 +1061,23 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
             ],
           ),
           const SizedBox(height: 16),
-          Expanded(
-            child: AnimatedBuilder(
-              animation: _scaleController,
-              builder: (context, _) {
-                final animationValue = Curves.easeOutCubic.transform(
-                  _scaleController.value,
-                );
-
-                return Center(
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      SizedBox(
-                        width: 186,
-                        height: 186,
-                        child: CustomPaint(
-                          painter: _ProgressRingPainter(
-                            values: ringValues,
-                            colors: colors,
-                            animationValue: animationValue,
-                          ),
-                        ),
-                      ),
-                      Container(
-                        width: 108,
-                        height: 108,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [
-                              Colors.white,
-                              Colors.white.withOpacity(0.95),
-                            ],
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 14,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              '$overallProgress%',
-                              style: const TextStyle(
-                                fontSize: 29,
-                                fontWeight: FontWeight.w800,
-                                color: AppTheme.textPrimary,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Overall',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
                 child: _buildLegendItem(
-                  'Completed',
-                  completedProjectsCount,
+                  'Projects with levels',
+                  projectsWithLevels,
                   totalProjectsCount,
-                  colors[0],
+                  const Color(0xFF10B981),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: _buildLegendItem(
-                  'Running',
-                  runningProjectsCount,
+                  'Projects without levels',
+                  projectsWithoutLevels,
                   totalProjectsCount,
-                  colors[1],
+                  const Color(0xFFEF4444),
                 ),
               ),
             ],
@@ -992,19 +1087,19 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
             children: [
               Expanded(
                 child: _buildLegendItem(
-                  'Pending',
-                  pendingProjectsCount,
+                  'Total levels',
+                  totalLevels,
                   totalProjectsCount,
-                  colors[2],
+                  AppTheme.primary,
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: _buildLegendItem(
-                  'Total',
+                  'Projects',
                   totalProjectsCount,
                   totalProjectsCount,
-                  AppTheme.primary,
+                  const Color(0xFFF59E0B),
                 ),
               ),
             ],
@@ -1088,79 +1183,46 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
   }
 
   Widget _buildRemindersSection(BuildContext context) {
-    final activeReminders = reminders.where((r) => !r.isRead).toList();
-
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 'Reminders & Activities',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: Colors.black87,
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppTheme.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${activeReminders.length} new',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.primary,
-                  ),
-                ),
-              ),
             ],
           ),
           const SizedBox(height: 12),
-
-          if (activeReminders.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey[200]!, width: 1),
-              ),
-              child: Center(
-                child: Text(
-                  'No active reminders',
-                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                ),
-              ),
-            )
-          else
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: activeReminders.length,
-              itemBuilder: (context, index) {
-                final reminder = activeReminders[index];
-                return SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(-0.3, 0),
-                    end: Offset.zero,
-                  ).animate(
-                    CurvedAnimation(
-                      parent: _slideController,
-                      curve: Interval(0.4 + (index * 0.1), 1),
-                    ),
-                  ),
-                  child: _buildReminderCard(context, reminder),
-                );
-              },
+          Container(
+            padding: const EdgeInsets.all(20),
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[200]!, width: 1),
             ),
+            child: const Center(
+              child: Column(
+                children: [
+                   Icon(Icons.notifications_none, color: Colors.grey, size: 32),
+                   SizedBox(height: 8),
+                   Text(
+                    'No active reminders',
+                    style: TextStyle(color: Colors.grey, fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+          )
         ],
       ),
     );

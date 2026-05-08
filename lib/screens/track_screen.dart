@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../data/mock_data.dart';
 import '../models/models.dart';
 import '../services/project_service.dart';
 import '../theme/app_theme.dart';
@@ -35,10 +34,8 @@ class TrackScreen extends StatelessWidget {
         }
 
         final project = snapshot.data!;
-        final overallProgress = project.levels.isEmpty
-            ? 0
-            : project.levels.map((l) => l.progress).reduce((a, b) => a + b) ~/
-                project.levels.length;
+        final orderedLevels = [...project.levels]
+          ..sort((a, b) => a.order.compareTo(b.order));
 
         final stats = [
           _Stat(
@@ -72,128 +69,104 @@ class TrackScreen extends StatelessWidget {
           body: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-          // Stats grid
-          GridView.count(
-            crossAxisCount: 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            childAspectRatio: 1.4,
-            children: stats.map((s) => _StatCard(stat: s)).toList(),
-          ),
-          const SizedBox(height: 16),
-          // Progress by level
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Progress by Level',
-                      style: TextStyle(
+              GridView.count(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                childAspectRatio: 1.4,
+                children: stats.map((s) => _StatCard(stat: s)).toList(),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Project Levels',
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
-                          color: AppTheme.textPrimary)),
-                  const SizedBox(height: 14),
-                  ...project.levels.map((level) => Padding(
-                        padding: const EdgeInsets.only(bottom: 14),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                    child: Text(level.name,
-                                        style: const TextStyle(
-                                            fontSize: 13,
-                                            color: AppTheme.textSecondary))),
-                                Text('${level.progress}%',
-                                    style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppTheme.textPrimary)),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: LinearProgressIndicator(
-                                value: level.progress / 100,
-                                backgroundColor: const Color(0xFFE5E7EB),
-                                valueColor: const AlwaysStoppedAnimation(
-                                    AppTheme.primary),
-                                minHeight: 8,
-                              ),
-                            ),
-                          ],
+                          color: AppTheme.textPrimary,
                         ),
-                      )),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          // Overall progress
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFEFF6FF), Color(0xFFF5F3FF)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              border: Border.all(color: const Color(0xFFBFDBFE)),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Text('Overall Progress',
+                      ),
+                      const SizedBox(height: 14),
+                      if (orderedLevels.isEmpty)
+                        const Text(
+                          'No levels have been created yet.',
                           style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.textPrimary)),
-                    ),
-                    Text('$overallProgress%',
-                        style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.primary)),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: LinearProgressIndicator(
-                    value: overallProgress / 100,
-                    backgroundColor: Colors.white,
-                    valueColor: const AlwaysStoppedAnimation(AppTheme.primary),
-                    minHeight: 12,
+                            fontSize: 13,
+                            color: AppTheme.textSecondary,
+                          ),
+                        )
+                      else
+                        ...orderedLevels.map((level) => Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 16,
+                                      backgroundColor: AppTheme.primary.withOpacity(0.12),
+                                      foregroundColor: AppTheme.primary,
+                                      child: Text('${level.order}'),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            level.title,
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppTheme.textPrimary,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            'Created ${level.createdAt.month}/${level.createdAt.day}/${level.createdAt.year}',
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              color: AppTheme.textSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )),
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          // AI report button
-          ElevatedButton.icon(
-            onPressed: () =>
-                Navigator.pushNamed(context, '/project/$projectId/ai-report'),
-            icon: const Icon(Icons.auto_awesome, size: 18),
-            label: const Text('Generate Weekly AI Report'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-              elevation: 1,
-            ),
-          ),
-          const SizedBox(height: 16),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () =>
+                    Navigator.pushNamed(context, '/project/$projectId/ai-report'),
+                icon: const Icon(Icons.auto_awesome, size: 18),
+                label: const Text('Generate Weekly AI Report'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  elevation: 1,
+                ),
+              ),
             ],
           ),
         );
