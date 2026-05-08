@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+
+import '../models/models.dart';
+import '../services/project_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
-import '../services/project_service.dart';
-import '../models/models.dart';
+import 'join_request_screen.dart';
 
 class DiscoverScreen extends StatefulWidget {
   const DiscoverScreen({super.key});
@@ -12,7 +14,7 @@ class DiscoverScreen extends StatefulWidget {
 }
 
 class _DiscoverScreenState extends State<DiscoverScreen> {
-  final _searchController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
   String _query = '';
 
   @override
@@ -33,11 +35,10 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
             child: TextField(
               controller: _searchController,
-              onChanged: (v) => setState(() => _query = v),
+              onChanged: (value) => setState(() => _query = value),
               decoration: InputDecoration(
                 hintText: 'Search public projects...',
-                prefixIcon: const Icon(Icons.search,
-                    size: 18, color: AppTheme.textMuted),
+                prefixIcon: const Icon(Icons.search, size: 18, color: AppTheme.textMuted),
                 suffixIcon: _query.isNotEmpty
                     ? IconButton(
                         icon: const Icon(Icons.close, size: 16),
@@ -59,21 +60,23 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final allProjects = snapshot.data ?? [];
-          final filtered = allProjects
-              .where((p) =>
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+
+          final projects = snapshot.data ?? [];
+          final filtered = projects
+              .where((project) =>
                   _query.isEmpty ||
-                  p.title.toLowerCase().contains(_query.toLowerCase()) ||
-                  p.description.toLowerCase().contains(_query.toLowerCase()))
+                  project.title.toLowerCase().contains(_query.toLowerCase()) ||
+                  project.description.toLowerCase().contains(_query.toLowerCase()))
               .toList();
 
           if (filtered.isEmpty) {
             return const EmptyState(
               icon: Icons.search_off,
               title: 'No projects found',
-              subtitle: allProjects.isEmpty
-                  ? 'No public projects available yet'
-                  : 'Try a different search term',
+              subtitle: 'Try a different search term',
             );
           }
 
@@ -83,12 +86,71 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
             separatorBuilder: (_, __) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               final project = filtered[index];
-              final memberCount = project.collaborators.length + 1; // +1 for creator
-
-              return _buildProjectCard(
-                context: context,
-                project: project,
-                memberCount: memberCount,
+              return Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        project.title,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        project.description,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppTheme.textSecondary,
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Members: ${project.collaboratorCount}/${project.requiredCollaborators > 0 ? project.requiredCollaborators : 'unlimited'}',
+                        style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                      ),
+                      if (project.requiredSkills.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          'Skills needed: ${project.requiredSkills.join(', ')}',
+                          style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                        ),
+                      ],
+                      if (project.isOpenForRequests) ...[
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Accepting join requests',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 10),
+                      if (project.isOpenForRequests)
+                        _RequestToJoinButton(project: project)
+                      else
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton(
+                            onPressed: null,
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: AppTheme.border),
+                              foregroundColor: AppTheme.textMuted,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: const Text('Not accepting requests'),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               );
             },
           );
@@ -96,98 +158,45 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       ),
     );
   }
+}
 
-  Widget _buildProjectCard({
-    required BuildContext context,
-    required Project project,
-    required int memberCount,
-  }) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              project.title,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              project.description,
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppTheme.textSecondary,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Members: $memberCount/${project.requiredCollaborators > 0 ? project.requiredCollaborators : 'unlimited'}',
-              style: const TextStyle(
-                  fontSize: 12, color: AppTheme.textMuted),
-            ),
-            if (project.isOpenForRequests) ...[
-              const SizedBox(height: 4),
-              const Text(
-                'Looking for collaborators',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppTheme.primary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: project.isOpenForRequests
-                    ? () => _requestToJoin(context, project)
-                    : null,
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: AppTheme.border),
-                  foregroundColor: AppTheme.textPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-                child: Text(
-                  project.isOpenForRequests
-                      ? 'Request to Join'
-                      : 'Not accepting requests',
-                ),
-              ),
-            ),
-          ],
+class _RequestToJoinButton extends StatefulWidget {
+  final Project project;
+
+  const _RequestToJoinButton({required this.project});
+
+  @override
+  State<_RequestToJoinButton> createState() => _RequestToJoinButtonState();
+}
+
+class _RequestToJoinButtonState extends State<_RequestToJoinButton> {
+  bool _isLoading = false;
+
+  void _requestToJoin() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => JoinRequestScreen(
+          projectId: widget.project.id,
+          project: widget.project,
         ),
       ),
     );
   }
 
-  Future<void> _requestToJoin(BuildContext context, Project project) async {
-    try {
-      await ProjectService.instance.requestToJoinProject(project.id);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Join request sent to ${project.title}'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: _isLoading ? null : _requestToJoin,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppTheme.primary,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        child: const Text('Request to Join'),
+      ),
+    );
   }
 }

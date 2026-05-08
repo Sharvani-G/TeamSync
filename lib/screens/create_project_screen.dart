@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/models.dart';
 import '../services/project_service.dart';
+import '../services/user_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
 
@@ -16,112 +14,161 @@ class CreateProjectScreen extends StatefulWidget {
 class _CreateProjectScreenState extends State<CreateProjectScreen> {
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
-  final _collabController = TextEditingController();
-  final _emailController = TextEditingController();
+  final _usernameController = TextEditingController();
+  final _contactEmailController = TextEditingController();
   final _requiredCollabController = TextEditingController();
+  final _customLevelController = TextEditingController();
   
   bool _isPublic = false;
-  bool _isOpenForRequests = true;
-  final Map<String, String> _collaborators = {}; // Map<userId, role>
+  bool _isOpenForRequests = false;
+  final List<String> _collaboratorUsernames = [];
   final List<String> _requiredSkills = [];
-  final List<String> _skillInputList = [];
+  final _skillController = TextEditingController();
   bool _isLoading = false;
+  
+  // Default levels
+  late List<Map<String, dynamic>> _levels;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeDefaultLevels();
+  }
+
+  void _initializeDefaultLevels() {
+    _levels = [
+      {'title': 'Problem Statement', 'order': 1},
+      {'title': 'Ideation', 'order': 2},
+      {'title': 'Research', 'order': 3},
+      {'title': 'Development', 'order': 4},
+      {'title': 'Testing', 'order': 5},
+      {'title': 'Documentation', 'order': 6},
+    ];
+  }
+
+  void _removeLevel(int index) {
+    setState(() {
+      _levels.removeAt(index);
+      // Reorder
+      for (int i = 0; i < _levels.length; i++) {
+        _levels[i]['order'] = i + 1;
+      }
+    });
+  }
+
+  void _addCustomLevel() {
+    final title = _customLevelController.text.trim();
+    if (title.isEmpty) {
+      _showSnackBar('Please enter a level name');
+      return;
+    }
+
+    if (_levels.any((l) => l['title'].toLowerCase() == title.toLowerCase())) {
+      _showSnackBar('Level "$title" already exists');
+      return;
+    }
+
+    setState(() {
+      _levels.add({
+        'title': title,
+        'order': _levels.length + 1,
+      });
+      _customLevelController.clear();
+    });
+  }
 
   @override
   void dispose() {
     _titleController.dispose();
     _descController.dispose();
-    _collabController.dispose();
-    _emailController.dispose();
+    _usernameController.dispose();
+    _contactEmailController.dispose();
     _requiredCollabController.dispose();
+    _customLevelController.dispose();
+    _skillController.dispose();
     super.dispose();
   }
 
-  /// Look up user by email or username
+  /// Add collaborator by username with validation
   Future<void> _addCollaborator() async {
-    final input = _collabController.text.trim();
-    if (input.isEmpty) return;
+    final username = _usernameController.text.trim();
+    if (username.isEmpty) {
+      _showSnackBar('Please enter a username');
+      return;
+    }
+
+    // Check for duplicates
+    if (_collaboratorUsernames.contains(username.toLowerCase())) {
+      _showSnackBar('User "@$username" already added');
+      return;
+    }
+
+    setState(() => _isLoading = true);
 
     try {
-      // Search for user by email or display name in Firestore
-      final usersQuery = await FirebaseFirestore.instance
-          .collection('users')
-          .where('email', isEqualTo: input)
-          .limit(1)
-          .get();
-
-      if (usersQuery.docs.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('User not found'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        return;
-      }
-
-      final userId = usersQuery.docs.first.id;
-      final userName = usersQuery.docs.first.data()['name'] as String? ?? input;
-
-      if (_collaborators.containsKey(userId)) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('User already added'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      // Verify user exists
+      final user = await UserService.instance.getUserByUsername(username);
+      if (user == null) {
+        _showSnackBar('User "@$username" not found');
         return;
       }
 
       setState(() {
-        _collaborators[userId] = 'collaborator';
-        _collabController.clear();
+        _collaboratorUsernames.add(username.toLowerCase());
+        _usernameController.clear();
       });
+
+      _showSnackBar('Added @${user.$2} as collaborator');
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      _showSnackBar('Error: ${e.toString()}');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _removeCollaborator(String userId) =>
-      setState(() => _collaborators.remove(userId));
+  void _removeCollaborator(String username) {
+    setState(() => _collaboratorUsernames.remove(username));
+  }
 
   void _addSkill() {
-    final skill = _skillInputList.isNotEmpty ? _skillInputList.last : '';
-    if (skill.isNotEmpty && !_requiredSkills.contains(skill)) {
-      setState(() => _requiredSkills.add(skill));
-      _skillInputList.clear();
-    }
-  }
-
-  void _removeSkill(String skill) =>
-      setState(() => _requiredSkills.remove(skill));
-
-  Future<void> _createProject() async {
-    if (_titleController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter project title'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    final skill = _skillController.text.trim();
+    if (skill.isEmpty) {
+      _showSnackBar('Please enter a skill');
       return;
     }
 
-    if (_descController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter project description'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    if (_requiredSkills.contains(skill.toLowerCase())) {
+      _showSnackBar('Skill "$skill" already added');
+      return;
+    }
+
+    setState(() {
+      _requiredSkills.add(skill.toLowerCase());
+      _skillController.clear();
+    });
+  }
+
+  void _removeSkill(String skill) {
+    setState(() => _requiredSkills.remove(skill));
+  }
+
+  Future<void> _createProject() async {
+    // Validate inputs
+    final title = _titleController.text.trim();
+    final description = _descController.text.trim();
+
+    if (title.isEmpty) {
+      _showSnackBar('Please enter project title');
+      return;
+    }
+
+    if (description.isEmpty) {
+      _showSnackBar('Please enter project description');
+      return;
+    }
+
+    if (_levels.isEmpty) {
+      _showSnackBar('Please add at least one project level');
       return;
     }
 
@@ -129,35 +176,37 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
 
     try {
       await ProjectService.instance.createProject(
-        title: _titleController.text.trim(),
-        description: _descController.text.trim(),
-        collaborators: _collaborators,
+        title: title,
+        description: description,
+        collaboratorUsernames: _collaboratorUsernames,
         visibility: _isPublic ? 'public' : 'private',
         isOpenForRequests: _isOpenForRequests,
         requiredCollaborators: int.tryParse(_requiredCollabController.text) ?? 0,
         requiredSkills: _requiredSkills,
-        contactEmail: _emailController.text.trim(),
+        contactEmail: _contactEmailController.text.trim(),
+        levels: _levels,
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Project created successfully'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      Navigator.of(context).popUntil((r) => r.isFirst);
+
+      _showSnackBar('Project created successfully!');
+      Navigator.of(context).pop(); // Go back to home
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      _showSnackBar('Error: ${e.toString()}');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   @override
@@ -169,166 +218,362 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _label('Project Title'),
-            const SizedBox(height: 6),
+            // Project Title
+            _label('Project Title *'),
+            const SizedBox(height: 8),
             TextField(
               controller: _titleController,
-              decoration: const InputDecoration(hintText: 'Enter project name'),
+              decoration: InputDecoration(
+                hintText: 'Enter project name',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
             ),
             const SizedBox(height: 20),
-            _label('Project Description'),
-            const SizedBox(height: 6),
+
+            // Project Description
+            _label('Project Description *'),
+            const SizedBox(height: 8),
             TextField(
               controller: _descController,
-              maxLines: 4,
-              decoration:
-                  const InputDecoration(hintText: 'Describe your project'),
-            ),
-            const SizedBox(height: 20),
-            _label('Contact Email'),
-            const SizedBox(height: 6),
-            TextField(
-              controller: _emailController,
-              decoration: const InputDecoration(hintText: 'project@example.com'),
-            ),
-            const SizedBox(height: 20),
-            _label('Visibility'),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Expanded(
-                    child: _VisibilityButton(
-                        label: 'Public',
-                        selected: _isPublic,
-                        onTap: () => setState(() => _isPublic = true))),
-                const SizedBox(width: 10),
-                Expanded(
-                    child: _VisibilityButton(
-                        label: 'Private',
-                        selected: !_isPublic,
-                        onTap: () => setState(() => _isPublic = false))),
-              ],
-            ),
-            const SizedBox(height: 20),
-            if (_isPublic) ...[
-              _label('Open for Join Requests?'),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Checkbox(
-                    value: _isOpenForRequests,
-                    onChanged: (val) =>
-                        setState(() => _isOpenForRequests = val ?? false),
-                    activeColor: AppTheme.primary,
-                  ),
-                  const Text('Allow users to request to join'),
-                ],
+              maxLines: 3,
+              decoration: InputDecoration(
+                hintText: 'Describe your project goals and scope',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
-              const SizedBox(height: 20),
-            ],
-            _label('Add Collaborators (by email)'),
-            const SizedBox(height: 6),
+            ),
+            const SizedBox(height: 20),
+
+            // Contact Email
+            _label('Contact Email'),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _contactEmailController,
+              keyboardType: TextInputType.emailAddress,
+              decoration: InputDecoration(
+                hintText: 'project@example.com',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Project Levels
+            _label('Project Levels'),
+            const SizedBox(height: 8),
+            // Display current levels
+            Column(
+              children: List.generate(
+                _levels.length,
+                (index) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                      borderRadius: BorderRadius.circular(10),
+                      color: Colors.white,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _levels[index]['title'],
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: AppTheme.textPrimary,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: _levels.length > 1
+                              ? () => _removeLevel(index)
+                              : null,
+                          color: _levels.length > 1
+                              ? AppTheme.danger
+                              : const Color(0xFFD1D5DB),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints.tightFor(
+                            width: 32,
+                            height: 32,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Add custom level
             Row(
               children: [
                 Expanded(
                   child: TextField(
-                    controller: _collabController,
-                    decoration: const InputDecoration(
-                        hintText: 'Search user by email'),
-                    onSubmitted: (_) => _addCollaborator(),
+                    controller: _customLevelController,
+                    decoration: InputDecoration(
+                      hintText: 'Add custom stage',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                    ),
+                    onSubmitted: (_) => _addCustomLevel(),
                   ),
                 ),
                 const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _addCollaborator,
+                ElevatedButton.icon(
+                  onPressed: _addCustomLevel,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add'),
                   style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14)),
-                  child: const Text('Add'),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                  ),
                 ),
               ],
             ),
-            if (_collaborators.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _collaborators.entries
-                    .map((entry) => Chip(
-                          label: Text(entry.key),
-                          deleteIcon: const Icon(Icons.close, size: 14),
-                          onDeleted: () => _removeCollaborator(entry.key),
-                          backgroundColor: const Color(0xFFEFF6FF),
-                          labelStyle: const TextStyle(
-                              fontSize: 13, color: AppTheme.primary),
-                          deleteIconColor: AppTheme.primary,
-                          side: BorderSide.none,
-                        ))
-                    .toList(),
-              ),
-            ],
             const SizedBox(height: 20),
-            _label('Required Number of Collaborators'),
-            const SizedBox(height: 6),
-            TextField(
-              controller: _requiredCollabController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(hintText: '5'),
+
+            // Visibility
+            _label('Project Visibility *'),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _VisibilityButton(
+                    label: 'Public',
+                    icon: Icons.people,
+                    selected: _isPublic,
+                    onTap: () => setState(() {
+                      _isPublic = true;
+                      _isOpenForRequests = false; // Reset requests
+                    }),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _VisibilityButton(
+                    label: 'Private',
+                    icon: Icons.lock,
+                    selected: !_isPublic,
+                    onTap: () => setState(() {
+                      _isPublic = false;
+                      _isOpenForRequests = false; // Disable for private
+                    }),
+                  ),
+                ),
+              ],
             ),
+            const SizedBox(height: 16),
+            if (!_isPublic)
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFDEBD47)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info, size: 18, color: Color(0xFFB45309)),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Private projects are only visible to collaborators',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFFB45309),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             const SizedBox(height: 20),
-            _label('Required Skills'),
-            const SizedBox(height: 6),
-            ..._requiredSkills.map((skill) => _SkillTile(
-                label: skill, onRemove: () => _removeSkill(skill))),
+
+            // Open for Requests (only for public projects)
+            if (_isPublic) ...[
+              _label('Open for Join Requests?'),
+              const SizedBox(height: 8),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Checkbox(
+                            value: _isOpenForRequests,
+                            onChanged: (val) =>
+                                setState(() => _isOpenForRequests = val ?? false),
+                            activeColor: AppTheme.primary,
+                          ),
+                          const Expanded(
+                            child: Text(
+                              'Allow users to request to join this project',
+                              style: TextStyle(fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_isOpenForRequests) ...[
+                        const Divider(height: 16),
+                        _label('Required Number of Collaborators'),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _requiredCollabController,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            hintText: 'e.g., 5',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _label('Required Skills'),
+                        const SizedBox(height: 8),
+                        ..._requiredSkills.map((skill) =>
+                            _SkillTile(
+                              skill: skill,
+                              onRemove: () => _removeSkill(skill),
+                            )),
+                        if (_requiredSkills.isNotEmpty)
+                          const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _skillController,
+                                decoration: InputDecoration(
+                                  hintText: 'Add skill (e.g., Flutter)',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
+                                ),
+                                onSubmitted: (_) => _addSkill(),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            OutlinedButton.icon(
+                              onPressed: _addSkill,
+                              icon: const Icon(Icons.add, size: 16),
+                              label: const Text('Add'),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+
+            // Add Collaborators
+            _label('Add Collaborators (by username)'),
             const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
                   child: TextField(
-                    onChanged: (val) {
-                      if (_skillInputList.isEmpty) {
-                        _skillInputList.add(val);
-                      } else {
-                        _skillInputList[0] = val;
-                      }
-                    },
-                    decoration:
-                        const InputDecoration(hintText: 'Add skill (e.g., Flutter)'),
-                    onSubmitted: (_) => _addSkill(),
+                    controller: _usernameController,
+                    enabled: !_isLoading,
+                    decoration: InputDecoration(
+                      hintText: 'e.g., john_doe',
+                      prefixText: '@',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onSubmitted: (_) => _addCollaborator(),
                   ),
                 ),
                 const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  onPressed: _addSkill,
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('Add'),
-                  style: OutlinedButton.styleFrom(
+                ElevatedButton(
+                  onPressed: _isLoading ? null : _addCollaborator,
+                  style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 14),
-                    foregroundColor: AppTheme.textPrimary,
-                    side: const BorderSide(color: AppTheme.border),
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
                   ),
+                  child: const Text('Add'),
                 ),
               ],
             ),
+
+            if (_collaboratorUsernames.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _collaboratorUsernames
+                    .map((username) => Chip(
+                      avatar: const Icon(Icons.person, size: 18),
+                      label: Text('@$username'),
+                      onDeleted: () => _removeCollaborator(username),
+                      backgroundColor: const Color(0xFFEFF6FF),
+                      labelStyle: const TextStyle(
+                        fontSize: 13,
+                        color: AppTheme.primary,
+                      ),
+                      deleteIconColor: AppTheme.primary,
+                      side: BorderSide.none,
+                    ))
+                    .toList(),
+              ),
+            ],
+
             const SizedBox(height: 28),
+
+            // Create Button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _isLoading ? null : _createProject,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
                 child: _isLoading
                     ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
                     : const Text('Create Project'),
               ),
             ),
+
             const SizedBox(height: 24),
           ],
         ),
@@ -336,44 +581,60 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     );
   }
 
-  Widget _label(String text) => Text(text,
-      style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-          color: AppTheme.textPrimary));
+  Widget _label(String text, {bool required = false}) => Text(
+    text,
+    style: TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w600,
+      color: AppTheme.textPrimary,
+    ),
+  );
 }
-
-
 
 class _VisibilityButton extends StatelessWidget {
   final String label;
+  final IconData icon;
   final bool selected;
   final VoidCallback onTap;
 
-  const _VisibilityButton(
-      {required this.label, required this.selected, required this.onTap});
+  const _VisibilityButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Container(
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFEFF6FF) : Colors.white,
           border: Border.all(
-              color: selected ? AppTheme.primary : AppTheme.border,
-              width: selected ? 2 : 1),
-          borderRadius: BorderRadius.circular(10),
+            color: selected ? AppTheme.primary : const Color(0xFFE5E7EB),
+            width: selected ? 2 : 1,
+          ),
+          borderRadius: BorderRadius.circular(8),
+          color: selected ? const Color(0xFFEFF6FF) : Colors.white,
         ),
-        child: Center(
-          child: Text(label,
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+        child: Column(
+          children: [
+            Icon(
+              icon,
+              size: 24,
+              color: selected ? AppTheme.primary : const Color(0xFF6B7280),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
               style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: selected ? AppTheme.primary : AppTheme.textSecondary,
-              )),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: selected ? AppTheme.primary : AppTheme.textPrimary,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -381,33 +642,48 @@ class _VisibilityButton extends StatelessWidget {
 }
 
 class _SkillTile extends StatelessWidget {
-  final String label;
+  final String skill;
   final VoidCallback onRemove;
 
-  const _SkillTile({required this.label, required this.onRemove});
+  const _SkillTile({
+    required this.skill,
+    required this.onRemove,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: AppTheme.border),
-        borderRadius: BorderRadius.circular(10),
-      ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
           Expanded(
-              child: Text(label,
-                  style: const TextStyle(
-                      fontSize: 14, color: AppTheme.textPrimary))),
-          GestureDetector(
-            onTap: onRemove,
-            child: const Icon(Icons.close, size: 18, color: AppTheme.textMuted),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                skill,
+                style: const TextStyle(fontSize: 13),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.close, size: 18),
+            onPressed: onRemove,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+            style: IconButton.styleFrom(
+              backgroundColor: const Color(0xFFFEE2E2),
+            ),
+            iconSize: 16,
+            color: AppTheme.danger,
           ),
         ],
       ),
     );
   }
 }
+

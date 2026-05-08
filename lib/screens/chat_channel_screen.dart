@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../data/mock_data.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
@@ -21,14 +20,6 @@ class _ChatChannelScreenState extends State<ChatChannelScreen> {
   final _scrollController = ScrollController();
   final List<_LocalMessage> _messages = [];
 
-  ChatChannel? get _channel {
-    try {
-      return chatChannels.firstWhere((c) => c.id == widget.channelId);
-    } catch (_) {
-      return null;
-    }
-  }
-
   @override
   void dispose() {
     _controller.dispose();
@@ -44,7 +35,7 @@ class _ChatChannelScreenState extends State<ChatChannelScreen> {
         _LocalMessage(
           text: text,
           time: _now(),
-          username: FirebaseAuth.instance.currentUser?.displayName ?? currentUser.name,
+          username: FirebaseAuth.instance.currentUser?.displayName ?? 'User',
         ),
       ),
     );
@@ -70,18 +61,8 @@ class _ChatChannelScreenState extends State<ChatChannelScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final channel = _channel;
-    if (channel == null) {
-      return const Scaffold(
-        appBar: SimpleAppBar(title: 'Channel Not Found'),
-        body: EmptyState(
-            icon: Icons.error_outline,
-            title: 'Channel not found',
-            subtitle: ''),
-      );
-    }
-
-    final channelLabel = '#${channel.name.toLowerCase().replaceAll(' ', '-')}';
+    final channelName = widget.channelId;
+    final channelLabel = '#$channelName';
 
     return Scaffold(
       appBar: SimpleAppBar(
@@ -102,7 +83,7 @@ class _ChatChannelScreenState extends State<ChatChannelScreen> {
       body: Column(
         children: [
           Expanded(
-            child: channel.messages.isEmpty && _messages.isEmpty
+            child: _messages.isEmpty
                 ? EmptyState(
                     icon: Icons.people_outline,
                     title: 'No messages yet',
@@ -112,12 +93,6 @@ class _ChatChannelScreenState extends State<ChatChannelScreen> {
                     controller: _scrollController,
                     padding: const EdgeInsets.all(16),
                     children: [
-                      ...channel.messages.map((msg) => _MessageBubble(
-                            username: msg.username,
-                            message: msg.message,
-                            timestamp: msg.timestamp,
-                            isMe: msg.userId == '1',
-                          )),
                       ..._messages.map((msg) => _MessageBubble(
                             username: msg.username,
                             message: msg.text,
@@ -129,7 +104,7 @@ class _ChatChannelScreenState extends State<ChatChannelScreen> {
           ),
           _MessageInput(
             controller: _controller,
-            channelName: channel.name.toLowerCase(),
+            channelName: channelName.toLowerCase(),
             onSend: _sendMessage,
             onAttach: () {},
           ),

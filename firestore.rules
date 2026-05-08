@@ -1,76 +1,141 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
+    // ============ FUNCTIONS ============
+    
+    /// Check if user is authenticated
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    /// Check if requester is specific user
+    function isUser(userId) {
+      return isAuth() && request.auth.uid == userId;
+    }
+
+    /// Check if user is project creator/admin
+    function isProjectAdmin(projectId) {
+      return isAuth() && 
+             exists(/databases/$(database)/documents/projects/$(projectId)) &&
+             get(/databases/$(database)/documents/projects/$(projectId)).data.createdBy == request.auth.uid;
+    }
+
+    /// Check if user is collaborator (includes admin)
+    function isProjectCollaborator(projectId) {
+      let project = get(/databases/$(database)/documents/projects/$(projectId)).data;
+      return isAuth() && 
+             (project.createdBy == request.auth.uid || 
+              request.auth.uid in project.collaborators);
+    }
+
+    /// Check if project is public
+    function isPublicProject(projectId) {
+      return exists(/databases/$(database)/documents/projects/$(projectId)) &&
+             get(/databases/$(database)/documents/projects/$(projectId)).data.visibility == 'public';
+    }
+
     // ============ USERS COLLECTION ============
+    // /users/{userId}
+    
     match /users/{userId} {
-      // Users can read and write their own documents
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      // Users can read their own profile
+      allow read: if isUser(userId);
+      
+      // Users can also read other users' public info (username, name for lookups)
+      allow read: if isAuth() && resource.data.keys().hasAny(['username', 'name', 'email']);
+      
+      // Users can only write their own profile
+      allow write: if isUser(userId) &&
+                      // Prevent username changes after creation (immutable)
+                      (resource == null || request.resource.data.username == resource.data.username);
+      
+      // Create user on signup (custom claim verification in function)
+      allow create: if isUser(userId) &&
+                       request.resource.data.uid == userId &&
+                       request.resource.data.username != null &&
+                       request.resource.data.email != null;
     }
 
     // ============ PROJECTS COLLECTION ============
+    // /projects/{projectId}
+    
     match /projects/{projectId} {
-      // Anyone authenticated can read public projects
-      allow read: if request.auth != null && 
-                     (resource.data.visibility == 'public' || 
-                      resource.data.createdBy == request.auth.uid || 
-                      request.auth.uid in resource.data.collaborators);
+      // READ: Public projects visible to all. Private projects visible only to collaborators.
+      allow read: if resource.data.visibility == 'public' || 
+                     isProjectCollaborator(projectId);
       
-      // Only creator can write/update projects
-      allow update, delete: if request.auth != null && 
-                             resource.data.createdBy == request.auth.uid;
-      
-      // Authenticated users can create projects
-      allow create: if request.auth != null && 
+      // CREATE: Only authenticated users can create
+      allow create: if isAuth() &&
                        request.resource.data.createdBy == request.auth.uid &&
-                       request.resource.data.visibility in ['public', 'private'];
+                       request.resource.data.visibility in ['public', 'private'] &&
+                       request.resource.data.title != '' &&
+                       request.resource.data.description != '' &&
+                       // For private projects, requests must be disabled
+                       (request.resource.data.visibility == 'public' ||
+                        request.resource.data.isOpenForRequests == false);
+      
+      // UPDATE: Only project admin can update
+      allow update: if isProjectAdmin(projectId) &&
+                       // Cannot change creator
+                       request.resource.data.createdBy == resource.data.createdBy &&
+                       // Cannot remove self from collaborators
+                       (resource.data.createdBy in resource.data.collaborators ||
+                        request.resource.data.createdBy in request.resource.data.collaborators);
+      
+      // DELETE: Only project admin can delete
+      allow delete: if isProjectAdmin(projectId);
+
+      // Subcollection security (future use)
+      match /documents/{documentId} {
+        allow read, write: if isProjectCollaborator(projectId);
+      }
     }
 
     // ============ JOIN REQUESTS COLLECTION ============
+    // /joinRequests/{requestId}
+    
     match /joinRequests/{requestId} {
-      // Users can read their own requests
-      allow read: if request.auth != null && 
-                     (request.auth.uid == resource.data.requestedBy ||
-                      // Admin can read all requests for their projects
-                      exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
-                      get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.createdBy == request.auth.uid);
+      // READ access
+      allow read: if isAuth() && 
+                     // Requester can see their own requests
+                     (resource.data.requestedBy == request.auth.uid ||
+                      // Project admin can see all requests for their project
+                      isProjectAdmin(resource.data.projectId));
       
-      // Users can create join requests
-      allow create: if request.auth != null && 
+      // CREATE: Users can submit join requests
+      allow create: if isAuth() &&
                        request.resource.data.requestedBy == request.auth.uid &&
-                       request.resource.data.status == 'pending';
+                       request.resource.data.status == 'pending' &&
+                       request.resource.data.projectId != null &&
+                       // Only for public projects with requests enabled
+                       exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId)) &&
+                       isPublicProject(request.resource.data.projectId) &&
+                       get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.isOpenForRequests == true &&
+                       // User is not already collaborator
+                       !isProjectCollaborator(request.resource.data.projectId);
       
-      // Only project admin can update join request status
-      allow update: if request.auth != null &&
-                       exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
-                       get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.createdBy == request.auth.uid &&
-                       (request.resource.data.status == 'accepted' || 
-                        request.resource.data.status == 'rejected') &&
-                       resource.data.status == 'pending';
+      // UPDATE: Only project admin can accept/reject
+      allow update: if isAuth() &&
+                       isProjectAdmin(resource.data.projectId) &&
+                       // Can only change status from pending to accepted/rejected
+                       resource.data.status == 'pending' &&
+                       request.resource.data.status in ['accepted', 'rejected'] &&
+                       // Cannot modify request details
+                       request.resource.data.requestedBy == resource.data.requestedBy &&
+                       request.resource.data.projectId == resource.data.projectId &&
+                       request.resource.data.createdAt == resource.data.createdAt;
+      
+      // DELETE: Only project admin can delete (for cleanup)
+      allow delete: if isProjectAdmin(resource.data.projectId);
     }
 
-    // ============ CHAT MESSAGES COLLECTION ============
-    match /projects/{projectId}/messages/{messageId} {
-      // Only collaborators/creator can read messages
-      allow read: if request.auth != null &&
-                     exists(/databases/$(database)/documents/projects/$(projectId)) &&
-                     (get(/databases/$(database)/documents/projects/$(projectId)).data.createdBy == request.auth.uid ||
-                      request.auth.uid in get(/databases/$(database)/documents/projects/$(projectId)).data.collaborators);
-      
-      // Only collaborators/creator can create messages
-      allow create: if request.auth != null &&
-                       request.resource.data.userId == request.auth.uid &&
-                       exists(/databases/$(database)/documents/projects/$(projectId)) &&
-                       (get(/databases/$(database)/documents/projects/$(projectId)).data.createdBy == request.auth.uid ||
-                        request.auth.uid in get(/databases/$(database)/documents/projects/$(projectId)).data.collaborators);
-    }
+    // ============ FIREBASE STORAGE ============
+    // Secured via Google Cloud Storage rules (separate configuration)
+    // joinRequests/{projectId}/{requestId}/* - accessible to authenticated users,
+    // files belong to project admins
 
     // ============ DENY ALL OTHER ACCESS ============
-    match /{document=**} {
-      allow read, write: if false;
-    }
-  }
-}
     match /{document=**} {
       allow read, write: if false;
     }

@@ -1,0 +1,1525 @@
+[  +94 ms] Unable to locate an Android SDK.
+[   +6 ms] executing: uname -m
+[   +8 ms] Exit code 0 from: uname -m
+[        ] x86_64
+[  +14 ms] Artifact Instance of 'MaterialFonts' is not required, skipping update.
+[        ] Artifact Instance of 'GradleWrapper' is not required, skipping update.
+[        ] Artifact Instance of 'AndroidGenSnapshotArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'AndroidInternalBuildArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IOSEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterWebSdk' is not required, skipping update.
+[        ] Artifact Instance of 'LegacyCanvasKitRemover' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterSdk' is not required, skipping update.
+[        ] Artifact Instance of 'WindowsEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'MacOSEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'LinuxEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'LinuxFuchsiaSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'MacOSFuchsiaSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterRunnerSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterRunnerDebugSymbols' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FontSubsetArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'PubDependencies' is not required, skipping update.
+[  +19 ms] Artifact Instance of 'AndroidGenSnapshotArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'AndroidInternalBuildArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IOSEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterWebSdk' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterEngineStamp' is not required, skipping update.
+[        ] Artifact Instance of 'LegacyCanvasKitRemover' is not required, skipping update.
+[   +3 ms] Artifact Instance of 'WindowsEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'MacOSEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'LinuxEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'LinuxFuchsiaSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'MacOSFuchsiaSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterRunnerSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterRunnerDebugSymbols' is not required, skipping update.
+[  +55 ms] Artifact Instance of 'MaterialFonts' is not required, skipping update.
+[        ] Artifact Instance of 'GradleWrapper' is not required, skipping update.
+[        ] Artifact Instance of 'AndroidGenSnapshotArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'AndroidInternalBuildArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IOSEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterEngineStamp' is not required, skipping update.
+[   +1 ms] Artifact Instance of 'FlutterSdk' is not required, skipping update.
+[        ] Artifact Instance of 'WindowsEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'MacOSEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'LinuxEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'LinuxFuchsiaSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'MacOSFuchsiaSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterRunnerSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterRunnerDebugSymbols' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FontSubsetArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'PubDependencies' is not required, skipping update.
+[  +10 ms] Skipping pub get: version match.
+[  +89 ms] Found plugin path_provider at /home/codespace/.pub-cache/hosted/pub.dev/path_provider-2.1.5/
+[   +6 ms] Found plugin path_provider_windows at /home/codespace/.pub-cache/hosted/pub.dev/path_provider_windows-2.3.0/
+[   +8 ms] Found plugin path_provider_linux at /home/codespace/.pub-cache/hosted/pub.dev/path_provider_linux-2.2.1/
+[   +5 ms] Found plugin path_provider_foundation at /home/codespace/.pub-cache/hosted/pub.dev/path_provider_foundation-2.4.1/
+[   +3 ms] Found plugin path_provider_android at /home/codespace/.pub-cache/hosted/pub.dev/path_provider_android-2.2.15/
+[  +10 ms] Found plugin firebase_storage at /home/codespace/.pub-cache/hosted/pub.dev/firebase_storage-13.3.0/
+[   +3 ms] Found plugin firebase_storage_web at /home/codespace/.pub-cache/hosted/pub.dev/firebase_storage_web-3.11.5/
+[   +9 ms] Found plugin firebase_core at /home/codespace/.pub-cache/hosted/pub.dev/firebase_core-4.7.0/
+[   +2 ms] Found plugin firebase_core_web at /home/codespace/.pub-cache/hosted/pub.dev/firebase_core_web-3.6.0/
+[   +6 ms] Found plugin firebase_auth at /home/codespace/.pub-cache/hosted/pub.dev/firebase_auth-6.4.0/
+[   +4 ms] Found plugin firebase_auth_web at /home/codespace/.pub-cache/hosted/pub.dev/firebase_auth_web-6.1.5/
+[   +5 ms] Found plugin cloud_firestore at /home/codespace/.pub-cache/hosted/pub.dev/cloud_firestore-6.3.0/
+[   +2 ms] Found plugin cloud_firestore_web at /home/codespace/.pub-cache/hosted/pub.dev/cloud_firestore_web-5.3.0/
+[  +79 ms] Found plugin path_provider at /home/codespace/.pub-cache/hosted/pub.dev/path_provider-2.1.5/
+[   +1 ms] Found plugin path_provider_windows at /home/codespace/.pub-cache/hosted/pub.dev/path_provider_windows-2.3.0/
+[   +5 ms] Found plugin path_provider_linux at /home/codespace/.pub-cache/hosted/pub.dev/path_provider_linux-2.2.1/
+[   +1 ms] Found plugin path_provider_foundation at /home/codespace/.pub-cache/hosted/pub.dev/path_provider_foundation-2.4.1/
+[   +1 ms] Found plugin path_provider_android at /home/codespace/.pub-cache/hosted/pub.dev/path_provider_android-2.2.15/
+[   +5 ms] Found plugin firebase_storage at /home/codespace/.pub-cache/hosted/pub.dev/firebase_storage-13.3.0/
+[   +2 ms] Found plugin firebase_storage_web at /home/codespace/.pub-cache/hosted/pub.dev/firebase_storage_web-3.11.5/
+[   +3 ms] Found plugin firebase_core at /home/codespace/.pub-cache/hosted/pub.dev/firebase_core-4.7.0/
+[   +2 ms] Found plugin firebase_core_web at /home/codespace/.pub-cache/hosted/pub.dev/firebase_core_web-3.6.0/
+[   +4 ms] Found plugin firebase_auth at /home/codespace/.pub-cache/hosted/pub.dev/firebase_auth-6.4.0/
+[   +1 ms] Found plugin firebase_auth_web at /home/codespace/.pub-cache/hosted/pub.dev/firebase_auth_web-6.1.5/
+[   +3 ms] Found plugin cloud_firestore at /home/codespace/.pub-cache/hosted/pub.dev/cloud_firestore-6.3.0/
+[   +1 ms] Found plugin cloud_firestore_web at /home/codespace/.pub-cache/hosted/pub.dev/cloud_firestore_web-5.3.0/
+[  +19 ms] Skipping generating web_plugin_registrant.dart because it is up-to-date.
+[  +33 ms] Found plugin path_provider at /home/codespace/.pub-cache/hosted/pub.dev/path_provider-2.1.5/
+[   +1 ms] Found plugin path_provider_windows at /home/codespace/.pub-cache/hosted/pub.dev/path_provider_windows-2.3.0/
+[   +5 ms] Found plugin path_provider_linux at /home/codespace/.pub-cache/hosted/pub.dev/path_provider_linux-2.2.1/
+[   +2 ms] Found plugin path_provider_foundation at /home/codespace/.pub-cache/hosted/pub.dev/path_provider_foundation-2.4.1/
+[   +1 ms] Found plugin path_provider_android at /home/codespace/.pub-cache/hosted/pub.dev/path_provider_android-2.2.15/
+[   +4 ms] Found plugin firebase_storage at /home/codespace/.pub-cache/hosted/pub.dev/firebase_storage-13.3.0/
+[   +1 ms] Found plugin firebase_storage_web at /home/codespace/.pub-cache/hosted/pub.dev/firebase_storage_web-3.11.5/
+[   +2 ms] Found plugin firebase_core at /home/codespace/.pub-cache/hosted/pub.dev/firebase_core-4.7.0/
+[   +1 ms] Found plugin firebase_core_web at /home/codespace/.pub-cache/hosted/pub.dev/firebase_core_web-3.6.0/
+[   +3 ms] Found plugin firebase_auth at /home/codespace/.pub-cache/hosted/pub.dev/firebase_auth-6.4.0/
+[   +4 ms] Found plugin firebase_auth_web at /home/codespace/.pub-cache/hosted/pub.dev/firebase_auth_web-6.1.5/
+[   +5 ms] Found plugin cloud_firestore at /home/codespace/.pub-cache/hosted/pub.dev/cloud_firestore-6.3.0/
+[   +1 ms] Found plugin cloud_firestore_web at /home/codespace/.pub-cache/hosted/pub.dev/cloud_firestore_web-5.3.0/
+[   +4 ms] Generating /workspaces/TeamSync/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+[   +2 ms] Skipping generating GeneratedPluginRegistrant.java because it is up-to-date.
+[   +5 ms] Skipping generating generated_plugin_registrant.h because it is up-to-date.
+[   +1 ms] Skipping generating generated_plugin_registrant.cc because it is up-to-date.
+[   +2 ms] Skipping generating generated_plugins.cmake because it is up-to-date.
+[   +7 ms] Skipping generating generated_plugin_registrant.h because it is up-to-date.
+[   +1 ms] Skipping generating generated_plugin_registrant.cc because it is up-to-date.
+[   +3 ms] Skipping generating generated_plugins.cmake because it is up-to-date.
+[   +3 ms] Skipping generating GeneratedPluginRegistrant.h because it is up-to-date.
+[   +5 ms] Skipping generating GeneratedPluginRegistrant.m because it is up-to-date.
+[   +1 ms] Skipping generating GeneratedPluginRegistrant.swift because it is up-to-date.
+[  +48 ms] Found plugin path_provider at /home/codespace/.pub-cache/hosted/pub.dev/path_provider-2.1.5/
+[   +1 ms] Found plugin path_provider_windows at /home/codespace/.pub-cache/hosted/pub.dev/path_provider_windows-2.3.0/
+[   +3 ms] Found plugin path_provider_linux at /home/codespace/.pub-cache/hosted/pub.dev/path_provider_linux-2.2.1/
+[   +1 ms] Found plugin path_provider_foundation at /home/codespace/.pub-cache/hosted/pub.dev/path_provider_foundation-2.4.1/
+[        ] Found plugin path_provider_android at /home/codespace/.pub-cache/hosted/pub.dev/path_provider_android-2.2.15/
+[   +4 ms] Found plugin firebase_storage at /home/codespace/.pub-cache/hosted/pub.dev/firebase_storage-13.3.0/
+[   +1 ms] Found plugin firebase_storage_web at /home/codespace/.pub-cache/hosted/pub.dev/firebase_storage_web-3.11.5/
+[   +2 ms] Found plugin firebase_core at /home/codespace/.pub-cache/hosted/pub.dev/firebase_core-4.7.0/
+[   +1 ms] Found plugin firebase_core_web at /home/codespace/.pub-cache/hosted/pub.dev/firebase_core_web-3.6.0/
+[   +2 ms] Found plugin firebase_auth at /home/codespace/.pub-cache/hosted/pub.dev/firebase_auth-6.4.0/
+[        ] Found plugin firebase_auth_web at /home/codespace/.pub-cache/hosted/pub.dev/firebase_auth_web-6.1.5/
+[   +2 ms] Found plugin cloud_firestore at /home/codespace/.pub-cache/hosted/pub.dev/cloud_firestore-6.3.0/
+[   +1 ms] Found plugin cloud_firestore_web at /home/codespace/.pub-cache/hosted/pub.dev/cloud_firestore_web-5.3.0/
+[   +2 ms] generated_plugin_registrant.dart not found. Skipping.
+[   +1 ms] Compiling lib/main.dart for the Web...
+[   +6 ms] Initializing file store
+[   +1 ms] Done initializing file store
+[  +30 ms] Skipping target: web_entrypoint
+[   +1 ms] invalidated build due to missing files: /workspaces/TeamSync/web/*/index.html, /workspaces/TeamSync/web/flutter_bootstrap.js
+[        ] Skipping target: gen_localizations
+[   +2 ms] web_templated_files: Starting due to {InvalidatedReasonKind.outputMissing: The following outputs were missing: /workspaces/TeamSync/build/web/*/index.html, InvalidatedReasonKind.inputMissing: The following inputs were missing: /workspaces/TeamSync/web/*/index.html,/workspaces/TeamSync/web/flutter_bootstrap.js}
+[   +1 ms] Skipping target: dart_build
+[        ] web_static_assets: Starting due to {InvalidatedReasonKind.outputMissing: The following outputs were missing: /workspaces/TeamSync/.dart_tool/flutter_build/3e856f2401cad0db2fbc491f83df5cf9/flutter.js,/workspaces/TeamSync/.dart_tool/flutter_build/3e856f2401cad0db2fbc491f83df5cf9/canvaskit/chromium/canvaskit.js,/workspaces/TeamSync/.dart_tool/flutter_build/3e856f2401cad0db2fbc491f83df5cf9/canvaskit/chromium/canvaskit.js.symbols,/workspaces/TeamSync/.dart_tool/flutter_build/3e856f2401cad0db2fbc491f83df5cf9/canvaskit/chromium/canvaskit.wasm,/workspaces/TeamSync/.dart_tool/flutter_build/3e856f2401cad0db2fbc491f83df5cf9/canvaskit/wimp.js.symbols,/workspaces/TeamSync/.dart_tool/flutter_build/3e856f2401cad0db2fbc491f83df5cf9/canvaskit/skwasm.js.symbols,/workspaces/TeamSync/.dart_tool/flutter_build/3e856f2401cad0db2fbc491f83df5cf9/canvaskit/skwasm_heavy.wasm,/workspaces/TeamSync/.dart_tool/flutter_build/3e856f2401cad0db2fbc491f83df5cf9/canvaskit/skwasm_heavy.js,/workspaces/TeamSync/.dart_tool/flutter_build/3e856f2401cad0db2fbc491f83df5cf9/canvaskit/canvaskit.js,/workspaces/TeamSync/.dart_tool/flutter_build/3e856f2401cad0db2fbc491f83df5cf9/canvaskit/wimp.js,/workspaces/TeamSync/.dart_tool/flutter_build/3e856f2401cad0db2fbc491f83df5cf9/canvaskit/skwasm_heavy.js.symbols,/workspaces/TeamSync/.dart_tool/flutter_build/3e856f2401cad0db2fbc491f83df5cf9/canvaskit/skwasm.js,/workspaces/TeamSync/.dart_tool/flutter_build/3e856f2401cad0db2fbc491f83df5cf9/canvaskit/wimp.wasm,/workspaces/TeamSync/.dart_tool/flutter_build/3e856f2401cad0db2fbc491f83df5cf9/canvaskit/canvaskit.js.symbols,/workspaces/TeamSync/.dart_tool/flutter_build/3e856f2401cad0db2fbc491f83df5cf9/canvaskit/canvaskit.wasm,/workspaces/TeamSync/.dart_tool/flutter_build/3e856f2401cad0db2fbc491f83df5cf9/canvaskit/skwasm.wasm}
+[  +57 ms] web_static_assets: Complete
+[  +18 ms] dart2js: Starting due to {}
+[  +20 ms] executing: /workspaces/flutter/bin/cache/dart-sdk/bin/dart compile js --platform-binaries=/workspaces/flutter/bin/cache/flutter_web_sdk/kernel --invoker=flutter_tool -Ddart.vm.product=true -DFLUTTER_VERSION=3.41.9 -DFLUTTER_CHANNEL=stable -DFLUTTER_GIT_URL=https://github.com/flutter/flutter.git -DFLUTTER_FRAMEWORK_REVISION=00b0c91f06 -DFLUTTER_ENGINE_REVISION=42d3d75a56 -DFLUTTER_DART_VERSION=3.11.5 -DFLUTTER_WEB_USE_SKIA=true -DFLUTTER_WEB_USE_SKWASM=false -DFLUTTER_WEB_CANVASKIT_URL=https://www.gstatic.com/flutter-canvaskit/42d3d75a56efe1a2e9902f52dc8006099c45d937/ --native-null-assertions --no-source-maps -O4 --minify -o /workspaces/TeamSync/.dart_tool/flutter_build/3e856f2401cad0db2fbc491f83df5cf9/app.dill --packages=/workspaces/TeamSync/.dart_tool/package_config.json --cfe-only /workspaces/TeamSync/.dart_tool/flutter_build/3e856f2401cad0db2fbc491f83df5cf9/main.dart
+[  +98 ms] web_templated_files: Complete
+[   +3 ms] dart2wasm: Starting due to {}
+[  +15 ms] executing: /workspaces/flutter/bin/cache/dart-sdk/bin/dart compile wasm --packages=/workspaces/TeamSync/.dart_tool/package_config.json --extra-compiler-option=--platform=/workspaces/flutter/bin/cache/flutter_web_sdk/kernel/dart2wasm_platform.dill -Ddart.vm.profile=false -Ddart.vm.product=true --extra-compiler-option=--delete-tostring-package-uri=dart:ui --extra-compiler-option=--delete-tostring-package-uri=package:flutter --extra-compiler-option=--import-shared-memory --extra-compiler-option=--shared-memory-max-pages=32768 -DFLUTTER_VERSION=3.41.9 -DFLUTTER_CHANNEL=stable -DFLUTTER_GIT_URL=https://github.com/flutter/flutter.git -DFLUTTER_FRAMEWORK_REVISION=00b0c91f06 -DFLUTTER_ENGINE_REVISION=42d3d75a56 -DFLUTTER_DART_VERSION=3.11.5 -DFLUTTER_WEB_USE_SKIA=false -DFLUTTER_WEB_USE_SKWASM=true -DFLUTTER_WEB_CANVASKIT_URL=https://www.gstatic.com/flutter-canvaskit/42d3d75a56efe1a2e9902f52dc8006099c45d937/ --extra-compiler-option=--depfile=/workspaces/TeamSync/.dart_tool/flutter_build/3e856f2401cad0db2fbc491f83df5cf9/dart2wasm.d -O2 --strip-wasm --no-source-maps --minify --extra-compiler-option=--dry-run -o /workspaces/TeamSync/.dart_tool/flutter_build/3e856f2401cad0db2fbc491f83df5cf9/main.dart.wasm /workspaces/TeamSync/.dart_tool/flutter_build/3e856f2401cad0db2fbc491f83df5cf9/main.dart
+[+23028 ms] Unhandled exception:
+            Unsupported operation: Cannot extract a file path from a org-dartlang-untranslatable-uri URI
+            #0      _Uri.toFilePath (dart:core/uri.dart:3432)
+            #1      DryRunSummarizer._lintChecks (package:dart2wasm/dry_run.dart:167)
+            #2      DryRunSummarizer.summarize (package:dart2wasm/dry_run.dart:236)
+            #3      _runCfePhase (package:dart2wasm/compile.dart:355)
+            <asynchronous suspension>
+            #4      compile (package:dart2wasm/compile.dart:222)
+            <asynchronous suspension>
+            #5      generateWasm (package:dart2wasm/generate_wasm.dart:63)
+            <asynchronous suspension>
+            #6      main (file:///b/s/w/ir/x/w/sdk/pkg/dart2wasm/bin/dart2wasm.dart:10)
+            <asynchronous suspension>
+[   +3 ms] Unexpected wasm dry run failure (255):
+[   +5 ms] Unhandled exception:
+           Unsupported operation: Cannot extract a file path from a org-dartlang-untranslatable-uri URI
+           #0      _Uri.toFilePath (dart:core/uri.dart:3432)
+           #1      DryRunSummarizer._lintChecks (package:dart2wasm/dry_run.dart:167)
+           #2      DryRunSummarizer.summarize (package:dart2wasm/dry_run.dart:236)
+           #3      _runCfePhase (package:dart2wasm/compile.dart:355)
+           <asynchronous suspension>
+           #4      compile (package:dart2wasm/compile.dart:222)
+           <asynchronous suspension>
+           #5      generateWasm (package:dart2wasm/generate_wasm.dart:63)
+           <asynchronous suspension>
+           #6      main (file:///b/s/w/ir/x/w/sdk/pkg/dart2wasm/bin/dart2wasm.dart:10)
+           <asynchronous suspension>
+
+[        ] Use --no-wasm-dry-run to disable these warnings.
+[        ] dart2wasm: Complete
+[+2400 ms] lib/screens/create_project_screen.dart:544:22:
+           Error: The final variable 'onTap' must be initialized.
+             final VoidCallback onTap;
+                                ^^^^^
+           lib/screens/create_project_screen.dart:546:3:
+           Error: Can't have modifier 'const' here.
+             const _VisibilityButton(
+             ^^^^^
+           lib/screens/create_project_screen.dart:547:74:
+           Error: Expected a function body or '=>'.
+                 {required this.label, required this.selected, required this.onTap});
+                                                                                    ^
+           lib/screens/create_project_screen.dart:574:1:
+           Error: Expected a declaration, but got '}'.
+           }
+           ^
+           lib/screens/idea_board_screen.dart:95:35:
+           Error: Can't find ')' to match '('.
+               return StreamBuilder<Project?>(
+                                             ^
+           lib/screens/idea_board_screen.dart:16:35:
+           Error: Can't find '}' to match '{'.
+               with TickerProviderStateMixin {
+                                             ^
+           lib/screens/idea_board_screen.dart:188:1:
+           Error: Classes can't be declared inside other classes.
+           class _AnimatedLevelCard extends StatefulWidget {
+           ^^^^^
+           lib/screens/idea_board_screen.dart:188:26:
+           Error: Expected a class member, but got 'extends'.
+           class _AnimatedLevelCard extends StatefulWidget {
+                                    ^^^^^^^
+           lib/screens/idea_board_screen.dart:188:34:
+           Error: A method declaration needs an explicit list of parameters.
+           class _AnimatedLevelCard extends StatefulWidget {
+                                            ^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:205:1:
+           Error: Classes can't be declared inside other classes.
+           class _AnimatedLevelCardState extends State<_AnimatedLevelCard>
+           ^^^^^
+           lib/screens/idea_board_screen.dart:205:31:
+           Error: Expected a class member, but got 'extends'.
+           class _AnimatedLevelCardState extends State<_AnimatedLevelCard>
+                                         ^^^^^^^
+           lib/screens/idea_board_screen.dart:205:39:
+           Error: A method declaration needs an explicit list of parameters.
+           class _AnimatedLevelCardState extends State<_AnimatedLevelCard>
+                                                 ^^^^^
+           lib/screens/idea_board_screen.dart:206:5:
+           Error: Expected '{' before this.
+               with TickerProviderStateMixin {
+               ^^^^
+           lib/screens/idea_board_screen.dart:206:5:
+           Error: Expected a class member, but got 'with'.
+               with TickerProviderStateMixin {
+               ^^^^
+           lib/screens/idea_board_screen.dart:206:10:
+           Error: A method declaration needs an explicit list of parameters.
+               with TickerProviderStateMixin {
+                    ^^^^^^^^^^^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:361:1:
+           Error: Classes can't be declared inside other classes.
+           class _AddLevelDialog extends StatefulWidget {
+           ^^^^^
+           lib/screens/idea_board_screen.dart:361:23:
+           Error: Expected a class member, but got 'extends'.
+           class _AddLevelDialog extends StatefulWidget {
+                                 ^^^^^^^
+           lib/screens/idea_board_screen.dart:361:31:
+           Error: A method declaration needs an explicit list of parameters.
+           class _AddLevelDialog extends StatefulWidget {
+                                         ^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:370:1:
+           Error: Classes can't be declared inside other classes.
+           class _AddLevelDialogState extends State<_AddLevelDialog>
+           ^^^^^
+           lib/screens/idea_board_screen.dart:370:28:
+           Error: Expected a class member, but got 'extends'.
+           class _AddLevelDialogState extends State<_AddLevelDialog>
+                                      ^^^^^^^
+           lib/screens/idea_board_screen.dart:370:36:
+           Error: A method declaration needs an explicit list of parameters.
+           class _AddLevelDialogState extends State<_AddLevelDialog>
+                                              ^^^^^
+           lib/screens/idea_board_screen.dart:371:5:
+           Error: Expected '{' before this.
+               with TickerProviderStateMixin {
+               ^^^^
+           lib/screens/idea_board_screen.dart:371:5:
+           Error: Expected a class member, but got 'with'.
+               with TickerProviderStateMixin {
+               ^^^^
+           lib/screens/idea_board_screen.dart:371:10:
+           Error: A method declaration needs an explicit list of parameters.
+               with TickerProviderStateMixin {
+                    ^^^^^^^^^^^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:53:35:
+           Error: Can't find ')' to match '('.
+               return StreamBuilder<Project?>(
+                                             ^
+           lib/screens/idea_board_document_screen.dart:19:76:
+           Error: Can't find '}' to match '{'.
+           class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
+                                                                                      ^
+           lib/screens/idea_board_document_screen.dart:206:1:
+           Error: Classes can't be declared inside other classes.
+           class _ToolbarButton extends StatelessWidget {
+           ^^^^^
+           lib/screens/idea_board_document_screen.dart:206:22:
+           Error: Expected a class member, but got 'extends'.
+           class _ToolbarButton extends StatelessWidget {
+                                ^^^^^^^
+           lib/screens/idea_board_document_screen.dart:206:30:
+           Error: A method declaration needs an explicit list of parameters.
+           class _ToolbarButton extends StatelessWidget {
+                                        ^^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:238:1:
+           Error: Classes can't be declared inside other classes.
+           class _AttachmentTile extends StatelessWidget {
+           ^^^^^
+           lib/screens/idea_board_document_screen.dart:238:23:
+           Error: Expected a class member, but got 'extends'.
+           class _AttachmentTile extends StatelessWidget {
+                                 ^^^^^^^
+           lib/screens/idea_board_document_screen.dart:238:31:
+           Error: A method declaration needs an explicit list of parameters.
+           class _AttachmentTile extends StatelessWidget {
+                                         ^^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:343:1:
+           Error: Classes can't be declared inside other classes.
+           class DottedUploadButton extends StatelessWidget {
+           ^^^^^
+           lib/screens/idea_board_document_screen.dart:343:26:
+           Error: Expected a class member, but got 'extends'.
+           class DottedUploadButton extends StatelessWidget {
+                                    ^^^^^^^
+           lib/screens/idea_board_document_screen.dart:343:34:
+           Error: A method declaration needs an explicit list of parameters.
+           class DottedUploadButton extends StatelessWidget {
+                                            ^^^^^^^^^^^^^^^
+           lib/screens/discover_screen.dart:57:38:
+           Error: Can't find '}' to match '{'.
+                   builder: (context, snapshot) {
+                                                ^
+           lib/screens/discover_screen.dart:26:20:
+           Error: Can't find ')' to match '('.
+               return Scaffold(
+                              ^
+           lib/screens/discover_screen.dart:184:69:
+           Error: Can't find '}' to match '{'.
+           class _RequestToJoinButtonState extends State<_RequestToJoinButton> {
+                                                                               ^
+           Error: Couldn't resolve the package 'file_picker' in 'package:file_picker/file_picker.dart'.
+           lib/screens/join_request_screen.dart:3:8:
+           Error: Not found: 'package:file_picker/file_picker.dart'
+           import 'package:file_picker/file_picker.dart';
+                  ^
+           lib/screens/create_project_screen.dart:546:9:
+           Error: '_VisibilityButton' is already declared in this scope.
+             const _VisibilityButton(
+                   ^^^^^^^^^^^^^^^^^
+           lib/screens/create_project_screen.dart:448:7:
+           Info: Previous declaration of '_VisibilityButton'.
+           class _VisibilityButton extends StatelessWidget {
+                 ^^^^^^^^^^^^^^^^^
+           lib/screens/create_project_screen.dart:576:7:
+           Error: '_SkillTile' is already declared in this scope.
+           class _SkillTile extends StatelessWidget {
+                 ^^^^^^^^^^
+           lib/screens/create_project_screen.dart:498:7:
+           Info: Previous declaration of '_SkillTile'.
+           class _SkillTile extends StatelessWidget {
+                 ^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:361:31:
+           Error: 'StatefulWidget' is already declared in this scope.
+           class _AddLevelDialog extends StatefulWidget {
+                                         ^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:188:34:
+           Info: Previous declaration of 'StatefulWidget'.
+           class _AnimatedLevelCard extends StatefulWidget {
+                                            ^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:370:36:
+           Error: 'State' is already declared in this scope.
+           class _AddLevelDialogState extends State<_AddLevelDialog>
+                                              ^^^^^
+           lib/screens/idea_board_screen.dart:205:39:
+           Info: Previous declaration of 'State'.
+           class _AnimatedLevelCardState extends State<_AnimatedLevelCard>
+                                                 ^^^^^
+           lib/screens/idea_board_screen.dart:371:10:
+           Error: 'TickerProviderStateMixin' is already declared in this scope.
+               with TickerProviderStateMixin {
+                    ^^^^^^^^^^^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:206:10:
+           Info: Previous declaration of 'TickerProviderStateMixin'.
+               with TickerProviderStateMixin {
+                    ^^^^^^^^^^^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:238:31:
+           Error: 'StatelessWidget' is already declared in this scope.
+           class _AttachmentTile extends StatelessWidget {
+                                         ^^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:206:30:
+           Info: Previous declaration of 'StatelessWidget'.
+           class _ToolbarButton extends StatelessWidget {
+                                        ^^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:343:34:
+           Error: 'StatelessWidget' is already declared in this scope.
+           class DottedUploadButton extends StatelessWidget {
+                                            ^^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:206:30:
+           Info: Previous declaration of 'StatelessWidget'.
+           class _ToolbarButton extends StatelessWidget {
+                                        ^^^^^^^^^^^^^^^
+           lib/screens/create_project_screen.dart:11:9:
+           Error: Type 'CreateProjectScreenState' not found.
+             State<CreateProjectScreenState> createState() => _CreateProjectScreenState();
+                   ^^^^^^^^^^^^^^^^^^^^^^^^
+           lib/screens/create_project_screen.dart:544:22:
+           Error: Field 'onTap' should be initialized because its type 'void Function()' doesn't allow null.
+             final VoidCallback onTap;
+                                ^^^^^
+           lib/screens/create_project_screen.dart:547:17:
+           Error: Field formal parameters can only be used in a constructor.
+                 {required this.label, required this.selected, required this.onTap});
+                           ^^^^
+           lib/screens/create_project_screen.dart:547:38:
+           Error: Field formal parameters can only be used in a constructor.
+                 {required this.label, required this.selected, required this.onTap});
+                                                ^^^^
+           lib/screens/create_project_screen.dart:547:62:
+           Error: Field formal parameters can only be used in a constructor.
+                 {required this.label, required this.selected, required this.onTap});
+                                                                        ^^^^
+           lib/screens/create_project_screen.dart:557:18:
+           Error: Undefined name 'selected'.
+                     color: selected ? const Color(0xFFEFF6FF) : Colors.white,
+                            ^^^^^^^^
+           lib/screens/create_project_screen.dart:559:22:
+           Error: Undefined name 'selected'.
+                         color: selected ? AppTheme.primary : AppTheme.border,
+                                ^^^^^^^^
+           lib/screens/create_project_screen.dart:560:22:
+           Error: Undefined name 'selected'.
+                         width: selected ? 2 : 1),
+                                ^^^^^^^^
+           lib/screens/create_project_screen.dart:564:23:
+           Error: Undefined name 'label'.
+                     child: Text(label,
+                                 ^^^^^
+           lib/screens/create_project_screen.dart:568:24:
+           Error: Undefined name 'selected'.
+                           color: selected ? AppTheme.primary : AppTheme.textSecondary,
+                                  ^^^^^^^^
+           lib/screens/idea_board_screen.dart:65:29:
+           Error: The method '_AddLevelDialog' isn't defined for the type '_IdeaBoardScreenState'.
+            - '_IdeaBoardScreenState' is from 'package:teamsync/screens/idea_board_screen.dart' ('lib/screens/idea_board_screen.dart').
+                 builder: (context) => _AddLevelDialog(
+                                       ^^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:185:3:
+           Error: Expected ';' after this.
+             }
+             ^
+           lib/screens/idea_board_screen.dart:156:32:
+           Error: The method '_AnimatedLevelCard' isn't defined for the type '_IdeaBoardScreenState'.
+            - '_IdeaBoardScreenState' is from 'package:teamsync/screens/idea_board_screen.dart' ('lib/screens/idea_board_screen.dart').
+                                   return _AnimatedLevelCard(
+                                          ^^^^^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:195:14:
+           Error: Expected ',' before this.
+               required this.level,
+                        ^^^^
+           lib/screens/idea_board_screen.dart:196:14:
+           Error: Expected ',' before this.
+               required this.projectId,
+                        ^^^^
+           lib/screens/idea_board_screen.dart:197:14:
+           Error: Expected ',' before this.
+               required this.onDelete,
+                        ^^^^
+           lib/screens/idea_board_screen.dart:198:14:
+           Error: Expected ',' before this.
+               required this.delay,
+                        ^^^^
+           lib/screens/idea_board_screen.dart:194:9:
+           Error: Not a constant expression.
+             const _AnimatedLevelCard({
+                   ^^^^^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:202:9:
+           Error: '_AnimatedLevelCard' isn't a type.
+             State<_AnimatedLevelCard> createState() => _AnimatedLevelCardState();
+                   ^^^^^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:202:46:
+           Error: The method '_AnimatedLevelCardState' isn't defined for the type '_IdeaBoardScreenState'.
+            - '_IdeaBoardScreenState' is from 'package:teamsync/screens/idea_board_screen.dart' ('lib/screens/idea_board_screen.dart').
+             State<_AnimatedLevelCard> createState() => _AnimatedLevelCardState();
+                                                        ^^^^^^^^^^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:241:50:
+           Error: The getter 'delay' isn't defined for the type 'IdeaBoardScreen'.
+            - 'IdeaBoardScreen' is from 'package:teamsync/screens/idea_board_screen.dart' ('lib/screens/idea_board_screen.dart').
+               Future.delayed(Duration(milliseconds: widget.delay), () {
+                                                            ^^^^^
+           lib/screens/idea_board_screen.dart:322:38:
+           Error: The getter 'level' isn't defined for the type 'IdeaBoardScreen'.
+            - 'IdeaBoardScreen' is from 'package:teamsync/screens/idea_board_screen.dart' ('lib/screens/idea_board_screen.dart').
+                                         widget.level.name,
+                                                ^^^^^
+           lib/screens/idea_board_screen.dart:331:41:
+           Error: The getter 'level' isn't defined for the type 'IdeaBoardScreen'.
+            - 'IdeaBoardScreen' is from 'package:teamsync/screens/idea_board_screen.dart' ('lib/screens/idea_board_screen.dart').
+                                         '${widget.level.documents.length} documents',
+                                                   ^^^^^
+           lib/screens/idea_board_screen.dart:346:43:
+           Error: The getter 'onDelete' isn't defined for the type 'IdeaBoardScreen'.
+            - 'IdeaBoardScreen' is from 'package:teamsync/screens/idea_board_screen.dart' ('lib/screens/idea_board_screen.dart').
+                                   onPressed: widget.onDelete,
+                                                     ^^^^^^^^
+           lib/screens/idea_board_screen.dart:265:76:
+           Error: The getter 'level' isn't defined for the type 'IdeaBoardScreen'.
+            - 'IdeaBoardScreen' is from 'package:teamsync/screens/idea_board_screen.dart' ('lib/screens/idea_board_screen.dart').
+                           context, '/project/${widget.projectId}/idea-board/${widget.level.id}'),
+                                                                                      ^^^^^
+           lib/screens/idea_board_screen.dart:364:35:
+           Error: Expected ',' before this.
+             const _AddLevelDialog({required this.onAdd});
+                                             ^^^^
+           lib/screens/idea_board_screen.dart:364:9:
+           Error: Not a constant expression.
+             const _AddLevelDialog({required this.onAdd});
+                   ^^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:367:9:
+           Error: '_AddLevelDialog' isn't a type.
+             State<_AddLevelDialog> createState() => _AddLevelDialogState();
+                   ^^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:367:43:
+           Error: The method '_AddLevelDialogState' isn't defined for the type '_IdeaBoardScreenState'.
+            - '_IdeaBoardScreenState' is from 'package:teamsync/screens/idea_board_screen.dart' ('lib/screens/idea_board_screen.dart').
+             State<_AddLevelDialog> createState() => _AddLevelDialogState();
+                                                     ^^^^^^^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:461:28:
+           Error: The method 'onAdd' isn't defined for the type 'IdeaBoardScreen'.
+            - 'IdeaBoardScreen' is from 'package:teamsync/screens/idea_board_screen.dart' ('lib/screens/idea_board_screen.dart').
+                               widget.onAdd(
+                                      ^^^^^
+           lib/screens/idea_board_document_screen.dart:203:3:
+           Error: Expected ';' after this.
+             }
+             ^
+           lib/screens/idea_board_document_screen.dart:106:23:
+           Error: The method '_ToolbarButton' isn't defined for the type '_IdeaBoardDocumentScreenState'.
+            - '_IdeaBoardDocumentScreenState' is from 'package:teamsync/screens/idea_board_document_screen.dart' ('lib/screens/idea_board_document_screen.dart').
+                                 _ToolbarButton(
+                                 ^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:109:23:
+           Error: The method '_ToolbarButton' isn't defined for the type '_IdeaBoardDocumentScreenState'.
+            - '_IdeaBoardDocumentScreenState' is from 'package:teamsync/screens/idea_board_document_screen.dart' ('lib/screens/idea_board_document_screen.dart').
+                                 _ToolbarButton(
+                                 ^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:114:23:
+           Error: The method '_ToolbarButton' isn't defined for the type '_IdeaBoardDocumentScreenState'.
+            - '_IdeaBoardDocumentScreenState' is from 'package:teamsync/screens/idea_board_document_screen.dart' ('lib/screens/idea_board_document_screen.dart').
+                                 _ToolbarButton(
+                                 ^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:119:23:
+           Error: The method '_ToolbarButton' isn't defined for the type '_IdeaBoardDocumentScreenState'.
+            - '_IdeaBoardDocumentScreenState' is from 'package:teamsync/screens/idea_board_document_screen.dart' ('lib/screens/idea_board_document_screen.dart').
+                                 _ToolbarButton(
+                                 ^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:179:55:
+           Error: The method '_AttachmentTile' isn't defined for the type '_IdeaBoardDocumentScreenState'.
+            - '_IdeaBoardDocumentScreenState' is from 'package:teamsync/screens/idea_board_document_screen.dart' ('lib/screens/idea_board_document_screen.dart').
+                                     ...attachments.map((att) => _AttachmentTile(
+                                                                 ^^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:193:28:
+           Error: The method 'DottedUploadButton' isn't defined for the type '_IdeaBoardDocumentScreenState'.
+            - '_IdeaBoardDocumentScreenState' is from 'package:teamsync/screens/idea_board_document_screen.dart' ('lib/screens/idea_board_document_screen.dart').
+                               child: DottedUploadButton(onTap: () {}),
+                                      ^^^^^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:212:17:
+           Error: Expected ',' before this.
+                 {required this.icon, required this.label, required this.onTap});
+                           ^^^^
+           lib/screens/idea_board_document_screen.dart:212:37:
+           Error: Expected ',' before this.
+                 {required this.icon, required this.label, required this.onTap});
+                                               ^^^^
+           lib/screens/idea_board_document_screen.dart:212:58:
+           Error: Expected ',' before this.
+                 {required this.icon, required this.label, required this.onTap});
+                                                                    ^^^^
+           lib/screens/idea_board_document_screen.dart:211:9:
+           Error: Not a constant expression.
+             const _ToolbarButton(
+                   ^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:217:14:
+           Error: Final variable 'onTap' must be assigned before it can be used.
+                 onTap: onTap,
+                        ^^^^^
+           lib/screens/idea_board_document_screen.dart:226:18:
+           Error: Final variable 'icon' must be assigned before it can be used.
+                       Icon(icon, size: 15, color: AppTheme.textSecondary),
+                            ^^^^
+           lib/screens/idea_board_document_screen.dart:228:18:
+           Error: Final variable 'label' must be assigned before it can be used.
+                       Text(label,
+                            ^^^^^
+           lib/screens/idea_board_document_screen.dart:245:14:
+           Error: Expected ',' before this.
+               required this.name,
+                        ^^^^
+           lib/screens/idea_board_document_screen.dart:246:14:
+           Error: Expected ',' before this.
+               required this.type,
+                        ^^^^
+           lib/screens/idea_board_document_screen.dart:247:14:
+           Error: Expected ',' before this.
+               required this.uploadedBy,
+                        ^^^^
+           lib/screens/idea_board_document_screen.dart:248:14:
+           Error: Expected ',' before this.
+               required this.uploadedAt,
+                        ^^^^
+           lib/screens/idea_board_document_screen.dart:244:9:
+           Error: Not a constant expression.
+             const _AttachmentTile({
+                   ^^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:251:12:
+           Error: Expected ';' after this.
+             IconData get _icon {
+                      ^^^
+           lib/screens/idea_board_document_screen.dart:251:16:
+           Error: Expected ';' after this.
+             IconData get _icon {
+                          ^^^^^
+           lib/screens/idea_board_document_screen.dart:265:9:
+           Error: 'get' is already declared in this scope.
+             Color get _iconColor {
+                   ^^^
+           lib/screens/idea_board_document_screen.dart:251:12:
+           Info: Previous declaration of 'get'.
+             IconData get _icon {
+                      ^^^
+           lib/screens/idea_board_document_screen.dart:265:9:
+           Error: Expected ';' after this.
+             Color get _iconColor {
+                   ^^^
+           lib/screens/idea_board_document_screen.dart:265:13:
+           Error: Expected ';' after this.
+             Color get _iconColor {
+                       ^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:251:16:
+           Error: The getter '_icon' isn't defined for the type '_IdeaBoardDocumentScreenState'.
+            - '_IdeaBoardDocumentScreenState' is from 'package:teamsync/screens/idea_board_document_screen.dart' ('lib/screens/idea_board_document_screen.dart').
+             IconData get _icon {
+                          ^^^^^
+           lib/screens/idea_board_document_screen.dart:252:13:
+           Error: Final variable 'type' must be assigned before it can be used.
+               switch (type) {
+                       ^^^^
+           lib/screens/idea_board_document_screen.dart:265:13:
+           Error: The getter '_iconColor' isn't defined for the type '_IdeaBoardDocumentScreenState'.
+            - '_IdeaBoardDocumentScreenState' is from 'package:teamsync/screens/idea_board_document_screen.dart' ('lib/screens/idea_board_document_screen.dart').
+             Color get _iconColor {
+                       ^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:266:13:
+           Error: Final variable 'type' must be assigned before it can be used.
+               switch (type) {
+                       ^^^^
+           lib/screens/idea_board_document_screen.dart:290:16:
+           Error: The getter '_icon' isn't defined for the type '_IdeaBoardDocumentScreenState'.
+            - '_IdeaBoardDocumentScreenState' is from 'package:teamsync/screens/idea_board_document_screen.dart' ('lib/screens/idea_board_document_screen.dart').
+                     Icon(_icon, color: _iconColor, size: 22),
+                          ^^^^^
+           lib/screens/idea_board_document_screen.dart:290:30:
+           Error: The getter '_iconColor' isn't defined for the type '_IdeaBoardDocumentScreenState'.
+            - '_IdeaBoardDocumentScreenState' is from 'package:teamsync/screens/idea_board_document_screen.dart' ('lib/screens/idea_board_document_screen.dart').
+                     Icon(_icon, color: _iconColor, size: 22),
+                                        ^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:296:22:
+           Error: Final variable 'name' must be assigned before it can be used.
+                           Text(name,
+                                ^^^^
+           lib/screens/idea_board_document_screen.dart:308:26:
+           Error: Final variable 'uploadedBy' must be assigned before it can be used.
+                               Text(uploadedBy,
+                                    ^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:315:26:
+           Error: Final variable 'uploadedAt' must be assigned before it can be used.
+                               Text(uploadedAt,
+                                    ^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:345:49:
+           Error: Expected ',' before this.
+             const DottedUploadButton({super.key, required this.onTap});
+                                                           ^^^^
+           lib/screens/idea_board_document_screen.dart:345:35:
+           Error: Superclass has no getter named 'key'.
+             const DottedUploadButton({super.key, required this.onTap});
+                                             ^^^
+           lib/screens/idea_board_document_screen.dart:345:9:
+           Error: Not a constant expression.
+             const DottedUploadButton({super.key, required this.onTap});
+                   ^^^^^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:350:14:
+           Error: Final variable 'onTap' must be assigned before it can be used.
+                 onTap: onTap,
+                        ^^^^^
+           lib/screens/chat_channel_screen.dart:87:20:
+           Error: The getter 'channel' isn't defined for the type '_ChatChannelScreenState'.
+            - '_ChatChannelScreenState' is from 'package:teamsync/screens/chat_channel_screen.dart' ('lib/screens/chat_channel_screen.dart').
+                       child: channel.messages.isEmpty && _messages.isEmpty
+                              ^^^^^^^
+           lib/screens/chat_channel_screen.dart:97:26:
+           Error: The getter 'channel' isn't defined for the type '_ChatChannelScreenState'.
+            - '_ChatChannelScreenState' is from 'package:teamsync/screens/chat_channel_screen.dart' ('lib/screens/chat_channel_screen.dart').
+                                 ...channel.messages.map((msg) => _MessageBubble(
+                                    ^^^^^^^
+           lib/screens/chat_channel_screen.dart:114:26:
+           Error: The getter 'channel' isn't defined for the type '_ChatChannelScreenState'.
+            - '_ChatChannelScreenState' is from 'package:teamsync/screens/chat_channel_screen.dart' ('lib/screens/chat_channel_screen.dart').
+                       channelName: channel.name.toLowerCase(),
+                                    ^^^^^^^
+           lib/screens/profile_screen.dart:45:45:
+           Error: The argument type 'Stream<AppUser?>' can't be assigned to the parameter type 'Stream<AppUser>?'.
+            - 'Stream' is from 'dart:async'.
+            - 'AppUser' is from 'package:teamsync/models/models.dart' ('lib/models/models.dart').
+                   stream: UserProfileService.instance.watchCurrentUser(),
+                                                       ^
+           lib/screens/profile_screen.dart:291:41:
+           Error: The getter 'currentUser' isn't defined for the type '_MyProfileDetailsScreenState'.
+            - '_MyProfileDetailsScreenState' is from 'package:teamsync/screens/profile_screen.dart' ('lib/screens/profile_screen.dart').
+                     final user = snapshot.data ?? currentUser;
+                                                   ^^^^^^^^^^^
+           lib/screens/profile_screen.dart:289:45:
+           Error: The argument type 'Stream<AppUser?>' can't be assigned to the parameter type 'Stream<AppUser>?'.
+            - 'Stream' is from 'dart:async'.
+            - 'AppUser' is from 'package:teamsync/models/models.dart' ('lib/models/models.dart').
+                   stream: UserProfileService.instance.watchCurrentUser(),
+                                                       ^
+           lib/screens/home_dashboard_screen.dart:97:58:
+           Error: Required named parameter 'username' must be provided.
+                               final user = snapshot.data ?? AppUser(
+                                                                    ^
+           lib/models/models.dart:160:9:
+           Info: Found this candidate, but the arguments don't match.
+             const AppUser({
+                   ^^^^^^^
+           lib/screens/home_dashboard_screen.dart:95:55:
+           Error: The argument type 'Stream<AppUser?>' can't be assigned to the parameter type 'Stream<AppUser>?'.
+            - 'Stream' is from 'dart:async'.
+            - 'AppUser' is from 'package:teamsync/models/models.dart' ('lib/models/models.dart').
+                             stream: UserProfileService.instance.watchCurrentUser(),
+                                                                 ^
+           lib/screens/home_dashboard_screen.dart:177:64:
+           Error: Required named parameter 'username' must be provided.
+                                     final user = snapshot.data ?? AppUser(
+                                                                          ^
+           lib/models/models.dart:160:9:
+           Info: Found this candidate, but the arguments don't match.
+             const AppUser({
+                   ^^^^^^^
+           lib/screens/home_dashboard_screen.dart:175:61:
+           Error: The argument type 'Stream<AppUser?>' can't be assigned to the parameter type 'Stream<AppUser>?'.
+            - 'Stream' is from 'dart:async'.
+            - 'AppUser' is from 'package:teamsync/models/models.dart' ('lib/models/models.dart').
+                                   stream: UserProfileService.instance.watchCurrentUser(),
+                                                                       ^
+           lib/screens/discover_screen.dart:85:26:
+           Error: Not a constant expression.
+                       return const EmptyState(
+                                    ^^^^^^^^^^
+           lib/screens/discover_screen.dart:170:13:
+           Error: Expected ';' after this.
+                       ),
+                       ^
+           lib/screens/discover_screen.dart:170:14:
+           Error: Expected an identifier, but got ','.
+                       ),
+                        ^
+           lib/screens/discover_screen.dart:170:14:
+           Error: Unexpected token ';'.
+                       ),
+                        ^
+           lib/screens/project_admin_screen.dart:160:44:
+           Error: Property 'isNotEmpty' cannot be accessed on 'String?' because it is potentially null.
+                               if (request.githubLink.isNotEmpty || request.linkedinLink.isNotEmpty) ...[
+                                                      ^^^^^^^^^^
+           lib/screens/project_admin_screen.dart:160:79:
+           Error: Property 'isNotEmpty' cannot be accessed on 'String?' because it is potentially null.
+                               if (request.githubLink.isNotEmpty || request.linkedinLink.isNotEmpty) ...[
+                                                                                         ^^^^^^^^^^
+           lib/screens/project_admin_screen.dart:164:50:
+           Error: Property 'isNotEmpty' cannot be accessed on 'String?' because it is potentially null.
+                                     if (request.githubLink.isNotEmpty)
+                                                            ^^^^^^^^^^
+           lib/screens/project_admin_screen.dart:167:50:
+           Error: Property 'isNotEmpty' cannot be accessed on 'String?' because it is potentially null.
+                                     if (request.githubLink.isNotEmpty)
+                                                            ^^^^^^^^^^
+           lib/screens/project_admin_screen.dart:170:52:
+           Error: Property 'isNotEmpty' cannot be accessed on 'String?' because it is potentially null.
+                                     if (request.linkedinLink.isNotEmpty)
+                                                              ^^^^^^^^^^
+           lib/screens/project_admin_screen.dart:173:52:
+           Error: Property 'isNotEmpty' cannot be accessed on 'String?' because it is potentially null.
+                                     if (request.linkedinLink.isNotEmpty)
+                                                              ^^^^^^^^^^
+           lib/screens/join_request_screen.dart:43:26:
+           Error: The getter 'FilePicker' isn't defined for the type '_JoinRequestScreenState'.
+            - '_JoinRequestScreenState' is from 'package:teamsync/screens/join_request_screen.dart' ('lib/screens/join_request_screen.dart').
+               final result = await FilePicker.platform.pickFiles(
+                                    ^^^^^^^^^^
+           lib/screens/join_request_screen.dart:45:13:
+           Error: The getter 'FileType' isn't defined for the type '_JoinRequestScreenState'.
+            - '_JoinRequestScreenState' is from 'package:teamsync/screens/join_request_screen.dart' ('lib/screens/join_request_screen.dart').
+                 type: FileType.any,
+                       ^^^^^^^^
+           lib/screens/join_request_screen.dart:80:47:
+           Error: The method 'uploadPortfolioFiles' isn't defined for the type 'FileService'.
+            - 'FileService' is from 'package:teamsync/services/file_service.dart' ('lib/services/file_service.dart').
+                   fileUrls = await FileService.instance.uploadPortfolioFiles(
+                                                         ^^^^^^^^^^^^^^^^^^^^
+           lib/screens/join_request_screen.dart:89:17:
+           Error: The argument type 'String' can't be assigned to the parameter type 'List<String>'.
+            - 'List' is from 'dart:core'.
+                   skills: skills,
+                           ^
+           lib/services/file_service.dart:51:37:
+           Error: The method 'getDownloadUrl' isn't defined for the type 'Reference'.
+            - 'Reference' is from 'package:firebase_storage/firebase_storage.dart' ('/home/codespace/.pub-cache/hosted/pub.dev/firebase_storage-13.3.0/lib/firebase_storage.dart').
+                 final downloadUrl = await ref.getDownloadUrl();
+                                               ^^^^^^^^^^^^^^
+           lib/services/file_service.dart:100:24:
+           Error: The method 'getDownloadUrl' isn't defined for the type 'Reference'.
+            - 'Reference' is from 'package:firebase_storage/firebase_storage.dart' ('/home/codespace/.pub-cache/hosted/pub.dev/firebase_storage-13.3.0/lib/firebase_storage.dart').
+                 return await ref.getDownloadUrl();
+                                  ^^^^^^^^^^^^^^
+           Error: Compilation failed.
+[  +15 ms] Persisting file store
+[   +4 ms] Done persisting file store
+[   +3 ms] Target dart2js failed: ProcessException: Process exited abnormally with exit code 1:
+           lib/screens/create_project_screen.dart:544:22:
+           Error: The final variable 'onTap' must be initialized.
+             final VoidCallback onTap;
+                                ^^^^^
+           lib/screens/create_project_screen.dart:546:3:
+           Error: Can't have modifier 'const' here.
+             const _VisibilityButton(
+             ^^^^^
+           lib/screens/create_project_screen.dart:547:74:
+           Error: Expected a function body or '=>'.
+                 {required this.label, required this.selected, required this.onTap});
+                                                                                    ^
+           lib/screens/create_project_screen.dart:574:1:
+           Error: Expected a declaration, but got '}'.
+           }
+           ^
+           lib/screens/idea_board_screen.dart:95:35:
+           Error: Can't find ')' to match '('.
+               return StreamBuilder<Project?>(
+                                             ^
+           lib/screens/idea_board_screen.dart:16:35:
+           Error: Can't find '}' to match '{'.
+               with TickerProviderStateMixin {
+                                             ^
+           lib/screens/idea_board_screen.dart:188:1:
+           Error: Classes can't be declared inside other classes.
+           class _AnimatedLevelCard extends StatefulWidget {
+           ^^^^^
+           lib/screens/idea_board_screen.dart:188:26:
+           Error: Expected a class member, but got 'extends'.
+           class _AnimatedLevelCard extends StatefulWidget {
+                                    ^^^^^^^
+           lib/screens/idea_board_screen.dart:188:34:
+           Error: A method declaration needs an explicit list of parameters.
+           class _AnimatedLevelCard extends StatefulWidget {
+                                            ^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:205:1:
+           Error: Classes can't be declared inside other classes.
+           class _AnimatedLevelCardState extends State<_AnimatedLevelCard>
+           ^^^^^
+           lib/screens/idea_board_screen.dart:205:31:
+           Error: Expected a class member, but got 'extends'.
+           class _AnimatedLevelCardState extends State<_AnimatedLevelCard>
+                                         ^^^^^^^
+           lib/screens/idea_board_screen.dart:205:39:
+           Error: A method declaration needs an explicit list of parameters.
+           class _AnimatedLevelCardState extends State<_AnimatedLevelCard>
+                                                 ^^^^^
+           lib/screens/idea_board_screen.dart:206:5:
+           Error: Expected '{' before this.
+               with TickerProviderStateMixin {
+               ^^^^
+           lib/screens/idea_board_screen.dart:206:5:
+           Error: Expected a class member, but got 'with'.
+               with TickerProviderStateMixin {
+               ^^^^
+           lib/screens/idea_board_screen.dart:206:10:
+           Error: A method declaration needs an explicit list of parameters.
+               with TickerProviderStateMixin {
+                    ^^^^^^^^^^^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:361:1:
+           Error: Classes can't be declared inside other classes.
+           class _AddLevelDialog extends StatefulWidget {
+           ^^^^^
+           lib/screens/idea_board_screen.dart:361:23:
+           Error: Expected a class member, but got 'extends'.
+           class _AddLevelDialog extends StatefulWidget {
+                                 ^^^^^^^
+           lib/screens/idea_board_screen.dart:361:31:
+           Error: A method declaration needs an explicit list of parameters.
+           class _AddLevelDialog extends StatefulWidget {
+                                         ^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:370:1:
+           Error: Classes can't be declared inside other classes.
+           class _AddLevelDialogState extends State<_AddLevelDialog>
+           ^^^^^
+           lib/screens/idea_board_screen.dart:370:28:
+           Error: Expected a class member, but got 'extends'.
+           class _AddLevelDialogState extends State<_AddLevelDialog>
+                                      ^^^^^^^
+           lib/screens/idea_board_screen.dart:370:36:
+           Error: A method declaration needs an explicit list of parameters.
+           class _AddLevelDialogState extends State<_AddLevelDialog>
+                                              ^^^^^
+           lib/screens/idea_board_screen.dart:371:5:
+           Error: Expected '{' before this.
+               with TickerProviderStateMixin {
+               ^^^^
+           lib/screens/idea_board_screen.dart:371:5:
+           Error: Expected a class member, but got 'with'.
+               with TickerProviderStateMixin {
+               ^^^^
+           lib/screens/idea_board_screen.dart:371:10:
+           Error: A method declaration needs an explicit list of parameters.
+               with TickerProviderStateMixin {
+                    ^^^^^^^^^^^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:53:35:
+           Error: Can't find ')' to match '('.
+               return StreamBuilder<Project?>(
+                                             ^
+           lib/screens/idea_board_document_screen.dart:19:76:
+           Error: Can't find '}' to match '{'.
+           class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
+                                                                                      ^
+           lib/screens/idea_board_document_screen.dart:206:1:
+           Error: Classes can't be declared inside other classes.
+           class _ToolbarButton extends StatelessWidget {
+           ^^^^^
+           lib/screens/idea_board_document_screen.dart:206:22:
+           Error: Expected a class member, but got 'extends'.
+           class _ToolbarButton extends StatelessWidget {
+                                ^^^^^^^
+           lib/screens/idea_board_document_screen.dart:206:30:
+           Error: A method declaration needs an explicit list of parameters.
+           class _ToolbarButton extends StatelessWidget {
+                                        ^^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:238:1:
+           Error: Classes can't be declared inside other classes.
+           class _AttachmentTile extends StatelessWidget {
+           ^^^^^
+           lib/screens/idea_board_document_screen.dart:238:23:
+           Error: Expected a class member, but got 'extends'.
+           class _AttachmentTile extends StatelessWidget {
+                                 ^^^^^^^
+           lib/screens/idea_board_document_screen.dart:238:31:
+           Error: A method declaration needs an explicit list of parameters.
+           class _AttachmentTile extends StatelessWidget {
+                                         ^^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:343:1:
+           Error: Classes can't be declared inside other classes.
+           class DottedUploadButton extends StatelessWidget {
+           ^^^^^
+           lib/screens/idea_board_document_screen.dart:343:26:
+           Error: Expected a class member, but got 'extends'.
+           class DottedUploadButton extends StatelessWidget {
+                                    ^^^^^^^
+           lib/screens/idea_board_document_screen.dart:343:34:
+           Error: A method declaration needs an explicit list of parameters.
+           class DottedUploadButton extends StatelessWidget {
+                                            ^^^^^^^^^^^^^^^
+           lib/screens/discover_screen.dart:57:38:
+           Error: Can't find '}' to match '{'.
+                   builder: (context, snapshot) {
+                                                ^
+           lib/screens/discover_screen.dart:26:20:
+           Error: Can't find ')' to match '('.
+               return Scaffold(
+                              ^
+           lib/screens/discover_screen.dart:184:69:
+           Error: Can't find '}' to match '{'.
+           class _RequestToJoinButtonState extends State<_RequestToJoinButton> {
+                                                                               ^
+           Error: Couldn't resolve the package 'file_picker' in 'package:file_picker/file_picker.dart'.
+           lib/screens/join_request_screen.dart:3:8:
+           Error: Not found: 'package:file_picker/file_picker.dart'
+           import 'package:file_picker/file_picker.dart';
+                  ^
+           lib/screens/create_project_screen.dart:546:9:
+           Error: '_VisibilityButton' is already declared in this scope.
+             const _VisibilityButton(
+                   ^^^^^^^^^^^^^^^^^
+           lib/screens/create_project_screen.dart:448:7:
+           Info: Previous declaration of '_VisibilityButton'.
+           class _VisibilityButton extends StatelessWidget {
+                 ^^^^^^^^^^^^^^^^^
+           lib/screens/create_project_screen.dart:576:7:
+           Error: '_SkillTile' is already declared in this scope.
+           class _SkillTile extends StatelessWidget {
+                 ^^^^^^^^^^
+           lib/screens/create_project_screen.dart:498:7:
+           Info: Previous declaration of '_SkillTile'.
+           class _SkillTile extends StatelessWidget {
+                 ^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:361:31:
+           Error: 'StatefulWidget' is already declared in this scope.
+           class _AddLevelDialog extends StatefulWidget {
+                                         ^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:188:34:
+           Info: Previous declaration of 'StatefulWidget'.
+           class _AnimatedLevelCard extends StatefulWidget {
+                                            ^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:370:36:
+           Error: 'State' is already declared in this scope.
+           class _AddLevelDialogState extends State<_AddLevelDialog>
+                                              ^^^^^
+           lib/screens/idea_board_screen.dart:205:39:
+           Info: Previous declaration of 'State'.
+           class _AnimatedLevelCardState extends State<_AnimatedLevelCard>
+                                                 ^^^^^
+           lib/screens/idea_board_screen.dart:371:10:
+           Error: 'TickerProviderStateMixin' is already declared in this scope.
+               with TickerProviderStateMixin {
+                    ^^^^^^^^^^^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:206:10:
+           Info: Previous declaration of 'TickerProviderStateMixin'.
+               with TickerProviderStateMixin {
+                    ^^^^^^^^^^^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:238:31:
+           Error: 'StatelessWidget' is already declared in this scope.
+           class _AttachmentTile extends StatelessWidget {
+                                         ^^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:206:30:
+           Info: Previous declaration of 'StatelessWidget'.
+           class _ToolbarButton extends StatelessWidget {
+                                        ^^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:343:34:
+           Error: 'StatelessWidget' is already declared in this scope.
+           class DottedUploadButton extends StatelessWidget {
+                                            ^^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:206:30:
+           Info: Previous declaration of 'StatelessWidget'.
+           class _ToolbarButton extends StatelessWidget {
+                                        ^^^^^^^^^^^^^^^
+           lib/screens/create_project_screen.dart:11:9:
+           Error: Type 'CreateProjectScreenState' not found.
+             State<CreateProjectScreenState> createState() => _CreateProjectScreenState();
+                   ^^^^^^^^^^^^^^^^^^^^^^^^
+           lib/screens/create_project_screen.dart:544:22:
+           Error: Field 'onTap' should be initialized because its type 'void Function()' doesn't allow null.
+             final VoidCallback onTap;
+                                ^^^^^
+           lib/screens/create_project_screen.dart:547:17:
+           Error: Field formal parameters can only be used in a constructor.
+                 {required this.label, required this.selected, required this.onTap});
+                           ^^^^
+           lib/screens/create_project_screen.dart:547:38:
+           Error: Field formal parameters can only be used in a constructor.
+                 {required this.label, required this.selected, required this.onTap});
+                                                ^^^^
+           lib/screens/create_project_screen.dart:547:62:
+           Error: Field formal parameters can only be used in a constructor.
+                 {required this.label, required this.selected, required this.onTap});
+                                                                        ^^^^
+           lib/screens/create_project_screen.dart:557:18:
+           Error: Undefined name 'selected'.
+                     color: selected ? const Color(0xFFEFF6FF) : Colors.white,
+                            ^^^^^^^^
+           lib/screens/create_project_screen.dart:559:22:
+           Error: Undefined name 'selected'.
+                         color: selected ? AppTheme.primary : AppTheme.border,
+                                ^^^^^^^^
+           lib/screens/create_project_screen.dart:560:22:
+           Error: Undefined name 'selected'.
+                         width: selected ? 2 : 1),
+                                ^^^^^^^^
+           lib/screens/create_project_screen.dart:564:23:
+           Error: Undefined name 'label'.
+                     child: Text(label,
+                                 ^^^^^
+           lib/screens/create_project_screen.dart:568:24:
+           Error: Undefined name 'selected'.
+                           color: selected ? AppTheme.primary : AppTheme.textSecondary,
+                                  ^^^^^^^^
+           lib/screens/idea_board_screen.dart:65:29:
+           Error: The method '_AddLevelDialog' isn't defined for the type '_IdeaBoardScreenState'.
+            - '_IdeaBoardScreenState' is from 'package:teamsync/screens/idea_board_screen.dart' ('lib/screens/idea_board_screen.dart').
+                 builder: (context) => _AddLevelDialog(
+                                       ^^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:185:3:
+           Error: Expected ';' after this.
+             }
+             ^
+           lib/screens/idea_board_screen.dart:156:32:
+           Error: The method '_AnimatedLevelCard' isn't defined for the type '_IdeaBoardScreenState'.
+            - '_IdeaBoardScreenState' is from 'package:teamsync/screens/idea_board_screen.dart' ('lib/screens/idea_board_screen.dart').
+                                   return _AnimatedLevelCard(
+                                          ^^^^^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:195:14:
+           Error: Expected ',' before this.
+               required this.level,
+                        ^^^^
+           lib/screens/idea_board_screen.dart:196:14:
+           Error: Expected ',' before this.
+               required this.projectId,
+                        ^^^^
+           lib/screens/idea_board_screen.dart:197:14:
+           Error: Expected ',' before this.
+               required this.onDelete,
+                        ^^^^
+           lib/screens/idea_board_screen.dart:198:14:
+           Error: Expected ',' before this.
+               required this.delay,
+                        ^^^^
+           lib/screens/idea_board_screen.dart:194:9:
+           Error: Not a constant expression.
+             const _AnimatedLevelCard({
+                   ^^^^^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:202:9:
+           Error: '_AnimatedLevelCard' isn't a type.
+             State<_AnimatedLevelCard> createState() => _AnimatedLevelCardState();
+                   ^^^^^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:202:46:
+           Error: The method '_AnimatedLevelCardState' isn't defined for the type '_IdeaBoardScreenState'.
+            - '_IdeaBoardScreenState' is from 'package:teamsync/screens/idea_board_screen.dart' ('lib/screens/idea_board_screen.dart').
+             State<_AnimatedLevelCard> createState() => _AnimatedLevelCardState();
+                                                        ^^^^^^^^^^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:241:50:
+           Error: The getter 'delay' isn't defined for the type 'IdeaBoardScreen'.
+            - 'IdeaBoardScreen' is from 'package:teamsync/screens/idea_board_screen.dart' ('lib/screens/idea_board_screen.dart').
+               Future.delayed(Duration(milliseconds: widget.delay), () {
+                                                            ^^^^^
+           lib/screens/idea_board_screen.dart:322:38:
+           Error: The getter 'level' isn't defined for the type 'IdeaBoardScreen'.
+            - 'IdeaBoardScreen' is from 'package:teamsync/screens/idea_board_screen.dart' ('lib/screens/idea_board_screen.dart').
+                                         widget.level.name,
+                                                ^^^^^
+           lib/screens/idea_board_screen.dart:331:41:
+           Error: The getter 'level' isn't defined for the type 'IdeaBoardScreen'.
+            - 'IdeaBoardScreen' is from 'package:teamsync/screens/idea_board_screen.dart' ('lib/screens/idea_board_screen.dart').
+                                         '${widget.level.documents.length} documents',
+                                                   ^^^^^
+           lib/screens/idea_board_screen.dart:346:43:
+           Error: The getter 'onDelete' isn't defined for the type 'IdeaBoardScreen'.
+            - 'IdeaBoardScreen' is from 'package:teamsync/screens/idea_board_screen.dart' ('lib/screens/idea_board_screen.dart').
+                                   onPressed: widget.onDelete,
+                                                     ^^^^^^^^
+           lib/screens/idea_board_screen.dart:265:76:
+           Error: The getter 'level' isn't defined for the type 'IdeaBoardScreen'.
+            - 'IdeaBoardScreen' is from 'package:teamsync/screens/idea_board_screen.dart' ('lib/screens/idea_board_screen.dart').
+                           context, '/project/${widget.projectId}/idea-board/${widget.level.id}'),
+                                                                                      ^^^^^
+           lib/screens/idea_board_screen.dart:364:35:
+           Error: Expected ',' before this.
+             const _AddLevelDialog({required this.onAdd});
+                                             ^^^^
+           lib/screens/idea_board_screen.dart:364:9:
+           Error: Not a constant expression.
+             const _AddLevelDialog({required this.onAdd});
+                   ^^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:367:9:
+           Error: '_AddLevelDialog' isn't a type.
+             State<_AddLevelDialog> createState() => _AddLevelDialogState();
+                   ^^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:367:43:
+           Error: The method '_AddLevelDialogState' isn't defined for the type '_IdeaBoardScreenState'.
+            - '_IdeaBoardScreenState' is from 'package:teamsync/screens/idea_board_screen.dart' ('lib/screens/idea_board_screen.dart').
+             State<_AddLevelDialog> createState() => _AddLevelDialogState();
+                                                     ^^^^^^^^^^^^^^^^^^^^
+           lib/screens/idea_board_screen.dart:461:28:
+           Error: The method 'onAdd' isn't defined for the type 'IdeaBoardScreen'.
+            - 'IdeaBoardScreen' is from 'package:teamsync/screens/idea_board_screen.dart' ('lib/screens/idea_board_screen.dart').
+                               widget.onAdd(
+                                      ^^^^^
+           lib/screens/idea_board_document_screen.dart:203:3:
+           Error: Expected ';' after this.
+             }
+             ^
+           lib/screens/idea_board_document_screen.dart:106:23:
+           Error: The method '_ToolbarButton' isn't defined for the type '_IdeaBoardDocumentScreenState'.
+            - '_IdeaBoardDocumentScreenState' is from 'package:teamsync/screens/idea_board_document_screen.dart' ('lib/screens/idea_board_document_screen.dart').
+                                 _ToolbarButton(
+                                 ^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:109:23:
+           Error: The method '_ToolbarButton' isn't defined for the type '_IdeaBoardDocumentScreenState'.
+            - '_IdeaBoardDocumentScreenState' is from 'package:teamsync/screens/idea_board_document_screen.dart' ('lib/screens/idea_board_document_screen.dart').
+                                 _ToolbarButton(
+                                 ^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:114:23:
+           Error: The method '_ToolbarButton' isn't defined for the type '_IdeaBoardDocumentScreenState'.
+            - '_IdeaBoardDocumentScreenState' is from 'package:teamsync/screens/idea_board_document_screen.dart' ('lib/screens/idea_board_document_screen.dart').
+                                 _ToolbarButton(
+                                 ^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:119:23:
+           Error: The method '_ToolbarButton' isn't defined for the type '_IdeaBoardDocumentScreenState'.
+            - '_IdeaBoardDocumentScreenState' is from 'package:teamsync/screens/idea_board_document_screen.dart' ('lib/screens/idea_board_document_screen.dart').
+                                 _ToolbarButton(
+                                 ^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:179:55:
+           Error: The method '_AttachmentTile' isn't defined for the type '_IdeaBoardDocumentScreenState'.
+            - '_IdeaBoardDocumentScreenState' is from 'package:teamsync/screens/idea_board_document_screen.dart' ('lib/screens/idea_board_document_screen.dart').
+                                     ...attachments.map((att) => _AttachmentTile(
+                                                                 ^^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:193:28:
+           Error: The method 'DottedUploadButton' isn't defined for the type '_IdeaBoardDocumentScreenState'.
+            - '_IdeaBoardDocumentScreenState' is from 'package:teamsync/screens/idea_board_document_screen.dart' ('lib/screens/idea_board_document_screen.dart').
+                               child: DottedUploadButton(onTap: () {}),
+                                      ^^^^^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:212:17:
+           Error: Expected ',' before this.
+                 {required this.icon, required this.label, required this.onTap});
+                           ^^^^
+           lib/screens/idea_board_document_screen.dart:212:37:
+           Error: Expected ',' before this.
+                 {required this.icon, required this.label, required this.onTap});
+                                               ^^^^
+           lib/screens/idea_board_document_screen.dart:212:58:
+           Error: Expected ',' before this.
+                 {required this.icon, required this.label, required this.onTap});
+                                                                    ^^^^
+           lib/screens/idea_board_document_screen.dart:211:9:
+           Error: Not a constant expression.
+             const _ToolbarButton(
+                   ^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:217:14:
+           Error: Final variable 'onTap' must be assigned before it can be used.
+                 onTap: onTap,
+                        ^^^^^
+           lib/screens/idea_board_document_screen.dart:226:18:
+           Error: Final variable 'icon' must be assigned before it can be used.
+                       Icon(icon, size: 15, color: AppTheme.textSecondary),
+                            ^^^^
+           lib/screens/idea_board_document_screen.dart:228:18:
+           Error: Final variable 'label' must be assigned before it can be used.
+                       Text(label,
+                            ^^^^^
+           lib/screens/idea_board_document_screen.dart:245:14:
+           Error: Expected ',' before this.
+               required this.name,
+                        ^^^^
+           lib/screens/idea_board_document_screen.dart:246:14:
+           Error: Expected ',' before this.
+               required this.type,
+                        ^^^^
+           lib/screens/idea_board_document_screen.dart:247:14:
+           Error: Expected ',' before this.
+               required this.uploadedBy,
+                        ^^^^
+           lib/screens/idea_board_document_screen.dart:248:14:
+           Error: Expected ',' before this.
+               required this.uploadedAt,
+                        ^^^^
+           lib/screens/idea_board_document_screen.dart:244:9:
+           Error: Not a constant expression.
+             const _AttachmentTile({
+                   ^^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:251:12:
+           Error: Expected ';' after this.
+             IconData get _icon {
+                      ^^^
+           lib/screens/idea_board_document_screen.dart:251:16:
+           Error: Expected ';' after this.
+             IconData get _icon {
+                          ^^^^^
+           lib/screens/idea_board_document_screen.dart:265:9:
+           Error: 'get' is already declared in this scope.
+             Color get _iconColor {
+                   ^^^
+           lib/screens/idea_board_document_screen.dart:251:12:
+           Info: Previous declaration of 'get'.
+             IconData get _icon {
+                      ^^^
+           lib/screens/idea_board_document_screen.dart:265:9:
+           Error: Expected ';' after this.
+             Color get _iconColor {
+                   ^^^
+           lib/screens/idea_board_document_screen.dart:265:13:
+           Error: Expected ';' after this.
+             Color get _iconColor {
+                       ^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:251:16:
+           Error: The getter '_icon' isn't defined for the type '_IdeaBoardDocumentScreenState'.
+            - '_IdeaBoardDocumentScreenState' is from 'package:teamsync/screens/idea_board_document_screen.dart' ('lib/screens/idea_board_document_screen.dart').
+             IconData get _icon {
+                          ^^^^^
+           lib/screens/idea_board_document_screen.dart:252:13:
+           Error: Final variable 'type' must be assigned before it can be used.
+               switch (type) {
+                       ^^^^
+           lib/screens/idea_board_document_screen.dart:265:13:
+           Error: The getter '_iconColor' isn't defined for the type '_IdeaBoardDocumentScreenState'.
+            - '_IdeaBoardDocumentScreenState' is from 'package:teamsync/screens/idea_board_document_screen.dart' ('lib/screens/idea_board_document_screen.dart').
+             Color get _iconColor {
+                       ^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:266:13:
+           Error: Final variable 'type' must be assigned before it can be used.
+               switch (type) {
+                       ^^^^
+           lib/screens/idea_board_document_screen.dart:290:16:
+           Error: The getter '_icon' isn't defined for the type '_IdeaBoardDocumentScreenState'.
+            - '_IdeaBoardDocumentScreenState' is from 'package:teamsync/screens/idea_board_document_screen.dart' ('lib/screens/idea_board_document_screen.dart').
+                     Icon(_icon, color: _iconColor, size: 22),
+                          ^^^^^
+           lib/screens/idea_board_document_screen.dart:290:30:
+           Error: The getter '_iconColor' isn't defined for the type '_IdeaBoardDocumentScreenState'.
+            - '_IdeaBoardDocumentScreenState' is from 'package:teamsync/screens/idea_board_document_screen.dart' ('lib/screens/idea_board_document_screen.dart').
+                     Icon(_icon, color: _iconColor, size: 22),
+                                        ^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:296:22:
+           Error: Final variable 'name' must be assigned before it can be used.
+                           Text(name,
+                                ^^^^
+           lib/screens/idea_board_document_screen.dart:308:26:
+           Error: Final variable 'uploadedBy' must be assigned before it can be used.
+                               Text(uploadedBy,
+                                    ^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:315:26:
+           Error: Final variable 'uploadedAt' must be assigned before it can be used.
+                               Text(uploadedAt,
+                                    ^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:345:49:
+           Error: Expected ',' before this.
+             const DottedUploadButton({super.key, required this.onTap});
+                                                           ^^^^
+           lib/screens/idea_board_document_screen.dart:345:35:
+           Error: Superclass has no getter named 'key'.
+             const DottedUploadButton({super.key, required this.onTap});
+                                             ^^^
+           lib/screens/idea_board_document_screen.dart:345:9:
+           Error: Not a constant expression.
+             const DottedUploadButton({super.key, required this.onTap});
+                   ^^^^^^^^^^^^^^^^^^
+           lib/screens/idea_board_document_screen.dart:350:14:
+           Error: Final variable 'onTap' must be assigned before it can be used.
+                 onTap: onTap,
+                        ^^^^^
+           lib/screens/chat_channel_screen.dart:87:20:
+           Error: The getter 'channel' isn't defined for the type '_ChatChannelScreenState'.
+            - '_ChatChannelScreenState' is from 'package:teamsync/screens/chat_channel_screen.dart' ('lib/screens/chat_channel_screen.dart').
+                       child: channel.messages.isEmpty && _messages.isEmpty
+                              ^^^^^^^
+           lib/screens/chat_channel_screen.dart:97:26:
+           Error: The getter 'channel' isn't defined for the type '_ChatChannelScreenState'.
+            - '_ChatChannelScreenState' is from 'package:teamsync/screens/chat_channel_screen.dart' ('lib/screens/chat_channel_screen.dart').
+                                 ...channel.messages.map((msg) => _MessageBubble(
+                                    ^^^^^^^
+           lib/screens/chat_channel_screen.dart:114:26:
+           Error: The getter 'channel' isn't defined for the type '_ChatChannelScreenState'.
+            - '_ChatChannelScreenState' is from 'package:teamsync/screens/chat_channel_screen.dart' ('lib/screens/chat_channel_screen.dart').
+                       channelName: channel.name.toLowerCase(),
+                                    ^^^^^^^
+           lib/screens/profile_screen.dart:45:45:
+           Error: The argument type 'Stream<AppUser?>' can't be assigned to the parameter type 'Stream<AppUser>?'.
+            - 'Stream' is from 'dart:async'.
+            - 'AppUser' is from 'package:teamsync/models/models.dart' ('lib/models/models.dart').
+                   stream: UserProfileService.instance.watchCurrentUser(),
+                                                       ^
+           lib/screens/profile_screen.dart:291:41:
+           Error: The getter 'currentUser' isn't defined for the type '_MyProfileDetailsScreenState'.
+            - '_MyProfileDetailsScreenState' is from 'package:teamsync/screens/profile_screen.dart' ('lib/screens/profile_screen.dart').
+                     final user = snapshot.data ?? currentUser;
+                                                   ^^^^^^^^^^^
+           lib/screens/profile_screen.dart:289:45:
+           Error: The argument type 'Stream<AppUser?>' can't be assigned to the parameter type 'Stream<AppUser>?'.
+            - 'Stream' is from 'dart:async'.
+            - 'AppUser' is from 'package:teamsync/models/models.dart' ('lib/models/models.dart').
+                   stream: UserProfileService.instance.watchCurrentUser(),
+                                                       ^
+           lib/screens/home_dashboard_screen.dart:97:58:
+           Error: Required named parameter 'username' must be provided.
+                               final user = snapshot.data ?? AppUser(
+                                                                    ^
+           lib/models/models.dart:160:9:
+           Info: Found this candidate, but the arguments don't match.
+             const AppUser({
+                   ^^^^^^^
+           lib/screens/home_dashboard_screen.dart:95:55:
+           Error: The argument type 'Stream<AppUser?>' can't be assigned to the parameter type 'Stream<AppUser>?'.
+            - 'Stream' is from 'dart:async'.
+            - 'AppUser' is from 'package:teamsync/models/models.dart' ('lib/models/models.dart').
+                             stream: UserProfileService.instance.watchCurrentUser(),
+                                                                 ^
+           lib/screens/home_dashboard_screen.dart:177:64:
+           Error: Required named parameter 'username' must be provided.
+                                     final user = snapshot.data ?? AppUser(
+                                                                          ^
+           lib/models/models.dart:160:9:
+           Info: Found this candidate, but the arguments don't match.
+             const AppUser({
+                   ^^^^^^^
+           lib/screens/home_dashboard_screen.dart:175:61:
+           Error: The argument type 'Stream<AppUser?>' can't be assigned to the parameter type 'Stream<AppUser>?'.
+            - 'Stream' is from 'dart:async'.
+            - 'AppUser' is from 'package:teamsync/models/models.dart' ('lib/models/models.dart').
+                                   stream: UserProfileService.instance.watchCurrentUser(),
+                                                                       ^
+           lib/screens/discover_screen.dart:85:26:
+           Error: Not a constant expression.
+                       return const EmptyState(
+                                    ^^^^^^^^^^
+           lib/screens/discover_screen.dart:170:13:
+           Error: Expected ';' after this.
+                       ),
+                       ^
+           lib/screens/discover_screen.dart:170:14:
+           Error: Expected an identifier, but got ','.
+                       ),
+                        ^
+           lib/screens/discover_screen.dart:170:14:
+           Error: Unexpected token ';'.
+                       ),
+                        ^
+           lib/screens/project_admin_screen.dart:160:44:
+           Error: Property 'isNotEmpty' cannot be accessed on 'String?' because it is potentially null.
+                               if (request.githubLink.isNotEmpty || request.linkedinLink.isNotEmpty) ...[
+                                                      ^^^^^^^^^^
+           lib/screens/project_admin_screen.dart:160:79:
+           Error: Property 'isNotEmpty' cannot be accessed on 'String?' because it is potentially null.
+                               if (request.githubLink.isNotEmpty || request.linkedinLink.isNotEmpty) ...[
+                                                                                         ^^^^^^^^^^
+           lib/screens/project_admin_screen.dart:164:50:
+           Error: Property 'isNotEmpty' cannot be accessed on 'String?' because it is potentially null.
+                                     if (request.githubLink.isNotEmpty)
+                                                            ^^^^^^^^^^
+           lib/screens/project_admin_screen.dart:167:50:
+           Error: Property 'isNotEmpty' cannot be accessed on 'String?' because it is potentially null.
+                                     if (request.githubLink.isNotEmpty)
+                                                            ^^^^^^^^^^
+           lib/screens/project_admin_screen.dart:170:52:
+           Error: Property 'isNotEmpty' cannot be accessed on 'String?' because it is potentially null.
+                                     if (request.linkedinLink.isNotEmpty)
+                                                              ^^^^^^^^^^
+           lib/screens/project_admin_screen.dart:173:52:
+           Error: Property 'isNotEmpty' cannot be accessed on 'String?' because it is potentially null.
+                                     if (request.linkedinLink.isNotEmpty)
+                                                              ^^^^^^^^^^
+           lib/screens/join_request_screen.dart:43:26:
+           Error: The getter 'FilePicker' isn't defined for the type '_JoinRequestScreenState'.
+            - '_JoinRequestScreenState' is from 'package:teamsync/screens/join_request_screen.dart' ('lib/screens/join_request_screen.dart').
+               final result = await FilePicker.platform.pickFiles(
+                                    ^^^^^^^^^^
+           lib/screens/join_request_screen.dart:45:13:
+           Error: The getter 'FileType' isn't defined for the type '_JoinRequestScreenState'.
+            - '_JoinRequestScreenState' is from 'package:teamsync/screens/join_request_screen.dart' ('lib/screens/join_request_screen.dart').
+                 type: FileType.any,
+                       ^^^^^^^^
+           lib/screens/join_request_screen.dart:80:47:
+           Error: The method 'uploadPortfolioFiles' isn't defined for the type 'FileService'.
+            - 'FileService' is from 'package:teamsync/services/file_service.dart' ('lib/services/file_service.dart').
+                   fileUrls = await FileService.instance.uploadPortfolioFiles(
+                                                         ^^^^^^^^^^^^^^^^^^^^
+           lib/screens/join_request_screen.dart:89:17:
+           Error: The argument type 'String' can't be assigned to the parameter type 'List<String>'.
+            - 'List' is from 'dart:core'.
+                   skills: skills,
+                           ^
+           lib/services/file_service.dart:51:37:
+           Error: The method 'getDownloadUrl' isn't defined for the type 'Reference'.
+            - 'Reference' is from 'package:firebase_storage/firebase_storage.dart' ('/home/codespace/.pub-cache/hosted/pub.dev/firebase_storage-13.3.0/lib/firebase_storage.dart').
+                 final downloadUrl = await ref.getDownloadUrl();
+                                               ^^^^^^^^^^^^^^
+           lib/services/file_service.dart:100:24:
+           Error: The method 'getDownloadUrl' isn't defined for the type 'Reference'.
+            - 'Reference' is from 'package:firebase_storage/firebase_storage.dart' ('/home/codespace/.pub-cache/hosted/pub.dev/firebase_storage-13.3.0/lib/firebase_storage.dart').
+                 return await ref.getDownloadUrl();
+                                  ^^^^^^^^^^^^^^
+           Error: Compilation failed.
+             Command: /workspaces/flutter/bin/cache/dart-sdk/bin/dart compile js --platform-binaries=/workspaces/flutter/bin/cache/flutter_web_sdk/kernel --invoker=flutter_tool -Ddart.vm.product=true -DFLUTTER_VERSION=3.41.9 -DFLUTTER_CHANNEL=stable -DFLUTTER_GIT_URL=https://github.com/flutter/flutter.git -DFLUTTER_FRAMEWORK_REVISION=00b0c91f06 -DFLUTTER_ENGINE_REVISION=42d3d75a56 -DFLUTTER_DART_VERSION=3.11.5 -DFLUTTER_WEB_USE_SKIA=true -DFLUTTER_WEB_USE_SKWASM=false -DFLUTTER_WEB_CANVASKIT_URL=https://www.gstatic.com/flutter-canvaskit/42d3d75a56efe1a2e9902f52dc8006099c45d937/ --native-null-assertions --no-source-maps -O4 --minify -o /workspaces/TeamSync/.dart_tool/flutter_build/3e856f2401cad0db2fbc491f83df5cf9/app.dill --packages=/workspaces/TeamSync/.dart_tool/package_config.json --cfe-only /workspaces/TeamSync/.dart_tool/flutter_build/3e856f2401cad0db2fbc491f83df5cf9/main.dart
+           #0      RunResult.throwException (package:flutter_tools/src/base/process.dart:153:5)
+           #1      _DefaultProcessUtils.run (package:flutter_tools/src/base/process.dart:379:19)
+           <asynchronous suspension>
+           #2      Dart2JSTarget.build (package:flutter_tools/src/build_system/targets/web.dart:208:5)
+           <asynchronous suspension>
+           #3      _BuildInstance._invokeInternal (package:flutter_tools/src/build_system/build_system.dart:937:9)
+           <asynchronous suspension>
+           #4      Future.wait.<anonymous closure> (dart:async/future.dart:546:21)
+           <asynchronous suspension>
+           #5      _BuildInstance.invokeTarget (package:flutter_tools/src/build_system/build_system.dart:875:32)
+           <asynchronous suspension>
+           #6      Future.wait.<anonymous closure> (dart:async/future.dart:546:21)
+           <asynchronous suspension>
+           #7      _BuildInstance.invokeTarget (package:flutter_tools/src/build_system/build_system.dart:875:32)
+           <asynchronous suspension>
+           #8      FlutterBuildSystem.build (package:flutter_tools/src/build_system/build_system.dart:684:16)
+           <asynchronous suspension>
+           #9      WebBuilder.buildWeb (package:flutter_tools/src/web/compile.dart:107:34)
+           <asynchronous suspension>
+           #10     BuildWebCommand.runCommand (package:flutter_tools/src/commands/build_web.dart:300:5)
+           <asynchronous suspension>
+           #11     FlutterCommand.run.<anonymous closure> (package:flutter_tools/src/runner/flutter_command.dart:1590:27)
+           <asynchronous suspension>
+           #12     AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+           <asynchronous suspension>
+           #13     CommandRunner.runCommand (package:args/command_runner.dart:212:13)
+           <asynchronous suspension>
+           #14     FlutterCommandRunner.runCommand.<anonymous closure> (package:flutter_tools/src/runner/flutter_command_runner.dart:496:9)
+           <asynchronous suspension>
+           #15     AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+           <asynchronous suspension>
+           #16     FlutterCommandRunner.runCommand (package:flutter_tools/src/runner/flutter_command_runner.dart:431:5)
+           <asynchronous suspension>
+           #17     FlutterCommandRunner.run.<anonymous closure> (package:flutter_tools/src/runner/flutter_command_runner.dart:307:33)
+           <asynchronous suspension>
+           #18     run.<anonymous closure>.<anonymous closure> (package:flutter_tools/runner.dart:104:11)
+           <asynchronous suspension>
+           #19     AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+           <asynchronous suspension>
+           #20     main (package:flutter_tools/executable.dart:103:3)
+           <asynchronous suspension>
+
+[   +4 ms] Compiling lib/main.dart for the Web... (completed in 25.7s)
+[        ] "flutter web" took 26,299ms.
+[   +7 ms] Error: Failed to compile application for the Web.
+[        ] 
+           #0      throwToolExit (package:flutter_tools/src/base/common.dart:34:3)
+           #1      WebBuilder.buildWeb (package:flutter_tools/src/web/compile.dart:152:7)
+           <asynchronous suspension>
+           #2      BuildWebCommand.runCommand (package:flutter_tools/src/commands/build_web.dart:300:5)
+           <asynchronous suspension>
+           #3      FlutterCommand.run.<anonymous closure> (package:flutter_tools/src/runner/flutter_command.dart:1590:27)
+           <asynchronous suspension>
+           #4      AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+           <asynchronous suspension>
+           #5      CommandRunner.runCommand (package:args/command_runner.dart:212:13)
+           <asynchronous suspension>
+           #6      FlutterCommandRunner.runCommand.<anonymous closure> (package:flutter_tools/src/runner/flutter_command_runner.dart:496:9)
+           <asynchronous suspension>
+           #7      AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+           <asynchronous suspension>
+           #8      FlutterCommandRunner.runCommand (package:flutter_tools/src/runner/flutter_command_runner.dart:431:5)
+           <asynchronous suspension>
+           #9      FlutterCommandRunner.run.<anonymous closure> (package:flutter_tools/src/runner/flutter_command_runner.dart:307:33)
+           <asynchronous suspension>
+           #10     run.<anonymous closure>.<anonymous closure> (package:flutter_tools/runner.dart:104:11)
+           <asynchronous suspension>
+           #11     AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+           <asynchronous suspension>
+           #12     main (package:flutter_tools/executable.dart:103:3)
+           <asynchronous suspension>
+
+
+[        ] Running 1 shutdown hook
+[        ] Shutdown hooks complete
+[        ] exiting with code 1

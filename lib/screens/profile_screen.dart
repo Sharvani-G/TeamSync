@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../data/mock_data.dart';
 import '../models/models.dart';
 import '../services/user_profile_service.dart';
 import '../theme/app_theme.dart';
@@ -42,10 +41,18 @@ class ProfileScreen extends StatelessWidget {
           child: Divider(height: 1),
         ),
       ),
-      body: StreamBuilder<AppUser>(
+      body: StreamBuilder<AppUser?>(
         stream: UserProfileService.instance.watchCurrentUser(),
         builder: (context, snapshot) {
-          final user = snapshot.data ?? currentUser;
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          
+          final user = snapshot.data;
+
+          if (user == null) {
+            return const Center(child: Text('User not found'));
+          }
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
@@ -278,10 +285,13 @@ class _MyProfileDetailsScreenState extends State<MyProfileDetailsScreen> {
           child: Divider(height: 1),
         ),
       ),
-      body: StreamBuilder<AppUser>(
+      body: StreamBuilder<AppUser?>(
         stream: UserProfileService.instance.watchCurrentUser(),
         builder: (context, snapshot) {
-          final user = snapshot.data ?? currentUser;
+          final user = snapshot.data;
+          if (user == null) {
+            return const Center(child: CircularProgressIndicator());
+          }
           _syncUser(user);
 
           final avatarLabel = _isPhotoVisible

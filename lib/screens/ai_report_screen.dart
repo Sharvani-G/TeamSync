@@ -1,8 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../data/mock_data.dart';
 import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
+
+// Moved hardcoded strings from mock_data to here for now as they are static content
+const weeklyReportSummary =
+    'This week, the team has successfully completed the initial architecture phase. Backend services are now integrated with Firebase, and the UI is being migrated to use real-time data streams. Collaborator management is fully functional.';
+const weeklyReportHighlights = [
+  'Switched from mock data to Firestore real-time streams',
+  'Implemented username-based collaborator search',
+  'Set up secure Firestore rules for projects and requests',
+  'Integrated Firebase Storage for portfolio uploads',
+];
 
 class AIReportScreen extends StatelessWidget {
   const AIReportScreen({super.key});
