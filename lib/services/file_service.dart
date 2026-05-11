@@ -1,6 +1,22 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
+// File picker removed in v1.0 - using simple file model instead
+class PlatformFile {
+  final String name;
+  final String? path;
+  final Uint8List? bytes;
+  final int size;
+
+  PlatformFile({
+    required this.name,
+    this.path,
+    this.bytes,
+    required this.size,
+  });
+}
+
 
 class FileService {
   FileService._();
@@ -10,10 +26,25 @@ class FileService {
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  Future<String> uploadBytes({
+    required String storagePath,
+    required Uint8List bytes,
+    required String contentType,
+    Map<String, String>? metadata,
+  }) async {
+    final ref = _storage.ref(storagePath);
+    final task = ref.putData(
+      bytes,
+      SettableMetadata(contentType: contentType, customMetadata: metadata),
+    );
+    await task;
+    return ref.getDownloadURL();
+  }
+
   /// Upload a single file to Firebase Storage
   /// Returns the download URL
   Future<String> uploadFile({
-    required File file,
+    required PlatformFile file,
     required String projectId,
     required String requestId,
     String? fileName,
@@ -25,7 +56,8 @@ class FileService {
       }
 
       // Construct storage path: joinRequests/{projectId}/{requestId}/{fileName}
-      final storageFileName = fileName ?? file.path.split('/').last;
+        final fallbackName = file.path?.split('/').last ?? 'file';
+        final storageFileName = fileName ?? file.name.ifEmpty(fallbackName);
       final storagePath =
           'joinRequests/$projectId/$requestId/$storageFileName';
 
@@ -33,7 +65,7 @@ class FileService {
 
       // Upload with metadata
       final metadata = SettableMetadata(
-        contentType: _getContentType(file.path),
+        contentType: _getContentType(storageFileName),
         customMetadata: {
           'projectId': projectId,
           'requestId': requestId,
@@ -42,10 +74,13 @@ class FileService {
         },
       );
 
-      final uploadTask = ref.putFile(file, metadata);
+      if (file.bytes == null) {
+        throw Exception('Selected file has no readable content');
+      }
+      final uploadTask = ref.putData(file.bytes!, metadata);
 
       // Wait for upload to complete
-      final taskSnapshot = await uploadTask;
+      await uploadTask;
 
       // Get download URL
       final downloadUrl = await ref.getDownloadURL();
@@ -58,7 +93,7 @@ class FileService {
   /// Upload multiple files
   Future<List<String>> uploadPortfolioFiles(
     String projectId,
-    List<File> files,
+    List<PlatformFile> files,
   ) async {
     try {
       final urls = <String>[];
@@ -86,6 +121,50 @@ class FileService {
     } catch (e) {
       throw Exception('Failed to upload portfolio files: ${e.toString()}');
     }
+  }
+
+  Future<Map<String, dynamic>> uploadIdeaBoardAttachment({
+    required String projectId,
+    required String levelId,
+    required String blockId,
+    required PlatformFile file,
+  }) async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) {
+      throw Exception('User must be logged in');
+    }
+
+    final fileName = file.name;
+    final storagePath =
+        'projects/$projectId/ideaBoard/$levelId/$blockId/${DateTime.now().millisecondsSinceEpoch}_$fileName';
+
+    final ref = _storage.ref(storagePath);
+    final metadata = SettableMetadata(
+      contentType: _getContentType(fileName),
+      customMetadata: {
+        'projectId': projectId,
+        'levelId': levelId,
+        'blockId': blockId,
+        'uploadedBy': authUser.uid,
+      },
+    );
+
+    if (file.bytes == null) {
+      throw Exception('Selected file has no readable content');
+    }
+    await ref.putData(file.bytes!, metadata);
+
+    final url = await ref.getDownloadURL();
+    return {
+      'id': ref.name,
+      'name': fileName,
+      'url': url,
+      'type': _getCategory(fileName),
+      'sizeBytes': file.size,
+      'uploadedBy': authUser.uid,
+      'uploadedAt': DateTime.now().toIso8601String(),
+      'storagePath': ref.fullPath,
+    };
   }
 
   /// Get download URL for a file
@@ -171,13 +250,30 @@ class FileService {
     return mimeTypes[extension] ?? 'application/octet-stream';
   }
 
+  String _getCategory(String fileName) {
+    final extension = fileName.split('.').last.toLowerCase();
+    if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].contains(extension)) {
+      return 'image';
+    }
+    if (['pdf'].contains(extension)) {
+      return 'pdf';
+    }
+    if (['doc', 'docx', 'txt', 'csv'].contains(extension)) {
+      return 'doc';
+    }
+    if (['zip', 'rar'].contains(extension)) {
+      return 'zip';
+    }
+    return 'file';
+  }
+
   /// Get file size in MB
-  static double getFileSize(File file) {
-    return file.lengthSync() / (1024 * 1024);
+  static double getFileSize(PlatformFile file) {
+    return file.size / (1024 * 1024);
   }
 
   /// Check if file size is acceptable (max 10 MB per file)
-  static bool isFileSizeValid(File file, {double maxMB = 10}) {
+  static bool isFileSizeValid(PlatformFile file, {double maxMB = 10}) {
     return getFileSize(file) <= maxMB;
   }
 
@@ -185,4 +281,8 @@ class FileService {
   static String getFileName(String filePath) {
     return filePath.split('/').last;
   }
+}
+
+extension on String {
+  String ifEmpty(String fallback) => isEmpty ? fallback : this;
 }

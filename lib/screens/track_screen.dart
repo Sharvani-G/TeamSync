@@ -36,6 +36,9 @@ class TrackScreen extends StatelessWidget {
         final project = snapshot.data!;
         final orderedLevels = [...project.levels]
           ..sort((a, b) => a.order.compareTo(b.order));
+        final overallProgress = orderedLevels.isEmpty
+            ? 0
+            : orderedLevels.fold<int>(0, (sum, level) => sum + level.percentage) ~/ orderedLevels.length;
 
         final stats = [
           _Stat(
@@ -86,6 +89,43 @@ class TrackScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
+                        'Overall Progress',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(999),
+                        child: LinearProgressIndicator(
+                          value: overallProgress / 100,
+                          minHeight: 10,
+                          backgroundColor: const Color(0xFFE5E7EB),
+                          valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primary),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '$overallProgress% complete',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
                         'Project Levels',
                         style: TextStyle(
                           fontSize: 15,
@@ -106,42 +146,78 @@ class TrackScreen extends StatelessWidget {
                         ...orderedLevels.map((level) => Padding(
                               padding: const EdgeInsets.only(bottom: 12),
                               child: Container(
-                                padding: const EdgeInsets.all(12),
+                                padding: const EdgeInsets.all(14),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFF8FAFC),
-                                  borderRadius: BorderRadius.circular(10),
+                                  borderRadius: BorderRadius.circular(14),
                                   border: Border.all(color: const Color(0xFFE5E7EB)),
                                 ),
-                                child: Row(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    CircleAvatar(
-                                      radius: 16,
-                                      backgroundColor: AppTheme.primary.withOpacity(0.12),
-                                      foregroundColor: AppTheme.primary,
-                                      child: Text('${level.order}'),
+                                    Row(
+                                      children: [
+                                        CircleAvatar(
+                                          radius: 16,
+                                          backgroundColor: level.completed
+                                              ? const Color(0xFFDCFCE7)
+                                              : AppTheme.primary.withOpacity(0.12),
+                                          foregroundColor: level.completed
+                                              ? const Color(0xFF15803D)
+                                              : AppTheme.primary,
+                                          child: Text('${level.order}'),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                level.title,
+                                                style: const TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: AppTheme.textPrimary,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                'Updated ${level.updatedAt != null ? '${level.updatedAt!.month}/${level.updatedAt!.day}/${level.updatedAt!.year}' : '${level.createdAt.month}/${level.createdAt.day}/${level.createdAt.year}'}',
+                                                style: const TextStyle(
+                                                  fontSize: 11,
+                                                  color: AppTheme.textSecondary,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                          decoration: BoxDecoration(
+                                            color: level.completed ? const Color(0xFFDCFCE7) : const Color(0xFFE0F2FE),
+                                            borderRadius: BorderRadius.circular(999),
+                                          ),
+                                          child: Text(
+                                            level.completed ? 'Completed' : '${level.percentage}%',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w700,
+                                              color: level.completed ? const Color(0xFF15803D) : const Color(0xFF0369A1),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            level.title,
-                                            style: const TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w600,
-                                              color: AppTheme.textPrimary,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            'Created ${level.createdAt.month}/${level.createdAt.day}/${level.createdAt.year}',
-                                            style: const TextStyle(
-                                              fontSize: 11,
-                                              color: AppTheme.textSecondary,
-                                            ),
-                                          ),
-                                        ],
+                                    const SizedBox(height: 12),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(999),
+                                      child: LinearProgressIndicator(
+                                        value: level.percentage / 100,
+                                        minHeight: 8,
+                                        backgroundColor: const Color(0xFFE5E7EB),
+                                        valueColor: AlwaysStoppedAnimation<Color>(
+                                          level.completed ? const Color(0xFF16A34A) : AppTheme.primary,
+                                        ),
                                       ),
                                     ),
                                   ],

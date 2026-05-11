@@ -35,6 +35,10 @@ service cloud.firestore {
              get(/databases/$(database)/documents/projects/$(projectId)).data.visibility == 'public';
     }
 
+    function isProjectChatReader(projectId) {
+      return isPublicProject(projectId) || isProjectCollaborator(projectId);
+    }
+
     // ============ USERS COLLECTION ============
     // /users/{userId}
     
@@ -75,13 +79,26 @@ service cloud.firestore {
                        (request.resource.data.visibility == 'public' ||
                         request.resource.data.isOpenForRequests == false);
       
-      // UPDATE: Only project admin can update
-      allow update: if isProjectAdmin(projectId) &&
-                       // Cannot change creator
-                       request.resource.data.createdBy == resource.data.createdBy &&
-                       // Cannot remove self from collaborators
-                       (resource.data.createdBy in resource.data.collaborators ||
-                        request.resource.data.createdBy in request.resource.data.collaborators);
+      // UPDATE: Admin can update all project fields.
+      // Collaborators can only update collaborative board/progress fields.
+      allow update: if
+                       (
+                         isProjectAdmin(projectId) &&
+                         request.resource.data.createdBy == resource.data.createdBy
+                       )
+                       ||
+                       (
+                         isProjectCollaborator(projectId) &&
+                         request.resource.data.createdBy == resource.data.createdBy &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                           'ideaBoardBlocks',
+                           'lastUpdated',
+                           'ideasAdded',
+                           'tasksCompleted',
+                           'messagesSent',
+                           'meetingsConducted'
+                         ])
+                       );
       
       // DELETE: Only project admin can delete
       allow delete: if isProjectAdmin(projectId);
@@ -90,6 +107,42 @@ service cloud.firestore {
       match /documents/{documentId} {
         allow read, write: if isProjectCollaborator(projectId);
       }
+
+      match /messages/{messageId} {
+        allow read: if isProjectChatReader(projectId);
+        allow create: if isProjectCollaborator(projectId)
+          && request.resource.data.projectId == projectId
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0;
+        allow update: if isProjectCollaborator(projectId)
+          && resource.data.projectId == projectId
+          && (resource.data.senderId == request.auth.uid || isProjectAdmin(projectId))
+          && request.resource.data.projectId == resource.data.projectId;
+        allow delete: if isProjectAdmin(projectId) || resource.data.senderId == request.auth.uid;
+      }
+
+      match /callSessions/{callId} {
+        allow read, create, update: if isProjectCollaborator(projectId);
+        allow delete: if isProjectAdmin(projectId);
+      }
+
+      match /members/{memberId} {
+        allow read, write: if isProjectCollaborator(projectId);
+      }
+    }
+
+    // ============ USER NOTIFICATIONS ==========
+    // /users/{userId}/notifications/{notificationId}
+    match /users/{userId}/notifications/{notificationId} {
+      allow read, delete: if isUser(userId);
+      allow create: if isUser(userId)
+        || (
+          request.resource.data.projectId != null &&
+          request.resource.data.userId == userId &&
+          isProjectAdmin(request.resource.data.projectId)
+        );
+      allow update: if isUser(userId);
     }
 
     // ============ JOIN REQUESTS COLLECTION ============

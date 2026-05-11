@@ -33,12 +33,20 @@ class ProjectLevel {
   final String title;
   final int order;
   final DateTime createdAt;
+  final bool completed;
+  final int percentage;
+  final String updatedBy;
+  final DateTime? updatedAt;
 
   const ProjectLevel({
     required this.id,
     required this.title,
     required this.order,
     required this.createdAt,
+    this.completed = false,
+    this.percentage = 0,
+    this.updatedBy = '',
+    this.updatedAt,
   });
 }
 
@@ -56,6 +64,46 @@ class ProjectStats {
   });
 }
 
+  class IdeaBoardFile {
+    final String id;
+    final String name;
+    final String url;
+    final String type;
+    final int sizeBytes;
+    final String uploadedBy;
+    final DateTime uploadedAt;
+
+    const IdeaBoardFile({
+      required this.id,
+      required this.name,
+      required this.url,
+      required this.type,
+      required this.sizeBytes,
+      required this.uploadedBy,
+      required this.uploadedAt,
+    });
+  }
+
+  class IdeaBoardBlock {
+    final String id;
+    final String levelId;
+    final String type; // title | paragraph | file
+    final String content;
+    final List<IdeaBoardFile> files;
+    final String createdBy;
+    final DateTime createdAt;
+
+    const IdeaBoardBlock({
+      required this.id,
+      required this.levelId,
+      required this.type,
+      required this.content,
+      required this.files,
+      required this.createdBy,
+      required this.createdAt,
+    });
+  }
+
 class Project {
   final String id;
   final String title;
@@ -70,6 +118,7 @@ class Project {
   final String lastUpdated;
   final DateTime createdAt;
   final List<ProjectLevel> levels;
+  final List<IdeaBoardBlock> ideaBoardBlocks;
   final ProjectStats stats;
 
   const Project({
@@ -87,6 +136,7 @@ class Project {
     required this.createdAt,
     required this.levels,
     required this.stats,
+    required this.ideaBoardBlocks,
   });
 
   // Helper to check if user is admin of this project
@@ -97,7 +147,7 @@ class Project {
       collaborators.containsKey(userId) || createdBy == userId;
 
   // Helper to get collaborator count
-  int get collaboratorCount => collaborators.length + 1; // +1 for creator
+  int get collaboratorCount => safeCollaboratorCount;
 
   // Helper to check if project is private
   bool get isPrivate => visibility == 'private';
@@ -178,6 +228,7 @@ class AppUser {
   final String username; // For @ mentions and lookups
   final String name;
   final String email;
+  final String photoUrl;
   final int projectsJoined;
   final int tasksCompleted;
   final DateTime createdAt;
@@ -187,9 +238,96 @@ class AppUser {
     required this.username,
     required this.name,
     required this.email,
+    this.photoUrl = '',
     required this.projectsJoined,
     required this.tasksCompleted,
     required this.createdAt,
+  });
+}
+
+class ProjectChatMessage {
+  final String id;
+  final String projectId;
+  final String senderId;
+  final String senderUsername;
+  final String senderPhoto;
+  final String text;
+  final String replyToMessageId;
+  final bool edited;
+  final bool deleted;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final Map<String, List<String>> reactions;
+
+  const ProjectChatMessage({
+    required this.id,
+    required this.projectId,
+    required this.senderId,
+    required this.senderUsername,
+    required this.senderPhoto,
+    required this.text,
+    required this.replyToMessageId,
+    required this.edited,
+    required this.deleted,
+    required this.createdAt,
+    required this.updatedAt,
+    this.reactions = const {},
+  });
+
+  bool get hasReply => replyToMessageId.trim().isNotEmpty;
+}
+
+class ProjectCallSession {
+  final String id;
+  final String projectId;
+  final String startedBy;
+  final List<String> participants;
+  final bool active;
+  final String type;
+  final List<String> invitedParticipants;
+  final DateTime startedAt;
+  final DateTime? endedAt;
+  final bool audioEnabled;
+  final bool videoEnabled;
+  final bool screenSharing;
+
+  const ProjectCallSession({
+    required this.id,
+    required this.projectId,
+    required this.startedBy,
+    required this.participants,
+    required this.active,
+    required this.type,
+    required this.invitedParticipants,
+    required this.startedAt,
+    this.endedAt,
+    this.audioEnabled = true,
+    this.videoEnabled = true,
+    this.screenSharing = false,
+  });
+}
+
+class ProjectNotificationItem {
+  final String id;
+  final String userId;
+  final String projectId;
+  final String type;
+  final String title;
+  final String body;
+  final bool read;
+  final DateTime createdAt;
+  final Map<String, dynamic> data;
+
+  const ProjectNotificationItem({
+    required this.id,
+    required this.userId,
+    required this.projectId,
+    required this.type,
+    required this.title,
+    required this.body,
+    required this.read,
+    required this.createdAt,
+    this.data = const {},
   });
 }
 

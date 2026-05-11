@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../app/main_shell.dart';
 import '../screens/create_project_screen.dart';
 import '../screens/project_overview_screen.dart';
@@ -8,6 +9,7 @@ import '../screens/track_screen.dart';
 import '../screens/ai_report_screen.dart';
 import '../screens/chat_home_screen.dart';
 import '../screens/chat_channel_screen.dart';
+import '../screens/project_call_screen.dart';
 import '../screens/notifications_screen.dart';
 import '../screens/profile_screen.dart';
 import '../screens/entry_screen.dart';
@@ -16,6 +18,27 @@ import '../screens/check_email_screen.dart';
 
 Route<dynamic> generateRoute(RouteSettings settings) {
   final name = settings.name ?? '/';
+  final isAuthed = FirebaseAuth.instance.currentUser != null;
+
+  bool requiresAuthPath(String routeName) {
+    if (routeName == '/main' ||
+        routeName == '/create-project' ||
+        routeName == '/notifications' ||
+        routeName == '/profile') {
+      return true;
+    }
+
+    return routeName.startsWith('/project/');
+  }
+
+  if (!isAuthed && requiresAuthPath(name)) {
+    return _fade(const EntryScreen(), settings);
+  }
+
+  if (isAuthed &&
+      (name == '/' || name == '/forgot-password' || name == '/check-email')) {
+    return _fade(const MainShell(), settings);
+  }
 
   // /project/:id/idea-board/:levelId
   final ideaBoardDocMatch =
@@ -59,6 +82,12 @@ Route<dynamic> generateRoute(RouteSettings settings) {
           channelId: chatChannelMatch.group(2)!,
         ),
         settings);
+  }
+
+  // /project/:id/call
+  final callMatch = RegExp(r'^/project/(\w+)/call$').firstMatch(name);
+  if (callMatch != null) {
+    return _slide(ProjectCallScreen(projectId: callMatch.group(1)!), settings);
   }
 
   // /project/:id/chat
