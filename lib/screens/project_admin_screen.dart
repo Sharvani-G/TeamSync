@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/models.dart';
 import '../services/project_service.dart';
+import '../services/user_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
 
@@ -279,60 +280,60 @@ class _CollaboratorsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final allCollaborators = [
-      (
-        project.createdBy,
-        project.collaborators[project.createdBy] ?? 'admin',
-        true,
-      ), // (userId, role, isAdmin)
-      ...project.collaborators.entries
-          .where((entry) => entry.key != project.createdBy)
-          .map((e) => (e.key, e.value, false)),
-    ];
+    final collaboratorIds = <String>{project.createdBy, ...project.collaborators.keys}.toList();
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        const Text(
-          'Team Members',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 12),
-        ...allCollaborators
-            .asMap()
-            .entries
-            .map((entry) {
-              final index = entry.key;
-              final (userId, role, isAdmin) = entry.value;
+    return FutureBuilder<Map<String, AppUser>>(
+      future: UserService.instance.getUsersByIds(collaboratorIds),
+      builder: (context, snapshot) {
+        final users = snapshot.data ?? {};
+
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const Text(
+              'Team Members',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...collaboratorIds.map((userId) {
+              final user = users[userId];
+              final isAdmin = userId == project.createdBy;
+              final roleLabel = isAdmin ? 'ADMIN' : 'Collaborator';
               return Container(
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   border: Border.all(color: AppTheme.border),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
                   children: [
+                    UserAvatar(
+                      name: user?.name ?? user?.username ?? userId,
+                      size: 40,
+                      imageUrl: user?.photoUrl,
+                    ),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'User ID: $userId',
+                            user?.name ?? user?.username ?? userId,
                             style: const TextStyle(
-                              fontSize: 13,
+                              fontSize: 14,
                               fontWeight: FontWeight.w600,
                               color: AppTheme.textPrimary,
                             ),
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Role: $role',
+                            '@${user?.username ?? userId.substring(0, 6)}',
                             style: const TextStyle(
                               fontSize: 12,
                               color: AppTheme.textMuted,
@@ -341,19 +342,33 @@ class _CollaboratorsTab extends StatelessWidget {
                         ],
                       ),
                     ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: isAdmin ? const Color(0xFFDBEAFE) : const Color(0xFFEDE9FE),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        roleLabel,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: isAdmin ? const Color(0xFF1D4ED8) : const Color(0xFF6D28D9),
+                        ),
+                      ),
+                    ),
                     if (!isAdmin)
                       IconButton(
-                        onPressed: () =>
-                            _removeCollaborator(context, userId),
-                        icon: const Icon(Icons.delete_outline,
-                            size: 18, color: AppTheme.textMuted),
+                        onPressed: () => _removeCollaborator(context, userId),
+                        icon: const Icon(Icons.delete_outline, size: 18, color: AppTheme.textMuted),
                       ),
                   ],
                 ),
               );
-            })
-            .toList(),
-      ],
+            }),
+          ],
+        );
+      },
     );
   }
 
@@ -488,10 +503,16 @@ class _LevelsTabState extends State<_LevelsTab> {
                       child: Text('${level.order}'),
                     ),
                     title: Text(level.title),
-                    subtitle: Text('Created ${level.createdAt.month}/${level.createdAt.day}/${level.createdAt.year}'),
+                    subtitle: Text(
+                      '${level.percentage}% complete · ${level.completed ? 'Completed' : 'In progress'}',
+                    ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        IconButton(
+                          icon: const Icon(Icons.percent_outlined),
+                          onPressed: () => _updateProgress(level),
+                        ),
                         IconButton(
                           icon: const Icon(Icons.edit_outlined),
                           onPressed: () => _renameLevel(level.id, level.title),
@@ -613,6 +634,80 @@ class _LevelsTabState extends State<_LevelsTab> {
     }
   }
 
+  Future<void> _updateProgress(ProjectLevel level) async {
+    final percentageController = TextEditingController(text: level.percentage.toString());
+    bool completed = level.completed;
+
+    final result = await showDialog<_ProgressEditResult>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Update Progress'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: percentageController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Percentage'),
+                  ),
+                  const SizedBox(height: 12),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    value: completed,
+                    onChanged: (value) => setDialogState(() => completed = value),
+                    title: const Text('Mark completed'),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    final parsed = int.tryParse(percentageController.text.trim()) ?? 0;
+                    Navigator.pop(
+                      dialogContext,
+                      _ProgressEditResult(percentage: parsed.clamp(0, 100), completed: completed),
+                    );
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    percentageController.dispose();
+
+    if (result == null) {
+      return;
+    }
+
+    try {
+      await ProjectService.instance.updateProjectLevelProgress(
+        projectId: widget.projectId,
+        levelId: level.id,
+        percentage: result.percentage,
+        completed: result.completed,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   Future<void> _deleteLevel(String levelId) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -653,6 +748,13 @@ class _LevelsTabState extends State<_LevelsTab> {
       );
     }
   }
+}
+
+class _ProgressEditResult {
+  final int percentage;
+  final bool completed;
+
+  const _ProgressEditResult({required this.percentage, required this.completed});
 }
 
 class _SettingsTab extends StatefulWidget {

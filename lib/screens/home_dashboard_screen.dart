@@ -4,6 +4,7 @@ import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
 import '../services/user_profile_service.dart';
 import '../services/project_service.dart';
+import '../services/auth_service.dart';
 import 'dart:math' as math;
 
 class HomeDashboardScreen extends StatefulWidget {
@@ -1409,8 +1410,21 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
             _buildMenuOption(
               icon: Icons.logout,
               label: 'Logout',
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
+                try {
+                  await AuthService.instance.signOutAndClearSession();
+                  if (!context.mounted) return;
+                  Navigator.of(context)
+                      .pushNamedAndRemoveUntil('/', (route) => false);
+                } catch (e) {
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Logout failed: ${e.toString()}'),
+                    ),
+                  );
+                }
               },
               isDestructive: true,
             ),

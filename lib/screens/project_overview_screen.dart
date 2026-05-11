@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/models.dart';
 import '../services/project_service.dart';
+import '../services/user_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
 import 'project_admin_screen.dart';
@@ -39,6 +40,11 @@ class ProjectOverviewScreen extends StatelessWidget {
 
         final currentUser = FirebaseAuth.instance.currentUser;
         final isAdmin = currentUser != null && project.isAdmin(currentUser.uid);
+        final isCollaborator =
+            currentUser != null && project.isCollaborator(currentUser.uid);
+        final canEditWorkspace = isCollaborator;
+
+        final memberIds = <String>{project.createdBy, ...project.collaborators.keys}.toList();
 
         return Scaffold(
           appBar: SimpleAppBar(
@@ -220,6 +226,93 @@ class ProjectOverviewScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 20),
+              FutureBuilder<Map<String, AppUser>>(
+                future: UserService.instance.getUsersByIds(memberIds),
+                builder: (context, memberSnapshot) {
+                  final members = memberSnapshot.data ?? {};
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Collaborators',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          ...memberIds.map((userId) {
+                            final user = members[userId];
+                            final isAdmin = project.createdBy == userId;
+                            final username = user?.username.isNotEmpty == true ? user!.username : userId.substring(0, 6);
+                            final displayName = user?.name.isNotEmpty == true ? user!.name : username;
+                            final photoUrl = user?.photoUrl ?? '';
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppTheme.border),
+                              ),
+                              child: Row(
+                                children: [
+                                  UserAvatar(name: displayName, size: 38, imageUrl: photoUrl),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          displayName,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppTheme.textPrimary,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '@$username',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: AppTheme.textSecondary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                    decoration: BoxDecoration(
+                                      color: isAdmin ? const Color(0xFFDBEAFE) : const Color(0xFFEDE9FE),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      isAdmin ? 'ADMIN' : 'Collaborator',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 0.4,
+                                        color: isAdmin ? const Color(0xFF1D4ED8) : const Color(0xFF6D28D9),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
               // Project Levels Section
               if (project.levels.isNotEmpty) ...[
                 const Text(
@@ -283,7 +376,7 @@ class ProjectOverviewScreen extends StatelessWidget {
                 const SizedBox(height: 20),
               ],
               const Text(
-                'Features',
+                'Collaborative Workspace',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -291,31 +384,64 @@ class ProjectOverviewScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-              _NavCard(
-                icon: Icons.lightbulb_outline,
-                gradientColors: const [Color(0xFF3B82F6), Color(0xFF2563EB)],
-                title: 'Idea Board',
-                subtitle: 'Organize ideas and documents',
-                onTap: () => Navigator.pushNamed(
-                    context, '/project/$projectId/idea-board'),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.lock_clock, size: 16),
+                          const SizedBox(width: 8),
+                          Text(
+                            canEditWorkspace
+                                ? 'You can edit this workspace'
+                                : 'You have view-only access',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Blocks in idea board: ${project.ideaBoardBlocks.length}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Workflow levels: ${project.levels.length}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Collaborators: ${project.collaboratorCount}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(height: 12),
-              _NavCard(
-                icon: Icons.bar_chart_rounded,
-                gradientColors: const [Color(0xFF7C3AED), Color(0xFF6D28D9)],
-                title: 'Track',
-                subtitle: 'Monitor progress & analytics',
-                onTap: () =>
-                    Navigator.pushNamed(context, '/project/$projectId/track'),
-              ),
-              const SizedBox(height: 12),
-              _NavCard(
-                icon: Icons.chat_bubble_outline,
-                gradientColors: const [Color(0xFF10B981), Color(0xFF059669)],
-                title: 'Chat',
-                subtitle: 'Team communication',
-                onTap: () =>
-                    Navigator.pushNamed(context, '/project/$projectId/chat'),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () =>
+                      Navigator.pushNamed(context, '/project/$projectId/idea-board'),
+                  icon: const Icon(Icons.space_dashboard_outlined),
+                  label: const Text('Open Project Workspace'),
+                ),
               ),
             ],
           ),
@@ -370,59 +496,3 @@ class _CollaboratorAvatar extends StatelessWidget {
   }
 }
 
-class _NavCard extends StatelessWidget {
-  final IconData icon;
-  final List<Color> gradientColors;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  const _NavCard({
-    required this.icon,
-    required this.gradientColors,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                      colors: gradientColors,
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(icon, color: Colors.white, size: 28),
-              ),
-              const SizedBox(height: 14),
-              Text(title,
-                  style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textPrimary)),
-              const SizedBox(height: 4),
-              Text(subtitle,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 13,
-                      color: AppTheme.textSecondary,
-                      height: 1.4)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

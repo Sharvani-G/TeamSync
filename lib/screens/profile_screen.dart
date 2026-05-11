@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/models.dart';
+import '../services/auth_service.dart';
 import '../services/user_profile_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
@@ -15,6 +16,22 @@ class ProfileScreen extends StatelessWidget {
         behavior: SnackBarBehavior.floating,
       ),
     );
+  }
+
+  Future<void> _logout(BuildContext context) async {
+    try {
+      await AuthService.instance.signOutAndClearSession();
+      if (!context.mounted) return;
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Logout failed: ${e.toString()}'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -146,7 +163,7 @@ class ProfileScreen extends StatelessWidget {
                 label: 'Logout',
                 iconColor: AppTheme.danger,
                 labelColor: AppTheme.danger,
-                onTap: () => _showAction(context, 'Logout'),
+                onTap: () => _logout(context),
               ),
             ],
           );

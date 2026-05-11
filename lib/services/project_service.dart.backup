@@ -1434,697 +1434,214 @@ class ProjectService {
       };
     }
   }
+}
+        final collaborators = data['collaborators'] as Map<String, dynamic>? ?? {};
+        
+        if (collaborators.containsKey(authUser.uid)) {
+          collaboratingCount++;
+          collaboratingProjects.add({
+            'id': doc.id,
+            'title': data['title'],
+            'createdBy': createdBy,
+          });
+        }
+      }
 
-  // ============ CHAT SYSTEM ============
-
-  /// Watch all messages in a project, ordered newest first with pagination support
-  Stream<List<ProjectChatMessage>> watchProjectMessages(
-    String projectId, {
-    int limit = 30,
-  }) {
-    final authUser = _auth.currentUser;
-    if (authUser == null) {
-      return Stream.value([]);
+      return {
+        'logged_in': true,
+        'uid': authUser.uid,
+        'created_projects': createdDocs.docs.length,
+        'created_list': createdDocs.docs
+            .map((d) => {'id': d.id, 'title': d['title']})
+            .toList(),
+        'total_projects_in_db': allDocs.docs.length,
+        'collaborating_projects': collaboratingCount,
+        'collaborating_list': collaboratingProjects,
+        'total_accessible': createdDocs.docs.length + collaboratingCount,
+      };
+    } catch (e) {
+      return {
+        'error': e.toString(),
+        'uid': authUser.uid,
+      };
     }
-
-    return _firestore
-        .collection('projects')
-        .doc(projectId)
-        .collection('messages')
-        .orderBy('createdAt', descending: true)
-        .limit(limit)
-        .snapshots()
-        .map((snapshot) {
-          try {
-            return snapshot.docs
-                .map((doc) => _parseProjectChatMessage(doc))
-                .toList()
-                .reversed
-                .toList();
-          } catch (e) {
-            print('❌ Error parsing chat messages: $e');
-            return [];
-          }
-        });
+  }
+}
+        'lastUpdated': Timestamp.now(),
+      });
+    });
   }
 
-  /// Load older messages for pagination
-  Future<List<ProjectChatMessage>> loadOlderProjectMessages(
-    String projectId, {
-    required DateTime before,
-    int limit = 30,
+  List<Map<String, dynamic>> _reorderLevels(List<Map<String, dynamic>> levels) {
+    final ordered = [...levels]
+      ..sort((a, b) {
+        final leftOrder = a['order'] as int? ?? 0;
+        final rightOrder = b['order'] as int? ?? 0;
+        return leftOrder.compareTo(rightOrder);
+      });
+
+    for (var index = 0; index < ordered.length; index++) {
+      ordered[index]['order'] = index + 1;
+      ordered[index]['createdAt'] ??= Timestamp.now();
+    }
+
+    return ordered;
+  }
+
+  Future<void> _ensureDefaultLevelsIfMissing(String projectId) async {
+    await _firestore.runTransaction((transaction) async {
+      final ref = _firestore.collection('projects').doc(projectId);
+      final snapshot = await transaction.get(ref);
+      if (!snapshot.exists) {
+        return;
+      }
+
+      final data = snapshot.data()!;
+      final existingLevels = data['levels'] as List<dynamic>? ?? [];
+      if (existingLevels.isNotEmpty) {
+        return;
+      }
+
+      transaction.update(ref, {
+        'levels': _normalizeLevelEntries(null),
+        'lastUpdated': Timestamp.now(),
+      });
+    });
+  }
+
+  Future<void> updateProjectLevelProgress({
+    required String projectId,
+    required String levelId,
+    required int percentage,
+    required bool completed,
   }) async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) {
+      throw Exception('User must be logged in');
+    }
+
+    if (percentage < 0 || percentage > 100) {
+      throw Exception('Percentage must be between 0 and 100');
+    }
+
+    await _firestore.runTransaction((transaction) async {
+      final ref = _firestore.collection('projects').doc(projectId);
+      final snapshot = await transaction.get(ref);
+      if (!snapshot.exists) {
+        throw Exception('Project not found');
+      }
+
+      final data = snapshot.data()!;
+      if (data['createdBy'] != authUser.uid) {
+        throw Exception('Only project admin can update tracker progress');
+      }
+
+      final levels = _normalizeLevelEntries(
+        (data['levels'] as List<dynamic>? ?? [])
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList(),
+      );
+
+      final index = levels.indexWhere((entry) => entry['id'] == levelId);
+      if (index == -1) {
+        throw Exception('Level not found');
+      }
+
+      levels[index]['completed'] = completed;
+      levels[index]['percentage'] = percentage;
+      levels[index]['updatedBy'] = authUser.uid;
+      levels[index]['updatedAt'] = Timestamp.now();
+
+      transaction.update(ref, {
+        'levels': _reorderLevels(levels),
+        'lastUpdated': Timestamp.now(),
+      });
+    });
+  }
+
+  DateTime? _parseDateTime(dynamic value) {
+    if (value is Timestamp) {
+      return value.toDate();
+    }
+    if (value is DateTime) {
+      return value;
+    }
+    if (value is String) {
+      return DateTime.tryParse(value);
+    }
+    return null;
+  }
+
+  String? _parseTimestampString(dynamic value) {
+    if (value is Timestamp) {
+      return value.toDate().toIso8601String();
+    }
+    if (value is DateTime) {
+      return value.toIso8601String();
+    }
+    if (value is String && value.isNotEmpty) {
+      return value;
+    }
+    return null;
+  }
+
+  // ============ DEBUG HELPERS ============
+
+  /// Debug helper to diagnose project retrieval issues
+  /// Returns detailed information about projects in database
+  Future<Map<String, dynamic>> debugProjectRetrieval() async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) {
+      return {'error': 'Not logged in', 'uid': null};
+    }
+
     try {
-      final snapshot = await _firestore
+      // Check created projects
+      final createdDocs = await _firestore
           .collection('projects')
-          .doc(projectId)
-          .collection('messages')
-          .where('createdAt', isLessThan: before)
-          .orderBy('createdAt', descending: true)
-          .limit(limit)
+          .where('createdBy', isEqualTo: authUser.uid)
           .get();
 
-      return snapshot.docs
-          .map((doc) => _parseProjectChatMessage(doc))
-          .toList()
-          .reversed
-          .toList();
-    } catch (e) {
-      print('❌ Error loading older messages: $e');
-      return [];
-    }
-  }
+      // Check all projects
+      final allDocs = await _firestore.collection('projects').get();
 
-  /// Send a message in project chat
-  Future<void> sendProjectMessage({
-    required String projectId,
-    required String text,
-    String replyToMessageId = '',
-  }) async {
-    final authUser = _auth.currentUser;
-    if (authUser == null) {
-      throw Exception('User must be logged in');
-    }
+      // Check where user is collaborator
+      int collaboratingCount = 0;
+      final collaboratingProjects = <Map<String, dynamic>>[];
+      
+      for (final doc in allDocs.docs) {
+        final data = doc.data();
+        final createdBy = data['createdBy'] as String? ?? '';
+        final collaborators = data['collaborators'] as Map<String, dynamic>? ?? {};
+        
+        if (collaborators.containsKey(authUser.uid)) {
+          collaboratingCount++;
+          collaboratingProjects.add({
+            'id': doc.id,
+            'title': data['title'],
+            'createdBy': createdBy,
+          });
+        }
+      }
 
-    // Verify user has access to project
-    final projectDoc =
-        await _firestore.collection('projects').doc(projectId).get();
-    if (!projectDoc.exists) {
-      throw Exception('Project not found');
-    }
-
-    final projectData = projectDoc.data()!;
-    final createdBy = projectData['createdBy'] as String? ?? '';
-    final collaborators = _parseCollaboratorsMap(
-      projectData['collaborators'],
-      docId: projectId,
-    );
-
-    if (createdBy != authUser.uid && !collaborators.containsKey(authUser.uid)) {
-      throw Exception('You do not have access to this project');
-    }
-
-    final userDoc = await _firestore.collection('users').doc(authUser.uid).get();
-    final userUsername = userDoc.data()?['username'] as String? ?? 'Unknown';
-    final userPhoto = userDoc.data()?['photoUrl'] as String? ?? '';
-
-    final messageRef = _firestore
-        .collection('projects')
-        .doc(projectId)
-        .collection('messages')
-        .doc();
-
-    final messageData = {
-      'id': messageRef.id,
-      'projectId': projectId,
-      'senderId': authUser.uid,
-      'senderUsername': userUsername,
-      'senderPhoto': userPhoto,
-      'text': text.trim(),
-      'replyToMessageId': replyToMessageId,
-      'edited': false,
-      'deleted': false,
-      'createdAt': Timestamp.now(),
-      'updatedAt': Timestamp.now(),
-      'reactions': <String, List<String>>{},
-    };
-
-    try {
-      await messageRef.set(messageData);
-
-      // Fan out notification to other collaborators
-      final projectTitle = projectData['title'] as String? ?? 'Project';
-      final messagePreview =
-          text.substring(0, (text.length > 50 ? 50 : text.length));
-      await _fanOutProjectNotification(
-        projectId: projectId,
-        type: 'new_message',
-        title: 'New message in $projectTitle',
-        body: '$userUsername: $messagePreview...',
-        excludedUserIds: {authUser.uid},
-        data: {'messageId': messageRef.id},
-      );
-    } catch (e) {
-      throw Exception('Failed to send message: ${e.toString()}');
-    }
-  }
-
-  /// Edit a message (sender or admin only)
-  Future<void> editProjectMessage({
-    required String projectId,
-    required String messageId,
-    required String newText,
-  }) async {
-    final authUser = _auth.currentUser;
-    if (authUser == null) {
-      throw Exception('User must be logged in');
-    }
-
-    final messageRef = _firestore
-        .collection('projects')
-        .doc(projectId)
-        .collection('messages')
-        .doc(messageId);
-
-    final messageDoc = await messageRef.get();
-    if (!messageDoc.exists) {
-      throw Exception('Message not found');
-    }
-
-    final messageData = messageDoc.data()!;
-    final senderId = messageData['senderId'] as String?;
-
-    // Verify sender or admin
-    final projectDoc =
-        await _firestore.collection('projects').doc(projectId).get();
-    final createdBy = projectDoc.data()?['createdBy'] as String? ?? '';
-
-    if (senderId != authUser.uid && createdBy != authUser.uid) {
-      throw Exception('You can only edit your own messages');
-    }
-
-    await messageRef.update({
-      'text': newText.trim(),
-      'edited': true,
-      'updatedAt': Timestamp.now(),
-    });
-  }
-
-  /// Delete a message (sender or admin only)
-  Future<void> deleteProjectMessage({
-    required String projectId,
-    required String messageId,
-  }) async {
-    final authUser = _auth.currentUser;
-    if (authUser == null) {
-      throw Exception('User must be logged in');
-    }
-
-    final messageRef = _firestore
-        .collection('projects')
-        .doc(projectId)
-        .collection('messages')
-        .doc(messageId);
-
-    final messageDoc = await messageRef.get();
-    if (!messageDoc.exists) {
-      throw Exception('Message not found');
-    }
-
-    final messageData = messageDoc.data()!;
-    final senderId = messageData['senderId'] as String?;
-
-    final projectDoc =
-        await _firestore.collection('projects').doc(projectId).get();
-    final createdBy = projectDoc.data()?['createdBy'] as String? ?? '';
-
-    if (senderId != authUser.uid && createdBy != authUser.uid) {
-      throw Exception('You can only delete your own messages');
-    }
-
-    await messageRef.update({
-      'deleted': true,
-      'text': '[This message was deleted]',
-      'updatedAt': Timestamp.now(),
-    });
-  }
-
-  /// Clear all chat history for a project (admin only)
-  Future<void> clearProjectChat(String projectId) async {
-    final authUser = _auth.currentUser;
-    if (authUser == null) {
-      throw Exception('User must be logged in');
-    }
-
-    final projectDoc =
-        await _firestore.collection('projects').doc(projectId).get();
-    final createdBy = projectDoc.data()?['createdBy'] as String? ?? '';
-
-    if (createdBy != authUser.uid) {
-      throw Exception('Only project admin can clear chat');
-    }
-
-    final batch = _firestore.batch();
-    final snapshot = await _firestore
-        .collection('projects')
-        .doc(projectId)
-        .collection('messages')
-        .get();
-
-    for (final doc in snapshot.docs) {
-      batch.delete(doc.reference);
-    }
-
-    await batch.commit();
-  }
-
-  /// Mark project chat as read (sets last-read timestamp)
-  Future<void> markProjectChatRead({required String projectId}) async {
-    final authUser = _auth.currentUser;
-    if (authUser == null) {
-      return;
-    }
-
-    try {
-      await _firestore
-          .collection('projects')
-          .doc(projectId)
-          .collection('members')
-          .doc(authUser.uid)
-          .set(
-            {
-              'lastReadAt': Timestamp.now(),
-            },
-            SetOptions(merge: true),
-          );
-    } catch (e) {
-      print('⚠️  Error marking chat read: $e');
-    }
-  }
-
-  // ============ CALL SYSTEM ============
-
-  Stream<ProjectCallSession?> watchActiveProjectCall(String projectId) {
-    return _firestore
-        .collection('projects')
-        .doc(projectId)
-        .collection('callSessions')
-        .where('active', isEqualTo: true)
-        .snapshots()
-        .map((snapshot) {
-          try {
-            if (snapshot.docs.isEmpty) {
-              return null;
-            }
-            return _parseProjectCallSession(snapshot.docs.first);
-          } catch (e) {
-            print('❌ Error parsing active call: $e');
-            return null;
-          }
-        });
-  }
-
-  Stream<List<ProjectCallSession>> watchProjectCallHistory(String projectId) {
-    return _firestore
-        .collection('projects')
-        .doc(projectId)
-        .collection('callSessions')
-        .orderBy('startedAt', descending: true)
-        .limit(50)
-        .snapshots()
-        .map((snapshot) {
-          try {
-            return snapshot.docs
-                .map((doc) => _parseProjectCallSession(doc))
-                .toList();
-          } catch (e) {
-            print('❌ Error parsing call history: $e');
-            return [];
-          }
-        });
-  }
-
-  Future<String> startProjectCall({
-    required String projectId,
-    required String type,
-    List<String> invitedParticipants = const [],
-  }) async {
-    final authUser = _auth.currentUser;
-    if (authUser == null) {
-      throw Exception('User must be logged in');
-    }
-
-    final projectDoc =
-        await _firestore.collection('projects').doc(projectId).get();
-    if (!projectDoc.exists) {
-      throw Exception('Project not found');
-    }
-
-    final projectData = projectDoc.data()!;
-    final createdBy = projectData['createdBy'] as String? ?? '';
-    final collaborators = _parseCollaboratorsMap(
-      projectData['collaborators'],
-      docId: projectId,
-    );
-
-    if (createdBy != authUser.uid && !collaborators.containsKey(authUser.uid)) {
-      throw Exception('You do not have access to this project');
-    }
-
-    final callRef = _firestore
-        .collection('projects')
-        .doc(projectId)
-        .collection('callSessions')
-        .doc();
-
-    final callData = {
-      'id': callRef.id,
-      'projectId': projectId,
-      'startedBy': authUser.uid,
-      'participants': [authUser.uid],
-      'active': true,
-      'type': type,
-      'invitedParticipants': invitedParticipants,
-      'startedAt': Timestamp.now(),
-      'endedAt': null,
-      'audioEnabled': true,
-      'videoEnabled': true,
-      'screenSharing': false,
-    };
-
-    try {
-      await callRef.set(callData);
-
-      final teamMembers = <String>{
-        createdBy,
-        ...collaborators.keys,
+      return {
+        'logged_in': true,
+        'uid': authUser.uid,
+        'created_projects': createdDocs.docs.length,
+        'created_list': createdDocs.docs
+            .map((d) => {'id': d.id, 'title': d['title']})
+            .toList(),
+        'total_projects_in_db': allDocs.docs.length,
+        'collaborating_projects': collaboratingCount,
+        'collaborating_list': collaboratingProjects,
+        'total_accessible': createdDocs.docs.length + collaboratingCount,
       };
-
-      await _fanOutProjectNotification(
-        projectId: projectId,
-        type: 'call_started',
-        title: 'Call started in ${projectData['title']}',
-        body: 'Join the call now',
-        onlyUserIds: invitedParticipants.isNotEmpty
-            ? invitedParticipants.toSet()
-            : teamMembers,
-        excludedUserIds: {authUser.uid},
-        data: {'callId': callRef.id},
-      );
-
-      return callRef.id;
     } catch (e) {
-      throw Exception('Failed to start call: ${e.toString()}');
-    }
-  }
-
-  Future<void> joinProjectCall({
-    required String projectId,
-    required String callId,
-  }) async {
-    final authUser = _auth.currentUser;
-    if (authUser == null) {
-      throw Exception('User must be logged in');
-    }
-
-    final callRef = _firestore
-        .collection('projects')
-        .doc(projectId)
-        .collection('callSessions')
-        .doc(callId);
-
-    final callDoc = await callRef.get();
-    if (!callDoc.exists) {
-      throw Exception('Call not found');
-    }
-
-    final participants = List<String>.from(
-      (callDoc.data()?['participants'] as List? ?? []).cast<String>(),
-    );
-
-    if (!participants.contains(authUser.uid)) {
-      participants.add(authUser.uid);
-      await callRef.update({'participants': participants});
-    }
-  }
-
-  Future<void> leaveProjectCall({
-    required String projectId,
-    required String callId,
-  }) async {
-    final authUser = _auth.currentUser;
-    if (authUser == null) {
-      throw Exception('User must be logged in');
-    }
-
-    final callRef = _firestore
-        .collection('projects')
-        .doc(projectId)
-        .collection('callSessions')
-        .doc(callId);
-
-    final callDoc = await callRef.get();
-    if (!callDoc.exists) {
-      return;
-    }
-
-    final participants = List<String>.from(
-      (callDoc.data()?['participants'] as List? ?? []).cast<String>(),
-    );
-
-    participants.remove(authUser.uid);
-    await callRef.update({'participants': participants});
-  }
-
-  Future<void> endProjectCall({
-    required String projectId,
-    required String callId,
-  }) async {
-    final authUser = _auth.currentUser;
-    if (authUser == null) {
-      throw Exception('User must be logged in');
-    }
-
-    final callRef = _firestore
-        .collection('projects')
-        .doc(projectId)
-        .collection('callSessions')
-        .doc(callId);
-
-    final callDoc = await callRef.get();
-    if (!callDoc.exists) {
-      throw Exception('Call not found');
-    }
-
-    final startedBy = callDoc.data()?['startedBy'] as String?;
-    if (startedBy != authUser.uid) {
-      throw Exception('Only the call host can end the call');
-    }
-
-    await callRef.update({
-      'active': false,
-      'endedAt': Timestamp.now(),
-      'participants': [],
-    });
-  }
-
-  Future<void> updateCallState({
-    required String projectId,
-    required String callId,
-    bool? audioEnabled,
-    bool? videoEnabled,
-    bool? screenSharing,
-  }) async {
-    final updateData = <String, dynamic>{};
-    if (audioEnabled != null) updateData['audioEnabled'] = audioEnabled;
-    if (videoEnabled != null) updateData['videoEnabled'] = videoEnabled;
-    if (screenSharing != null) updateData['screenSharing'] = screenSharing;
-
-    if (updateData.isEmpty) return;
-
-    await _firestore
-        .collection('projects')
-        .doc(projectId)
-        .collection('callSessions')
-        .doc(callId)
-        .update(updateData);
-  }
-
-  // ============ NOTIFICATION SYSTEM ============
-
-  Stream<List<ProjectNotificationItem>> watchMyNotifications() {
-    final authUser = _auth.currentUser;
-    if (authUser == null) {
-      return Stream.value([]);
-    }
-
-    return _firestore
-        .collection('users')
-        .doc(authUser.uid)
-        .collection('notifications')
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) {
-          try {
-            return snapshot.docs
-                .map((doc) => _parseNotificationItem(doc))
-                .toList();
-          } catch (e) {
-            print('❌ Error parsing notifications: $e');
-            return [];
-          }
-        });
-  }
-
-  Future<void> markNotificationRead(String notificationId) async {
-    final authUser = _auth.currentUser;
-    if (authUser == null) {
-      return;
-    }
-
-    try {
-      await _firestore
-          .collection('users')
-          .doc(authUser.uid)
-          .collection('notifications')
-          .doc(notificationId)
-          .update({'read': true});
-    } catch (e) {
-      print('⚠️  Error marking notification read: $e');
-    }
-  }
-
-  Future<void> markAllNotificationsRead() async {
-    final authUser = _auth.currentUser;
-    if (authUser == null) {
-      return;
-    }
-
-    try {
-      final snapshot = await _firestore
-          .collection('users')
-          .doc(authUser.uid)
-          .collection('notifications')
-          .where('read', isEqualTo: false)
-          .get();
-
-      final batch = _firestore.batch();
-      for (final doc in snapshot.docs) {
-        batch.update(doc.reference, {'read': true});
-      }
-      await batch.commit();
-    } catch (e) {
-      print('❌ Error marking all notifications read: $e');
-    }
-  }
-
-  Future<void> _fanOutProjectNotification({
-    required String projectId,
-    required String type,
-    required String title,
-    required String body,
-    Set<String> onlyUserIds = const <String>{},
-    Set<String> excludedUserIds = const <String>{},
-    Map<String, dynamic> data = const <String, dynamic>{},
-  }) async {
-    try {
-      final projectDoc =
-          await _firestore.collection('projects').doc(projectId).get();
-      if (!projectDoc.exists) return;
-
-      final projectData = projectDoc.data()!;
-      final createdBy = projectData['createdBy'] as String? ?? '';
-      final collaborators = _parseCollaboratorsMap(
-        projectData['collaborators'],
-        docId: projectId,
-      );
-
-      final recipients = <String>{
-        createdBy,
-        ...collaborators.keys,
+      return {
+        'error': e.toString(),
+        'uid': authUser.uid,
       };
-
-      if (onlyUserIds.isNotEmpty) {
-        final filtered = recipients.intersection(onlyUserIds);
-        recipients.clear();
-        recipients.addAll(filtered);
-      }
-
-      recipients.removeAll(excludedUserIds);
-
-      final batch = _firestore.batch();
-      for (final userId in recipients) {
-        final notificationRef = _firestore
-            .collection('users')
-            .doc(userId)
-            .collection('notifications')
-            .doc();
-
-        batch.set(notificationRef, {
-          'id': notificationRef.id,
-          'userId': userId,
-          'projectId': projectId,
-          'type': type,
-          'title': title,
-          'body': body,
-          'read': false,
-          'createdAt': Timestamp.now(),
-          'data': data,
-        });
-      }
-
-      await batch.commit();
-    } catch (e) {
-      print('⚠️  Error fanning out notifications: $e');
     }
-  }
-
-  // ============ PARSER METHODS ============
-
-  ProjectChatMessage _parseProjectChatMessage(
-    DocumentSnapshot<Map<String, dynamic>> doc,
-  ) {
-    final data = doc.data()!;
-    return ProjectChatMessage(
-      id: doc.id,
-      projectId: data['projectId'] as String? ?? '',
-      senderId: data['senderId'] as String? ?? '',
-      senderUsername: data['senderUsername'] as String? ?? 'Unknown',
-      senderPhoto: data['senderPhoto'] as String? ?? '',
-      text: data['text'] as String? ?? '',
-      replyToMessageId: data['replyToMessageId'] as String? ?? '',
-      edited: data['edited'] as bool? ?? false,
-      deleted: data['deleted'] as bool? ?? false,
-      createdAt: _parseDateTime(data['createdAt']) ?? DateTime.now(),
-      updatedAt: _parseDateTime(data['updatedAt']) ?? DateTime.now(),
-      reactions: Map<String, List<String>>.from(
-        (data['reactions'] as Map? ?? {})
-            .map((key, value) => MapEntry(
-                  key as String,
-                  List<String>.from((value as List? ?? []).cast<String>()),
-                )),
-      ),
-    );
-  }
-
-  ProjectCallSession _parseProjectCallSession(
-    DocumentSnapshot<Map<String, dynamic>> doc,
-  ) {
-    final data = doc.data()!;
-    return ProjectCallSession(
-      id: doc.id,
-      projectId: data['projectId'] as String? ?? '',
-      startedBy: data['startedBy'] as String? ?? '',
-      participants: List<String>.from(
-        (data['participants'] as List? ?? []).cast<String>(),
-      ),
-      active: data['active'] as bool? ?? false,
-      type: data['type'] as String? ?? 'team',
-      invitedParticipants: List<String>.from(
-        (data['invitedParticipants'] as List? ?? []).cast<String>(),
-      ),
-      startedAt: _parseDateTime(data['startedAt']) ?? DateTime.now(),
-      endedAt: _parseDateTime(data['endedAt']),
-      audioEnabled: data['audioEnabled'] as bool? ?? true,
-      videoEnabled: data['videoEnabled'] as bool? ?? true,
-      screenSharing: data['screenSharing'] as bool? ?? false,
-    );
-  }
-
-  ProjectNotificationItem _parseNotificationItem(
-    DocumentSnapshot<Map<String, dynamic>> doc,
-  ) {
-    final data = doc.data()!;
-    return ProjectNotificationItem(
-      id: doc.id,
-      userId: data['userId'] as String? ?? '',
-      projectId: data['projectId'] as String? ?? '',
-      type: data['type'] as String? ?? 'new_message',
-      title: data['title'] as String? ?? '',
-      body: data['body'] as String? ?? '',
-      read: data['read'] as bool? ?? false,
-      createdAt: _parseDateTime(data['createdAt']) ?? DateTime.now(),
-      data: Map<String, dynamic>.from(data['data'] as Map? ?? {}),
-    );
   }
 }

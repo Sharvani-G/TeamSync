@@ -54,6 +54,7 @@ class UserService {
         username: data['username'] as String? ?? '',
         name: data['name'] as String? ?? 'Unknown',
         email: data['email'] as String? ?? '',
+        photoUrl: data['photoUrl'] as String? ?? '',
         projectsJoined: data['projectsJoined'] as int? ?? 0,
         tasksCompleted: data['tasksCompleted'] as int? ?? 0,
         createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
@@ -144,6 +145,7 @@ class UserService {
             username: data['username'] as String? ?? '',
             name: data['name'] as String? ?? 'Unknown',
             email: data['email'] as String? ?? '',
+            photoUrl: data['photoUrl'] as String? ?? '',
             projectsJoined: data['projectsJoined'] as int? ?? 0,
             tasksCompleted: data['tasksCompleted'] as int? ?? 0,
             createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
@@ -185,6 +187,7 @@ class UserService {
         'usernameLower': lowerUsername, // For case-insensitive search
         'name': name.trim(),
         'email': email.trim().toLowerCase(),
+        'photoUrl': FirebaseAuth.instance.currentUser?.photoURL ?? '',
         'projectsJoined': 0,
         'tasksCompleted': 0,
         'createdAt': DateTime.now().toIso8601String(),
@@ -208,6 +211,11 @@ class UserService {
 
       if (name != null && name.trim().isNotEmpty) {
         updateData['name'] = name.trim();
+      }
+
+      final authPhoto = _auth.currentUser?.photoURL;
+      if (authPhoto != null && authPhoto.trim().isNotEmpty) {
+        updateData['photoUrl'] = authPhoto.trim();
       }
 
       if (username != null && username.trim().isNotEmpty) {

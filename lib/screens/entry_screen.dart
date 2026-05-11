@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../services/user_service.dart';
 
 class EntryScreen extends StatefulWidget {
   const EntryScreen({super.key});
@@ -794,15 +795,31 @@ class _RegisterPaneState extends State<_RegisterPane>
 
       await credential.user?.updateDisplayName(_nameController.text.trim());
 
+      final emailPrefix = _emailController.text.trim().split('@').first;
+      var username = emailPrefix.toLowerCase().replaceAll(RegExp(r'[^a-z0-9_]'), '_');
+      if (username.isEmpty) {
+        username = 'user_${credential.user!.uid.substring(0, 6).toLowerCase()}';
+      }
+
+      final usernameAvailable = await UserService.instance.isUsernameAvailable(username);
+      if (!usernameAvailable) {
+        username = '${username}_${credential.user!.uid.substring(0, 4).toLowerCase()}';
+      }
+
       await FirebaseFirestore.instance
           .collection('users')
           .doc(credential.user!.uid)
           .set({
             'uid': credential.user!.uid,
+            'username': username,
+            'usernameLower': username,
             'name': _nameController.text.trim(),
-            'email': _emailController.text.trim(),
+            'email': _emailController.text.trim().toLowerCase(),
             'phone': _phoneController.text.trim(),
             'createdAt': FieldValue.serverTimestamp(),
+            'projectsJoined': 0,
+            'tasksCompleted': 0,
+            'lastUpdated': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
 
       

@@ -149,8 +149,9 @@ class UserAvatar extends StatelessWidget {
   final String name;
   final double size;
   final Color? color;
+  final String? imageUrl;
 
-  const UserAvatar({super.key, required this.name, this.size = 36, this.color});
+  const UserAvatar({super.key, required this.name, this.size = 36, this.color, this.imageUrl});
 
   String get initials {
     final parts = name.trim().split(' ');
@@ -165,13 +166,32 @@ class UserAvatar extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
-      child: Center(
-        child: Text(initials,
-            style: TextStyle(
-              fontSize: size * 0.35,
-              fontWeight: FontWeight.w600,
-              color: color != null ? Colors.white : AppTheme.primary,
-            )),
+      child: ClipOval(
+        child: imageUrl != null && imageUrl!.trim().isNotEmpty
+            ? Image.network(
+                imageUrl!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Center(
+                  child: Text(
+                    initials,
+                    style: TextStyle(
+                      fontSize: size * 0.35,
+                      fontWeight: FontWeight.w600,
+                      color: color != null ? Colors.white : AppTheme.primary,
+                    ),
+                  ),
+                ),
+              )
+            : Center(
+                child: Text(
+                  initials,
+                  style: TextStyle(
+                    fontSize: size * 0.35,
+                    fontWeight: FontWeight.w600,
+                    color: color != null ? Colors.white : AppTheme.primary,
+                  ),
+                ),
+              ),
       ),
     );
   }

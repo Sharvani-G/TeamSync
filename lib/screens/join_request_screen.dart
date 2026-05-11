@@ -1,6 +1,4 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
 import '../services/project_service.dart';
 import '../services/file_service.dart';
 import '../theme/app_theme.dart';
@@ -27,7 +25,7 @@ class _JoinRequestScreenState extends State<JoinRequestScreen> {
   final _githubController = TextEditingController();
   final _linkedinController = TextEditingController();
   
-  final List<File> _selectedFiles = [];
+  final List<Map<String, String>> _selectedFiles = [];
   bool _isLoading = false;
 
   @override
@@ -40,16 +38,11 @@ class _JoinRequestScreenState extends State<JoinRequestScreen> {
   }
 
   Future<void> _pickFiles() async {
-    final result = await FilePicker.platform.pickFiles(
-      allowMultiple: true,
-      type: FileType.any,
+    // File picker disabled in v1.0 - coming in v1.1
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('File upload coming soon in v1.1')),
     );
-
-    if (result != null) {
-      setState(() {
-        _selectedFiles.addAll(result.paths.map((path) => File(path!)).toList());
-      });
-    }
   }
 
   void _removeFile(int index) {
@@ -80,9 +73,6 @@ class _JoinRequestScreenState extends State<JoinRequestScreen> {
       // 1. Upload files if any
       List<String> fileUrls = [];
       if (_selectedFiles.isNotEmpty) {
-        // Correctly handle the String/List conversion by wrapping comma-separated skills
-        final skillsList = skills.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-        
         fileUrls = await FileService.instance.uploadPortfolioFiles(
           widget.projectId,
           _selectedFiles,
@@ -234,7 +224,7 @@ class _JoinRequestScreenState extends State<JoinRequestScreen> {
                               return ListTile(
                                 dense: true,
                                 title: Text(
-                                  _selectedFiles[index].path.split('/').last,
+                                  _selectedFiles[index].name,
                                   style: const TextStyle(fontSize: 12),
                                 ),
                                 trailing: IconButton(

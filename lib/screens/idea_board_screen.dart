@@ -26,6 +26,22 @@ class _IdeaBoardScreenState extends State<IdeaBoardScreen> {
           );
         }
 
+        if (snapshot.hasError) {
+          return Scaffold(
+            appBar: const SimpleAppBar(title: 'Idea Board'),
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'You do not have access to this project or the project could not be loaded.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey[700]),
+                ),
+              ),
+            ),
+          );
+        }
+
         final project = snapshot.data;
         if (project == null) {
           return const Scaffold(
