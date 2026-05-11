@@ -62,7 +62,7 @@ class _ChatChannelScreenState extends State<ChatChannelScreen> {
     setState(() => _isLoadingOlder = true);
     try {
       final older = await ProjectService.instance.loadOlderProjectMessages(
-        projectId: widget.projectId,
+        widget.projectId,
         limit: _pageSize,
         before: oldest,
       );
@@ -120,7 +120,7 @@ class _ChatChannelScreenState extends State<ChatChannelScreen> {
         await ProjectService.instance.editProjectMessage(
           projectId: widget.projectId,
           messageId: _editingTarget!.id,
-          text: text,
+          newText: text,
         );
       }
 

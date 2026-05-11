@@ -25,7 +25,7 @@ class _JoinRequestScreenState extends State<JoinRequestScreen> {
   final _githubController = TextEditingController();
   final _linkedinController = TextEditingController();
   
-  final List<String> _selectedFiles = [];
+  final List<PlatformFile> _selectedFiles = [];
   bool _isLoading = false;
 
   @override
