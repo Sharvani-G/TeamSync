@@ -526,9 +526,9 @@ class _ChatChannelScreenState extends State<ChatChannelScreen> {
   String _formatTimestamp(DateTime value) {
     final month = value.month.toString().padLeft(2, '0');
     final day = value.day.toString().padLeft(2, '0');
-    final hour = value.hourOfPeriod == 0 ? 12 : value.hourOfPeriod;
+    final hour12 = value.hour % 12 == 0 ? 12 : value.hour % 12;
     final minute = value.minute.toString().padLeft(2, '0');
     final period = value.hour >= 12 ? 'PM' : 'AM';
-    return '$month/$day $hour:$minute $period';
+    return '$month/$day $hour12:$minute $period';
   }
 }
