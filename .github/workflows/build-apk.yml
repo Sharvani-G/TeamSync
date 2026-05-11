@@ -3,6 +3,8 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
+    branches: ["main", "develop"]
+  pull_request:
     branches: ["main"]
 
 permissions:
@@ -26,9 +28,18 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: '3.41.9'
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Run analyzer
+        run: flutter analyze lib/
+        continue-on-error: true
+
+      - name: Run tests
+        run: flutter test
+        continue-on-error: true
 
       - name: Build release APK
         run: flutter build apk --release
@@ -39,3 +50,15 @@ jobs:
           name: teamsync-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+          retention-days: 30
+
+      - name: Display APK info
+        if: success()
+        run: |
+          echo "=== APK Build Summary ==="
+          ls -lh build/app/outputs/flutter-apk/app-release.apk
+          echo ""
+          echo "APK successfully generated!"
+          echo "Size: $(du -h build/app/outputs/flutter-apk/app-release.apk | cut -f1)"
+          echo ""
+          echo "Download from GitHub Actions artifacts"
