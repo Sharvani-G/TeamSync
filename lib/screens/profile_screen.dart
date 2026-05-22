@@ -85,7 +85,9 @@ class ProfileScreen extends StatelessWidget {
                   children: [
                     UserAvatar(
                       name: user.name,
+                      username: user.username,
                       size: 54,
+                      imageUrl: user.photoUrl,
                       color: AppTheme.primary,
                     ),
                     const SizedBox(width: 14),
@@ -344,7 +346,9 @@ class _MyProfileDetailsScreenState extends State<MyProfileDetailsScreen> {
                                 ? (_hasCustomPhoto
                                     ? UserAvatar(
                                         name: user.name,
+                                        username: user.username,
                                         size: 64,
+                                        imageUrl: user.photoUrl,
                                         color: Colors.white,
                                       )
                                     : const Icon(

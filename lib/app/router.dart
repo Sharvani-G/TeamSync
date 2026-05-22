@@ -5,6 +5,7 @@ import '../screens/create_project_screen.dart';
 import '../screens/project_overview_screen.dart';
 import '../screens/idea_board_screen.dart';
 import '../screens/idea_board_document_screen.dart';
+import '../screens/project_workspace_screen.dart';
 import '../screens/track_screen.dart';
 import '../screens/ai_report_screen.dart';
 import '../screens/chat_home_screen.dart';
@@ -58,6 +59,26 @@ Route<dynamic> generateRoute(RouteSettings settings) {
   if (ideaBoardMatch != null) {
     return _slide(
         IdeaBoardScreen(projectId: ideaBoardMatch.group(1)!), settings);
+  }
+
+  // /project/:id/workspace or /project/:id/workspace/:tab
+  final workspaceMatch =
+      RegExp(r'^/project/(\w+)/workspace(?:/(idea-board|chat|calls))?$')
+          .firstMatch(name);
+  if (workspaceMatch != null) {
+    final tab = workspaceMatch.group(2);
+    final initialTabIndex = switch (tab) {
+      'chat' => 1,
+      'calls' => 2,
+      _ => 0,
+    };
+
+    return _slide(
+        ProjectWorkspaceScreen(
+          projectId: workspaceMatch.group(1)!,
+          initialTabIndex: initialTabIndex,
+        ),
+        settings);
   }
 
   // /project/:id/track

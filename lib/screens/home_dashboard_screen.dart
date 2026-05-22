@@ -224,7 +224,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
                         builder: (context, snapshot) {
                           final user = snapshot.data ?? AppUser(
                             id: '',
-                            username: 'user',
+                            username: '',
                             name: 'User',
                             email: '',
                             projectsJoined: 0,
@@ -233,7 +233,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
                           );
                           return UserAvatar(
                             name: user.name,
+                            username: user.username,
                             size: 36,
+                            imageUrl: user.photoUrl,
                             color: AppTheme.primary,
                           );
                         },
@@ -658,57 +660,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildProjectPlaceholderCard(int index) {
-    return Column(
-      children: [
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.grey[300]!, width: 1),
-            ),
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Icon(
-                  Icons.folder_open,
-                  color: Colors.grey[500],
-                  size: 32,
-                ),
-                Text(
-                  'No data yet',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          width: double.infinity,
-          child: Text(
-            'Project ${index + 1}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[700],
-            ),
-          ),
-        ),
-      ],
     );
   }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/models.dart';
 import '../services/project_service.dart';
 import '../services/user_service.dart';
@@ -22,6 +23,9 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
+
     return StreamBuilder<Project?>(
       stream: ProjectService.instance.watchProject(widget.projectId),
       builder: (context, projectSnapshot) {
@@ -37,10 +41,11 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
 
         return Scaffold(
           appBar: SimpleAppBar(
-            title: 'Call • ${project.title}',
+            title: 'Calls • ${project.title}',
             actions: [
               IconButton(
                 icon: const Icon(Icons.history),
+                tooltip: 'Call history',
                 onPressed: _showHistory,
               ),
             ],
@@ -50,200 +55,250 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
             builder: (context, callSnapshot) {
               final activeCall = callSnapshot.data;
 
-              return ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF0F172A), Color(0xFF111827)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Project Call Room',
-                          style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          activeCall == null ? 'No active call' : 'Live ${activeCall.type} call',
-                          style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Room state, invitations, participants, and call history are synchronized in Firestore.',
-                          style: TextStyle(color: Colors.white.withOpacity(0.78), height: 1.45),
-                        ),
-                        const SizedBox(height: 14),
-                        Wrap(
-                          spacing: 10,
-                          runSpacing: 10,
-                          children: [
-                            _InfoChip(icon: Icons.people_outline, label: '${project.collaboratorCount} collaborators'),
-                            _InfoChip(icon: Icons.videocam_outlined, label: activeCall?.active == true ? 'Active' : 'Idle'),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  if (activeCall == null) ...[
-                    ElevatedButton.icon(
-                      onPressed: () => _startCall(type: 'team'),
-                      icon: const Icon(Icons.groups_outlined),
-                      label: const Text('Start Team Call'),
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: () => _startSelectedCall(memberIds),
-                      icon: const Icon(Icons.person_add_alt_1_outlined),
-                      label: const Text('Start Selected Call'),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Collaborators',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
-                    ),
-                    const SizedBox(height: 10),
-                    FutureBuilder<Map<String, AppUser>>(
-                      future: UserService.instance.getUsersByIds(memberIds),
-                      builder: (context, usersSnapshot) {
-                        final users = usersSnapshot.data ?? {};
-                        return Column(
-                          children: memberIds.map((userId) {
-                            final user = users[userId];
-                            final isAdmin = userId == project.createdBy;
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 10),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: AppTheme.border),
-                              ),
-                              child: Row(
-                                children: [
-                                  UserAvatar(
-                                    name: user?.name ?? user?.username ?? userId,
-                                    size: 38,
-                                    imageUrl: user?.photoUrl,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          user?.name ?? user?.username ?? userId,
-                                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          '@${user?.username ?? userId.substring(0, 6)}',
-                                          style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                    decoration: BoxDecoration(
-                                      color: isAdmin ? const Color(0xFFDBEAFE) : const Color(0xFFEDE9FE),
-                                      borderRadius: BorderRadius.circular(999),
-                                    ),
-                                    child: Text(
-                                      isAdmin ? 'ADMIN' : 'Collaborator',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                        color: isAdmin ? const Color(0xFF1D4ED8) : const Color(0xFF6D28D9),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }).toList(),
-                        );
-                      },
-                    ),
-                  ] else ...[
-                    _LiveCallPanel(
-                      call: activeCall,
-                      projectId: widget.projectId,
-                      audioEnabled: _audioEnabled,
-                      videoEnabled: _videoEnabled,
-                      screenSharing: _screenSharing,
-                      onToggleAudio: () async {
-                        setState(() => _audioEnabled = !_audioEnabled);
-                        await ProjectService.instance.updateCallState(
-                          projectId: widget.projectId,
-                          callId: activeCall.id,
-                          audioEnabled: _audioEnabled,
-                        );
-                      },
-                      onToggleVideo: () async {
-                        setState(() => _videoEnabled = !_videoEnabled);
-                        await ProjectService.instance.updateCallState(
-                          projectId: widget.projectId,
-                          callId: activeCall.id,
-                          videoEnabled: _videoEnabled,
-                        );
-                      },
-                      onToggleScreenShare: () async {
-                        setState(() => _screenSharing = !_screenSharing);
-                        await ProjectService.instance.updateCallState(
-                          projectId: widget.projectId,
-                          callId: activeCall.id,
-                          screenSharing: _screenSharing,
-                        );
-                      },
-                      onJoin: () => ProjectService.instance.joinProjectCall(projectId: widget.projectId, callId: activeCall.id),
-                      onLeave: () => ProjectService.instance.leaveProjectCall(projectId: widget.projectId, callId: activeCall.id),
-                      onEnd: () => ProjectService.instance.endProjectCall(projectId: widget.projectId, callId: activeCall.id),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Participants',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
-                    ),
-                    const SizedBox(height: 10),
-                    FutureBuilder<Map<String, AppUser>>(
-                      future: UserService.instance.getUsersByIds(activeCall.participants),
-                      builder: (context, usersSnapshot) {
-                        final users = usersSnapshot.data ?? {};
-                        return Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: activeCall.participants.map((userId) {
-                            final user = users[userId];
-                            return _ParticipantTile(
-                              name: user?.name ?? user?.username ?? userId,
-                              username: user?.username ?? userId,
-                              imageUrl: user?.photoUrl,
-                            );
-                          }).toList(),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Call participants share room state, chat, and notifications in realtime.',
-                      style: TextStyle(fontSize: 12, color: AppTheme.textSecondary, height: 1.45),
-                    ),
-                  ],
-                ],
-              );
+              if (activeCall != null && activeCall.active) {
+                // ACTIVE CALL: Show call controls only
+                return _buildActiveCallUI(context, activeCall, memberIds, isMobile);
+              } else {
+                // NO ACTIVE CALL: Show start options
+                return _buildPreCallUI(context, project, memberIds, isMobile);
+              }
             },
           ),
         );
       },
+    );
+  }
+
+  Widget _buildPreCallUI(BuildContext context, Project project, List<String> memberIds, bool isMobile) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Call Room Status
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  const Icon(Icons.videocam_outlined, size: 40, color: AppTheme.primary),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Ready to Start',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${memberIds.length} collaborators available',
+                    style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Start Call Button
+          ElevatedButton.icon(
+            onPressed: () => _startCall(type: 'team'),
+            style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+            icon: const Icon(Icons.videocam),
+            label: const Text('Start Team Call', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          ),
+          const SizedBox(height: 12),
+
+          // Schedule Button
+          OutlinedButton.icon(
+            onPressed: () => _showScheduleDialog(memberIds),
+            style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+            icon: const Icon(Icons.calendar_today_outlined),
+            label: const Text('Schedule Call', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          ),
+          const SizedBox(height: 24),
+
+          // Upcoming Calls Section
+          const Text(
+            'Upcoming Calls',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 12),
+          StreamBuilder<List<ProjectCallSchedule>>(
+            stream: ProjectService.instance.watchProjectCallSchedules(widget.projectId),
+            builder: (context, scheduleSnapshot) {
+              final schedules = scheduleSnapshot.data ?? [];
+              final upcoming = schedules.where((schedule) => schedule.status == 'scheduled').toList();
+              
+              if (upcoming.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: const EmptyState(
+                    icon: Icons.event_outlined,
+                    title: 'No upcoming calls',
+                    subtitle: 'Schedule a call to get started',
+                  ),
+                );
+              }
+
+              return ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: upcoming.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (context, index) {
+                  final schedule = upcoming[index];
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(schedule.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                          const SizedBox(height: 4),
+                          Text(
+                            'When: ${_formatDateTime(schedule.scheduledAt)} • ${schedule.durationMinutes} min',
+                            style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActiveCallUI(BuildContext context, ProjectCallSession activeCall, List<String> memberIds, bool isMobile) {
+    return SingleChildScrollView(
+      padding: EdgeInsets.all(isMobile ? 12 : 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Call Status
+          Card(
+            color: const Color(0xFFFEF3C7),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  const Icon(Icons.circle, size: 12, color: Color(0xFFD97706)),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'Call in progress...',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF92400E)),
+                    ),
+                  ),
+                  Text(
+                    '${activeCall.participants.length} joined',
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF92400E)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Call Control Buttons
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    setState(() => _audioEnabled = !_audioEnabled);
+                    await ProjectService.instance.updateCallState(
+                      projectId: widget.projectId,
+                      callId: activeCall.id,
+                      audioEnabled: _audioEnabled,
+                    );
+                  },
+                  icon: Icon(_audioEnabled ? Icons.mic : Icons.mic_off),
+                  label: Text(_audioEnabled ? 'Mute' : 'Unmute', style: const TextStyle(fontSize: 12)),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    setState(() => _videoEnabled = !_videoEnabled);
+                    await ProjectService.instance.updateCallState(
+                      projectId: widget.projectId,
+                      callId: activeCall.id,
+                      videoEnabled: _videoEnabled,
+                    );
+                  },
+                  icon: Icon(_videoEnabled ? Icons.videocam : Icons.videocam_off),
+                  label: Text(_videoEnabled ? 'Stop' : 'Start', style: const TextStyle(fontSize: 12)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
+            onPressed: () => _openRoom(
+              activeCall.roomUrl.isNotEmpty
+                  ? activeCall.roomUrl
+                  : 'https://meet.jit.si/${activeCall.roomName.isNotEmpty ? activeCall.roomName : 'teamsync-${widget.projectId}-${activeCall.id}'}',
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.success,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            icon: const Icon(Icons.open_in_new, size: 18),
+            label: const Text('Join Room', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () => ProjectService.instance.leaveProjectCall(projectId: widget.projectId, callId: activeCall.id),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppTheme.danger,
+              side: const BorderSide(color: AppTheme.danger),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            icon: const Icon(Icons.call_end, size: 18),
+            label: const Text('Leave Call', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          ),
+          const SizedBox(height: 20),
+
+          // Participants
+          const Text(
+            'Participants',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 12),
+          FutureBuilder<Map<String, AppUser>>(
+            future: UserService.instance.getUsersByIds(activeCall.participants),
+            builder: (context, usersSnapshot) {
+              final users = usersSnapshot.data ?? {};
+              if (activeCall.participants.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Text('No participants yet', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                );
+              }
+              return Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: activeCall.participants.map((userId) {
+                  final user = users[userId];
+                  return Chip(
+                    avatar: UserAvatar(
+                      name: user?.name ?? user?.username ?? userId,
+                      username: user?.username ?? userId,
+                      size: 28,
+                      imageUrl: user?.photoUrl,
+                    ),
+                    label: Text(user?.name.split(' ')[0] ?? user?.username ?? 'User', maxLines: 1),
+                  );
+                }).toList(),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -294,7 +349,7 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
                             });
                           },
                           title: Text(label),
-                          subtitle: Text('@${user?.username ?? userId.substring(0, 6)}'),
+                          subtitle: Text('@${user?.username.isNotEmpty == true ? user!.username : '?'}'),
                         );
                       }).toList(),
                     );
@@ -327,6 +382,180 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
         SnackBar(content: Text('Error: ${e.toString()}'), behavior: SnackBarBehavior.floating),
       );
     }
+  }
+
+  Future<void> _showScheduleDialog(List<String> memberIds) async {
+    final titleController = TextEditingController();
+    final agendaController = TextEditingController();
+    final descriptionController = TextEditingController();
+    final durationController = TextEditingController(text: '30');
+    DateTime? scheduledAt;
+    final invited = <String>{};
+    var inviteAll = true;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Schedule Call'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: titleController,
+                      decoration: const InputDecoration(labelText: 'Call title'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: agendaController,
+                      decoration: const InputDecoration(labelText: 'Agenda / topic'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: descriptionController,
+                      decoration: const InputDecoration(labelText: 'Discussion description'),
+                      maxLines: 3,
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: durationController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'Duration estimate (minutes)'),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            scheduledAt == null
+                                ? 'Choose date and time'
+                                : _formatDateTime(scheduledAt!),
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () async {
+                            final date = await showDatePicker(
+                              context: context,
+                              firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                              lastDate: DateTime.now().add(const Duration(days: 365)),
+                              initialDate: DateTime.now().add(const Duration(days: 1)),
+                            );
+                            if (date == null) return;
+                            final time = await showTimePicker(
+                              context: context,
+                              initialTime: TimeOfDay.now(),
+                            );
+                            if (time == null) return;
+                            setDialogState(() {
+                              scheduledAt = DateTime(
+                                date.year,
+                                date.month,
+                                date.day,
+                                time.hour,
+                                time.minute,
+                              );
+                            });
+                          },
+                          child: const Text('Pick'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Invite all collaborators'),
+                      value: inviteAll,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          inviteAll = value;
+                          if (value) {
+                            invited.clear();
+                          }
+                        });
+                      },
+                    ),
+                    if (!inviteAll)
+                      FutureBuilder<Map<String, AppUser>>(
+                        future: UserService.instance.getUsersByIds(memberIds),
+                        builder: (context, usersSnapshot) {
+                          final users = usersSnapshot.data ?? {};
+                          return Column(
+                            children: memberIds.map((userId) {
+                              final user = users[userId];
+                              final label = user?.name ?? user?.username ?? userId;
+                              return CheckboxListTile(
+                                contentPadding: EdgeInsets.zero,
+                                value: invited.contains(userId),
+                                onChanged: (checked) {
+                                  setDialogState(() {
+                                    if (checked == true) {
+                                      invited.add(userId);
+                                    } else {
+                                      invited.remove(userId);
+                                    }
+                                  });
+                                },
+                                title: Text(label),
+                              );
+                            }).toList(),
+                          );
+                        },
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+                ElevatedButton(
+                  onPressed: scheduledAt == null ? null : () => Navigator.pop(dialogContext, true),
+                  child: const Text('Schedule'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result != true || scheduledAt == null) {
+      return;
+    }
+
+    final inviteList = inviteAll ? memberIds : invited.toList();
+
+    try {
+      await ProjectService.instance.scheduleProjectCall(
+        projectId: widget.projectId,
+        title: titleController.text.trim().isEmpty ? 'Project Call' : titleController.text.trim(),
+        agenda: agendaController.text.trim(),
+        description: descriptionController.text.trim(),
+        scheduledAt: scheduledAt!,
+        durationMinutes: int.tryParse(durationController.text.trim()) ?? 30,
+        invitedParticipants: inviteList,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString()}'), behavior: SnackBarBehavior.floating),
+      );
+    }
+  }
+
+  Future<void> _openRoom(String roomUrl) async {
+    await launchUrl(Uri.parse(roomUrl), mode: LaunchMode.externalApplication);
+  }
+
+  String _formatDateTime(DateTime value) {
+    final month = value.month.toString().padLeft(2, '0');
+    final day = value.day.toString().padLeft(2, '0');
+    final hour12 = value.hour % 12 == 0 ? 12 : value.hour % 12;
+    final minute = value.minute.toString().padLeft(2, '0');
+    final period = value.hour >= 12 ? 'PM' : 'AM';
+    return '$month/$day $hour12:$minute $period';
   }
 
   Future<void> _showHistory() async {
@@ -402,6 +631,7 @@ class _LiveCallPanel extends StatelessWidget {
   final bool audioEnabled;
   final bool videoEnabled;
   final bool screenSharing;
+  final VoidCallback onOpenRoom;
   final VoidCallback onToggleAudio;
   final VoidCallback onToggleVideo;
   final VoidCallback onToggleScreenShare;
@@ -415,6 +645,7 @@ class _LiveCallPanel extends StatelessWidget {
     required this.audioEnabled,
     required this.videoEnabled,
     required this.screenSharing,
+    required this.onOpenRoom,
     required this.onToggleAudio,
     required this.onToggleVideo,
     required this.onToggleScreenShare,
@@ -479,6 +710,11 @@ class _LiveCallPanel extends StatelessWidget {
               onPressed: onToggleScreenShare,
             ),
             _ControlButton(
+              icon: Icons.meeting_room_outlined,
+              label: 'Room',
+              onPressed: onOpenRoom,
+            ),
+            _ControlButton(
               icon: Icons.login,
               label: 'Join',
               onPressed: onJoin,
@@ -521,7 +757,7 @@ class _ParticipantTile extends StatelessWidget {
       ),
       child: Column(
         children: [
-          UserAvatar(name: name, size: 44, imageUrl: imageUrl),
+          UserAvatar(name: name, username: username, size: 44, imageUrl: imageUrl),
           const SizedBox(height: 10),
           Text(name, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
           const SizedBox(height: 2),

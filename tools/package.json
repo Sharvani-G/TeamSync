@@ -1,0 +1,14 @@
+{
+  "name": "teamsync-rules-test",
+  "version": "1.0.0",
+  "description": "Firestore rules unit tests for TeamSync",
+  "main": "firestore_rules_test.js",
+  "scripts": {
+    "test": "node firestore_rules_test.js"
+  },
+  "dependencies": {
+    "@firebase/rules-unit-testing": "^2.0.1",
+    "firebase-admin": "^11.10.0",
+    "firebase-tools": "^15.18.0"
+  }
+}

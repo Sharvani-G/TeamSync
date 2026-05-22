@@ -23,10 +23,9 @@ class UserProfileService {
         (snapshot) {
           final data = snapshot.data();
           if (data == null) {
-            // User document doesn't exist yet, create default.
             return AppUser(
               id: authUser.uid,
-              username: authUser.email?.split('@').first ?? 'user',
+              username: '',
               name: authUser.displayName ?? 'User',
               email: authUser.email ?? '',
               projectsJoined: 0,
@@ -37,7 +36,7 @@ class UserProfileService {
 
           return AppUser(
             id: authUser.uid,
-            username: (data['username'] as String?) ?? 'unknown',
+            username: (data['username'] as String?)?.trim() ?? '',
             name: (data['name'] as String?)?.trim().isNotEmpty == true
                 ? data['name'] as String
                 : (authUser.displayName ?? 'User'),
@@ -74,6 +73,10 @@ class UserProfileService {
 
   /// Update current user username
   Future<void> updateCurrentUserUsername(String username) async {
+    await repairCurrentUserUsername(username);
+  }
+
+  Future<void> repairCurrentUserUsername(String username) async {
     final authUser = _auth.currentUser;
     final trimmedUsername = username.trim();
 
@@ -81,11 +84,28 @@ class UserProfileService {
       return;
     }
 
+    if (!UserService.isValidUsernameFormat(trimmedUsername)) {
+      throw Exception('Username must start with a letter and use only letters, numbers, or underscores');
+    }
+
+    final isAvailable = await _userService.isUsernameAvailable(trimmedUsername);
+    if (!isAvailable) {
+      throw Exception('Username already taken');
+    }
+
     try {
-      await _userService.updateUserProfile(
-        userId: authUser.uid,
-        username: trimmedUsername,
-      );
+      final existingDoc = await _firestore.collection('users').doc(authUser.uid).get();
+      if (!existingDoc.exists) {
+        await _userService.createUserDocument(
+          userId: authUser.uid,
+          username: trimmedUsername,
+          name: authUser.displayName?.trim().isNotEmpty == true ? authUser.displayName!.trim() : 'User',
+          email: authUser.email ?? '',
+        );
+        return;
+      }
+
+      await _userService.updateUserProfile(userId: authUser.uid, username: trimmedUsername);
     } catch (e) {
       throw Exception('Failed to update username: ${e.toString()}');
     }

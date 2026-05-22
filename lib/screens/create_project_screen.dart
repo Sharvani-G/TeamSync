@@ -98,7 +98,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     }
 
     // Check for duplicates
-    if (_collaboratorUsernames.contains(username.toLowerCase())) {
+    if (_collaboratorUsernames.any((existing) => existing.toLowerCase() == username.toLowerCase())) {
       _showSnackBar('User "@$username" already added');
       return;
     }
@@ -114,7 +114,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       }
 
       setState(() {
-        _collaboratorUsernames.add(username.toLowerCase());
+        _collaboratorUsernames.add(username);
         _usernameController.clear();
       });
 

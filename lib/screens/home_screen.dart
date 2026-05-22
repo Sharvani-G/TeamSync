@@ -79,7 +79,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   onTap: () => Navigator.pushNamed(context, '/profile'),
                   child: UserAvatar(
                     name: user.name,
+                    username: user.username,
                     size: 32,
+                    imageUrl: user.photoUrl,
                     color: AppTheme.primary,
                   ),
                 );

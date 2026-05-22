@@ -741,6 +741,7 @@ class _RegisterPane extends StatefulWidget {
 class _RegisterPaneState extends State<_RegisterPane>
     with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
+  final _usernameController = TextEditingController();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -764,6 +765,7 @@ class _RegisterPaneState extends State<_RegisterPane>
 
   @override
   void dispose() {
+    _usernameController.dispose();
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
@@ -781,8 +783,19 @@ class _RegisterPaneState extends State<_RegisterPane>
 
     setState(() => _isSubmitting = true);
     try {
+      final username = _usernameController.text.trim();
       final email = _emailController.text.trim();
       final password = _passwordController.text.trim();
+
+      if (!UserService.isValidUsernameFormat(username)) {
+        throw Exception('Username must start with a letter and use only letters, numbers, or underscores');
+      }
+
+      final usernameAvailable = await UserService.instance.isUsernameAvailable(username);
+      if (!usernameAvailable) {
+        throw Exception('Username is already taken');
+      }
+
       final credential = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(
             email: email,
@@ -795,24 +808,13 @@ class _RegisterPaneState extends State<_RegisterPane>
 
       await credential.user?.updateDisplayName(_nameController.text.trim());
 
-      final emailPrefix = _emailController.text.trim().split('@').first;
-      var username = emailPrefix.toLowerCase().replaceAll(RegExp(r'[^a-z0-9_]'), '_');
-      if (username.isEmpty) {
-        username = 'user_${credential.user!.uid.substring(0, 6).toLowerCase()}';
-      }
-
-      final usernameAvailable = await UserService.instance.isUsernameAvailable(username);
-      if (!usernameAvailable) {
-        username = '${username}_${credential.user!.uid.substring(0, 4).toLowerCase()}';
-      }
-
       await FirebaseFirestore.instance
           .collection('users')
           .doc(credential.user!.uid)
           .set({
             'uid': credential.user!.uid,
             'username': username,
-            'usernameLower': username,
+            'usernameLower': username.toLowerCase(),
             'name': _nameController.text.trim(),
             'email': _emailController.text.trim().toLowerCase(),
             'phone': _phoneController.text.trim(),
@@ -924,6 +926,23 @@ class _RegisterPaneState extends State<_RegisterPane>
                         key: _formKey,
                         child: Column(
                           children: [
+                            buildTextField(
+                              controller: _usernameController,
+                              label: 'Username',
+                              hint: 'Choose a username',
+                              icon: Icons.alternate_email,
+                              validator: (value) {
+                                final text = value?.trim() ?? '';
+                                if (text.isEmpty) {
+                                  return 'Please enter a username';
+                                }
+                                if (!UserService.isValidUsernameFormat(text)) {
+                                  return 'Use 3-20 letters, numbers, or underscores';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 16),
                             buildTextField(
                               controller: _nameController,
                               label: 'Full name',
@@ -1058,8 +1077,7 @@ class _RegisterPaneState extends State<_RegisterPane>
                                     height: 18,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      valueColor:
-                                          AlwaysStoppedAnimation<Color>(
+                                      valueColor: AlwaysStoppedAnimation<Color>(
                                         Colors.white,
                                       ),
                                     ),
@@ -1073,9 +1091,9 @@ class _RegisterPaneState extends State<_RegisterPane>
                                       letterSpacing: 0.3,
                                     ),
                                   ),
-                            ),
                           ),
                         ),
+                      ),
                     ],
                   ),
                 ),

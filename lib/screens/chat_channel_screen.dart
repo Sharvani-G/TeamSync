@@ -1,40 +1,78 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:file_picker/file_picker.dart' as picker;
 import '../models/models.dart';
+import '../services/attachment_service.dart';
 import '../services/project_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-class ChatChannelScreen extends StatefulWidget {
+class ChatChannelScreen extends StatelessWidget {
   final String projectId;
   final String channelId;
 
   const ChatChannelScreen({super.key, required this.projectId, required this.channelId});
 
   @override
-  State<ChatChannelScreen> createState() => _ChatChannelScreenState();
+  Widget build(BuildContext context) {
+    return StreamBuilder<Project?>(
+      stream: ProjectService.instance.watchProject(projectId),
+      builder: (context, projectSnapshot) {
+        final project = projectSnapshot.data;
+
+        if (projectSnapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+
+        if (project == null) {
+          return const Scaffold(body: Center(child: Text('Project not found')));
+        }
+
+        return Scaffold(
+          appBar: SimpleAppBar(title: project.title),
+          body: ChatChannelView(projectId: projectId, channelId: channelId),
+        );
+      },
+    );
+  }
 }
 
-class _ChatChannelScreenState extends State<ChatChannelScreen> {
+class ChatChannelView extends StatefulWidget {
+  final String projectId;
+  final String channelId;
+
+  const ChatChannelView({super.key, required this.projectId, required this.channelId});
+
+  @override
+  State<ChatChannelView> createState() => _ChatChannelViewState();
+}
+
+class _ChatChannelViewState extends State<ChatChannelView> {
   static const int _pageSize = 30;
 
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<ProjectChatMessage> _olderMessages = [];
+  final List<picker.PlatformFile> _pendingAttachments = [];
 
   ProjectChatMessage? _replyTarget;
   ProjectChatMessage? _editingTarget;
   bool _isLoadingOlder = false;
   bool _hasMoreOlder = true;
   bool _autoScroll = true;
+  bool _isUploadingAttachments = false;
+  double _uploadProgress = 0;
+  String _uploadLabel = '';
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_handleScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ProjectService.instance.markProjectChatRead(projectId: widget.projectId);
+      ProjectService.instance.markChannelRead(projectId: widget.projectId, channelId: widget.channelId);
     });
   }
 
@@ -61,8 +99,9 @@ class _ChatChannelScreenState extends State<ChatChannelScreen> {
 
     setState(() => _isLoadingOlder = true);
     try {
-      final older = await ProjectService.instance.loadOlderProjectMessages(
+      final older = await ProjectService.instance.loadOlderChannelMessages(
         widget.projectId,
+        widget.channelId,
         limit: _pageSize,
         before: oldest,
       );
@@ -103,7 +142,7 @@ class _ChatChannelScreenState extends State<ChatChannelScreen> {
 
   Future<void> _sendMessage() async {
     final text = _controller.text.trim();
-    if (text.isEmpty) {
+    if (text.isEmpty && _pendingAttachments.isEmpty) {
       return;
     }
 
@@ -111,14 +150,49 @@ class _ChatChannelScreenState extends State<ChatChannelScreen> {
 
     try {
       if (_editingTarget == null) {
-        await ProjectService.instance.sendProjectMessage(
-          projectId: widget.projectId,
-          text: text,
-          replyToMessageId: replyId,
-        );
+        if (_pendingAttachments.isNotEmpty) {
+          setState(() {
+            _isUploadingAttachments = true;
+            _uploadProgress = 0;
+            _uploadLabel = _pendingAttachments.first.name;
+          });
+
+          await AttachmentService.instance.attachToChatChannel(
+            projectId: widget.projectId,
+            channelId: widget.channelId,
+            text: text,
+            replyToMessageId: replyId,
+            files: _pendingAttachments,
+            onProgress: (progress, fileName) {
+              if (!mounted) return;
+              setState(() {
+                _isUploadingAttachments = true;
+                _uploadLabel = fileName;
+                _uploadProgress = progress;
+              });
+            },
+          );
+        } else {
+          final messageId = FirebaseFirestore.instance
+              .collection('projects')
+              .doc(widget.projectId)
+              .collection('channels')
+              .doc(widget.channelId)
+              .collection('messages')
+              .doc().id;
+          await ProjectService.instance.sendChannelMessage(
+            projectId: widget.projectId,
+            channelId: widget.channelId,
+            text: text,
+            replyToMessageId: replyId,
+            attachments: const [],
+            messageId: messageId,
+          );
+        }
       } else {
-        await ProjectService.instance.editProjectMessage(
+        await ProjectService.instance.editChannelMessage(
           projectId: widget.projectId,
+          channelId: widget.channelId,
           messageId: _editingTarget!.id,
           newText: text,
         );
@@ -129,14 +203,56 @@ class _ChatChannelScreenState extends State<ChatChannelScreen> {
       setState(() {
         _replyTarget = null;
         _editingTarget = null;
+        _pendingAttachments.clear();
+        _isUploadingAttachments = false;
+        _uploadProgress = 0;
+        _uploadLabel = '';
       });
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     } catch (e) {
       if (!mounted) return;
+      setState(() {
+        _isUploadingAttachments = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: ${e.toString()}'), behavior: SnackBarBehavior.floating),
       );
     }
+  }
+
+  Future<void> _pickAttachments() async {
+    if (_editingTarget != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Finish editing before adding attachments.')),
+      );
+      return;
+    }
+
+    try {
+      final files = await AttachmentService.instance.pickFiles(allowMultiple: true);
+      debugPrint('Chat attachment picker returned ${files.length} files');
+      if (!mounted || files.isEmpty) {
+        return;
+      }
+
+      setState(() {
+        _pendingAttachments.addAll(files);
+      });
+      debugPrint('Pending chat attachments now: ${_pendingAttachments.map((file) => file.name).join(', ')}');
+    } catch (e, stackTrace) {
+      debugPrint('Chat attachment picker failed: $e');
+      debugPrintStack(stackTrace: stackTrace);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Attachment picker failed: $e'), behavior: SnackBarBehavior.floating),
+      );
+    }
+  }
+
+  void _removePendingAttachment(int index) {
+    setState(() {
+      _pendingAttachments.removeAt(index);
+    });
   }
 
   void _scrollToBottom() {
@@ -212,8 +328,9 @@ class _ChatChannelScreenState extends State<ChatChannelScreen> {
                   title: const Text('Delete'),
                   onTap: () async {
                     Navigator.pop(sheetContext);
-                    await ProjectService.instance.deleteProjectMessage(
+                    await ProjectService.instance.deleteChannelMessage(
                       projectId: widget.projectId,
+                      channelId: widget.channelId,
                       messageId: message.id,
                     );
                   },
@@ -227,297 +344,375 @@ class _ChatChannelScreenState extends State<ChatChannelScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<Project?>(
-      stream: ProjectService.instance.watchProject(widget.projectId),
-      builder: (context, projectSnapshot) {
-        final project = projectSnapshot.data;
+    return StreamBuilder<List<ProjectChatMessage>>(
+      stream: ProjectService.instance.watchChannelMessages(
+        widget.projectId,
+        widget.channelId,
+        limit: _pageSize,
+      ),
+      builder: (context, snapshot) {
+        _latestMessages = snapshot.data ?? [];
+        final messages = _combinedMessages;
 
-        if (projectSnapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        if (snapshot.connectionState == ConnectionState.waiting && messages.isEmpty) {
+          return const Center(child: CircularProgressIndicator());
         }
 
-        if (project == null) {
-          return const Scaffold(body: Center(child: Text('Project not found')));
+        if (messages.isEmpty) {
+          return const EmptyState(
+            icon: Icons.chat_bubble_outline,
+            title: 'No messages yet',
+            subtitle: 'Start the conversation in this channel',
+          );
         }
 
-        return Scaffold(
-          appBar: SimpleAppBar(
-            title: project.title,
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.videocam_outlined),
-                onPressed: () => Navigator.pushNamed(context, '/project/${widget.projectId}/call'),
-              ),
-              IconButton(
-                icon: const Icon(Icons.phone_outlined),
-                onPressed: () => Navigator.pushNamed(context, '/project/${widget.projectId}/call'),
-              ),
-            ],
-          ),
-          body: Column(
-            children: [
-              Expanded(
-                child: StreamBuilder<List<ProjectChatMessage>>(
-                  stream: ProjectService.instance.watchProjectMessages(widget.projectId, limit: _pageSize),
-                  builder: (context, snapshot) {
-                    _latestMessages = snapshot.data ?? [];
-                    final messages = _combinedMessages;
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
 
-                    if (snapshot.connectionState == ConnectionState.waiting && messages.isEmpty) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-
-                    if (messages.isEmpty) {
-                      return const EmptyState(
-                        icon: Icons.chat_bubble_outline,
-                        title: 'No messages yet',
-                        subtitle: 'Start the conversation in this project room',
+        return Column(
+          children: [
+            Expanded(
+              child: NotificationListener<ScrollNotification>(
+                onNotification: (notification) {
+                  if (notification.metrics.pixels <= 100 && !_isLoadingOlder && _hasMoreOlder) {
+                    _loadOlderMessages();
+                  }
+                  return false;
+                },
+                child: ListView.separated(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                  itemCount: messages.length + (_isLoadingOlder ? 1 : 0),
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (context, index) {
+                    if (_isLoadingOlder && index == 0) {
+                      return const Center(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
                       );
                     }
 
-                    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+                    final offset = _isLoadingOlder ? 1 : 0;
+                    final message = messages[index - offset];
+                    final currentUser = FirebaseAuth.instance.currentUser;
+                    final isMe = currentUser != null && currentUser.uid == message.senderId;
+                    final replyTarget = message.hasReply ? _findReplyTarget(message.replyToMessageId) : null;
 
-                    return NotificationListener<ScrollNotification>(
-                      onNotification: (notification) {
-                        if (notification.metrics.pixels <= 100 && !_isLoadingOlder && _hasMoreOlder) {
-                          _loadOlderMessages();
-                        }
-                        return false;
-                      },
-                      child: ListView.separated(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                        itemCount: messages.length + (_isLoadingOlder ? 1 : 0),
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (context, index) {
-                          if (_isLoadingOlder && index == 0) {
-                            return const Center(
-                              child: Padding(
-                                padding: EdgeInsets.symmetric(vertical: 8),
-                                child: SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                ),
+                    return Align(
+                      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                      child: GestureDetector(
+                        onLongPress: () => _showActions(message),
+                        child: Container(
+                          constraints: const BoxConstraints(maxWidth: 520),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isMe ? AppTheme.primary : Colors.white,
+                            borderRadius: BorderRadius.only(
+                              topLeft: const Radius.circular(16),
+                              topRight: const Radius.circular(16),
+                              bottomLeft: Radius.circular(isMe ? 16 : 4),
+                              bottomRight: Radius.circular(isMe ? 4 : 16),
+                            ),
+                            border: Border.all(color: isMe ? AppTheme.primary : AppTheme.border),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.04),
+                                blurRadius: 16,
+                                offset: const Offset(0, 6),
                               ),
-                            );
-                          }
-
-                          final offset = _isLoadingOlder ? 1 : 0;
-                          final message = messages[index - offset];
-                          final currentUser = FirebaseAuth.instance.currentUser;
-                          final isMe = currentUser != null && currentUser.uid == message.senderId;
-                          final replyTarget = message.hasReply ? _findReplyTarget(message.replyToMessageId) : null;
-
-                          return Align(
-                            alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-                            child: GestureDetector(
-                              onLongPress: () => _showActions(message),
-                              child: Container(
-                                constraints: const BoxConstraints(maxWidth: 520),
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: isMe ? AppTheme.primary : Colors.white,
-                                  borderRadius: BorderRadius.only(
-                                    topLeft: const Radius.circular(16),
-                                    topRight: const Radius.circular(16),
-                                    bottomLeft: Radius.circular(isMe ? 16 : 4),
-                                    bottomRight: Radius.circular(isMe ? 4 : 16),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  UserAvatar(
+                                    name: message.senderUsername,
+                                    username: message.senderUsername,
+                                    size: 30,
+                                    imageUrl: message.senderPhoto,
+                                    color: isMe ? Colors.white : null,
                                   ),
-                                  border: Border.all(color: isMe ? AppTheme.primary : AppTheme.border),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.04),
-                                      blurRadius: 16,
-                                      offset: const Offset(0, 6),
-                                    ),
-                                  ],
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        UserAvatar(
-                                          name: message.senderUsername,
-                                          size: 30,
-                                          imageUrl: message.senderPhoto,
-                                          color: isMe ? Colors.white : null,
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                message.senderUsername,
-                                                style: TextStyle(
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: isMe ? Colors.white : AppTheme.textPrimary,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 2),
-                                              Text(
-                                                _formatTimestamp(message.createdAt),
-                                                style: TextStyle(
-                                                  fontSize: 10,
-                                                  color: isMe ? Colors.white70 : AppTheme.textMuted,
-                                                ),
-                                              ),
-                                            ],
+                                        Text(
+                                          message.senderUsername,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                            color: isMe ? Colors.white : AppTheme.textPrimary,
                                           ),
                                         ),
-                                        if (message.edited)
-                                          Text(
-                                            'edited',
-                                            style: TextStyle(fontSize: 10, color: isMe ? Colors.white70 : AppTheme.textMuted),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          _formatTimestamp(message.createdAt),
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: isMe ? Colors.white70 : AppTheme.textMuted,
                                           ),
+                                        ),
                                       ],
                                     ),
-                                    if (replyTarget != null) ...[
-                                      const SizedBox(height: 10),
-                                      Container(
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: BoxDecoration(
-                                          color: isMe ? Colors.white.withOpacity(0.12) : const Color(0xFFF8FAFC),
-                                          borderRadius: BorderRadius.circular(10),
-                                          border: Border(left: BorderSide(color: isMe ? Colors.white : AppTheme.primary, width: 3)),
+                                  ),
+                                  if (message.edited)
+                                    Text(
+                                      'edited',
+                                      style: TextStyle(fontSize: 10, color: isMe ? Colors.white70 : AppTheme.textMuted),
+                                    ),
+                                ],
+                              ),
+                              if (replyTarget != null) ...[
+                                const SizedBox(height: 10),
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: isMe ? Colors.white.withOpacity(0.12) : const Color(0xFFF8FAFC),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border(left: BorderSide(color: isMe ? Colors.white : AppTheme.primary, width: 3)),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        replyTarget.senderUsername,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: isMe ? Colors.white : AppTheme.primary,
                                         ),
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        replyTarget.deleted ? 'Message deleted' : replyTarget.text,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: isMe ? Colors.white70 : AppTheme.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 10),
+                              Text(
+                                message.deleted ? 'This message was deleted' : message.text,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  height: 1.45,
+                                  fontStyle: message.deleted ? FontStyle.italic : FontStyle.normal,
+                                  color: message.deleted
+                                      ? (isMe ? Colors.white70 : AppTheme.textMuted)
+                                      : (isMe ? Colors.white : AppTheme.textSecondary),
+                                ),
+                              ),
+                              if (message.attachments.isNotEmpty) ...[
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: message.attachments.map((attachment) {
+                                    return InkWell(
+                                      onTap: () => launchUrl(
+                                        Uri.parse(attachment.fileUrl),
+                                        mode: LaunchMode.externalApplication,
+                                      ),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                        decoration: BoxDecoration(
+                                          color: isMe
+                                              ? Colors.white.withOpacity(0.12)
+                                              : const Color(0xFFF8FAFC),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color: isMe ? Colors.white.withOpacity(0.18) : AppTheme.border,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            Text(
-                                              replyTarget.senderUsername,
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w700,
-                                                color: isMe ? Colors.white : AppTheme.primary,
-                                              ),
+                                            Icon(
+                                              _iconForAttachmentType(attachment.fileType),
+                                              size: 16,
+                                              color: isMe ? Colors.white : AppTheme.primary,
                                             ),
-                                            const SizedBox(height: 2),
+                                            const SizedBox(width: 8),
                                             Text(
-                                              replyTarget.deleted ? 'Message deleted' : replyTarget.text,
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
+                                              attachment.fileName,
                                               style: TextStyle(
-                                                fontSize: 11,
-                                                color: isMe ? Colors.white70 : AppTheme.textSecondary,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: isMe ? Colors.white : AppTheme.textPrimary,
                                               ),
                                             ),
                                           ],
                                         ),
                                       ),
-                                    ],
-                                    const SizedBox(height: 10),
-                                    Text(
-                                      message.deleted ? 'This message was deleted' : message.text,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        height: 1.45,
-                                        fontStyle: message.deleted ? FontStyle.italic : FontStyle.normal,
-                                        color: message.deleted
-                                            ? (isMe ? Colors.white70 : AppTheme.textMuted)
-                                            : (isMe ? Colors.white : AppTheme.textSecondary),
-                                      ),
-                                    ),
-                                  ],
+                                    );
+                                  }).toList(),
                                 ),
-                              ),
-                            ),
-                          );
-                        },
+                              ],
+                            ],
+                          ),
+                        ),
                       ),
                     );
                   },
                 ),
               ),
-              if (_replyTarget != null || _editingTarget != null)
-                Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.border),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(_editingTarget != null ? Icons.edit_outlined : Icons.reply_outlined, size: 18, color: AppTheme.primary),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          _editingTarget != null
-                              ? 'Editing message'
-                              : 'Replying to ${_replyTarget?.senderUsername ?? ''}',
-                          style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () => setState(() {
-                          _replyTarget = null;
-                          _editingTarget = null;
-                          if (_editingTarget == null) {
-                            _controller.clear();
-                          }
-                        }),
-                        child: const Text('Cancel'),
-                      ),
-                    ],
-                  ),
-                ),
+            ),
+            if (_replyTarget != null || _editingTarget != null)
               Container(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  border: Border(top: BorderSide(color: AppTheme.border)),
+                width: double.infinity,
+                margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.border),
                 ),
                 child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    IconButton(
-                      onPressed: () => Navigator.pushNamed(context, '/project/${widget.projectId}/call'),
-                      icon: const Icon(Icons.video_call_outlined, color: AppTheme.textSecondary, size: 20),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                    ),
+                    Icon(_editingTarget != null ? Icons.edit_outlined : Icons.reply_outlined, size: 18, color: AppTheme.primary),
+                    const SizedBox(width: 10),
                     Expanded(
-                      child: TextField(
-                        controller: _controller,
-                        maxLines: 5,
-                        minLines: 1,
-                        textInputAction: TextInputAction.newline,
-                        decoration: InputDecoration(
-                          hintText: _editingTarget != null ? 'Edit message' : 'Message this project',
-                        ),
-                        style: const TextStyle(fontSize: 14),
+                      child: Text(
+                        _editingTarget != null
+                            ? 'Editing message'
+                            : 'Replying to ${_replyTarget?.senderUsername ?? ''}',
+                        style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    ValueListenableBuilder<TextEditingValue>(
-                      valueListenable: _controller,
-                      builder: (_, value, __) {
-                        final active = value.text.trim().isNotEmpty;
-                        return GestureDetector(
-                          onTap: active ? _sendMessage : null,
-                          child: Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: active ? AppTheme.primary : const Color(0xFFD1D5DB),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
-                          ),
-                        );
-                      },
+                    TextButton(
+                      onPressed: () => setState(() {
+                        _replyTarget = null;
+                        _editingTarget = null;
+                        _pendingAttachments.clear();
+                        if (_editingTarget == null) {
+                          _controller.clear();
+                        }
+                      }),
+                      child: const Text('Cancel'),
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
+            if (_isUploadingAttachments)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _uploadLabel.isNotEmpty ? 'Uploading $_uploadLabel' : 'Uploading attachment...',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    LinearProgressIndicator(value: _uploadProgress),
+                  ],
+                ),
+              ),
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(top: BorderSide(color: AppTheme.border)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_pendingAttachments.isNotEmpty)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppTheme.border),
+                      ),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: List.generate(_pendingAttachments.length, (index) {
+                          final file = _pendingAttachments[index];
+                          return Chip(
+                            label: Text(file.name, overflow: TextOverflow.ellipsis),
+                            avatar: Icon(_iconForAttachmentType(file.name.split('.').last), size: 16),
+                            onDeleted: () => _removePendingAttachment(index),
+                          );
+                        }),
+                      ),
+                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      IconButton(
+                        onPressed: _pickAttachments,
+                        icon: const Icon(Icons.attach_file, color: AppTheme.textSecondary, size: 20),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pushNamed(context, '/project/${widget.projectId}/call'),
+                        icon: const Icon(Icons.call_outlined, color: AppTheme.textSecondary, size: 20),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                      ),
+                      Expanded(
+                        child: TextField(
+                          controller: _controller,
+                          maxLines: 5,
+                          minLines: 1,
+                          textInputAction: TextInputAction.newline,
+                          decoration: InputDecoration(
+                            hintText: _editingTarget != null ? 'Edit message' : 'Message this project',
+                          ),
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: _controller,
+                        builder: (_, value, __) {
+                          final active = value.text.trim().isNotEmpty || _pendingAttachments.isNotEmpty;
+                          return GestureDetector(
+                            onTap: active ? _sendMessage : null,
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: active ? AppTheme.primary : const Color(0xFFD1D5DB),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         );
       },
     );
@@ -530,5 +725,20 @@ class _ChatChannelScreenState extends State<ChatChannelScreen> {
     final minute = value.minute.toString().padLeft(2, '0');
     final period = value.hour >= 12 ? 'PM' : 'AM';
     return '$month/$day $hour12:$minute $period';
+  }
+
+  IconData _iconForAttachmentType(String fileType) {
+    switch (fileType.toLowerCase()) {
+      case 'image':
+        return Icons.image_outlined;
+      case 'pdf':
+        return Icons.picture_as_pdf_outlined;
+      case 'doc':
+        return Icons.description_outlined;
+      case 'zip':
+        return Icons.archive_outlined;
+      default:
+        return Icons.attach_file;
+    }
   }
 }

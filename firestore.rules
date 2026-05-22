@@ -18,7 +18,10 @@ service cloud.firestore {
     function isProjectAdmin(projectId) {
       return isAuth() && 
              exists(/databases/$(database)/documents/projects/$(projectId)) &&
-             get(/databases/$(database)/documents/projects/$(projectId)).data.createdBy == request.auth.uid;
+             (
+               get(/databases/$(database)/documents/projects/$(projectId)).data.createdBy == request.auth.uid ||
+               get(/databases/$(database)/documents/projects/$(projectId)).data.collaborators[request.auth.uid] == 'admin'
+             );
     }
 
     /// Check if user is collaborator (includes admin)
@@ -108,23 +111,74 @@ service cloud.firestore {
         allow read, write: if isProjectCollaborator(projectId);
       }
 
+      match /ideaBoard/{levelId}/{blockId}/{fileName} {
+        allow read, write, delete: if isProjectCollaborator(projectId);
+      }
+
+      // NOTE: Project-wide messages are deprecated. Use channel-scoped messages.
+      // Channel-based messaging security rules live under /projects/{projectId}/channels/{channelId}
       match /messages/{messageId} {
-        allow read: if isProjectChatReader(projectId);
-        allow create: if isProjectCollaborator(projectId)
-          && request.resource.data.projectId == projectId
-          && request.resource.data.senderId == request.auth.uid
-          && request.resource.data.text is string
-          && request.resource.data.text.size() > 0;
-        allow update: if isProjectCollaborator(projectId)
-          && resource.data.projectId == projectId
-          && (resource.data.senderId == request.auth.uid || isProjectAdmin(projectId))
-          && request.resource.data.projectId == resource.data.projectId;
-        allow delete: if isProjectAdmin(projectId) || resource.data.senderId == request.auth.uid;
+        allow read, create, update, delete: if false; // disallow legacy project-level access
+      }
+
+      // ============ CHANNELS ============
+      match /channels/{channelId} {
+        // Channel document access
+        allow read: if (
+          // Public project: non-private channels visible to public collaborators
+          (isPublicProject(projectId) && resource.data.isPrivate == false) ||
+          // Project collaborators can read public channels
+          (isProjectCollaborator(projectId) && resource.data.isPrivate == false) ||
+          // Channel members can read private channels
+          (resource.data.isPrivate == true && exists(/databases/$(database)/documents/projects/$(projectId)/channels/$(channelId)/members/$(request.auth.uid))) ||
+          isProjectAdmin(projectId)
+        );
+
+        allow create: if isProjectAdmin(projectId) || isProjectCollaborator(projectId);
+        allow update, delete: if isProjectAdmin(projectId) || (isAuth() && resource.data.createdBy == request.auth.uid);
+
+        // Members subcollection: per-user unread state and membership list
+        match /members/{memberId} {
+          // Users can read/write their own member doc; admins can read all
+          allow read: if isAuth() && (request.auth.uid == memberId || isProjectAdmin(projectId));
+          allow create: if isAuth() && request.auth.uid == memberId;
+          allow update: if isAuth() && request.auth.uid == memberId;
+          allow delete: if isProjectAdmin(projectId) || (isAuth() && request.auth.uid == memberId);
+        }
+
+        // Messages subcollection: channel-scoped messages
+        match /messages/{messageId} {
+          allow create: if isAuth() && (
+            // For private channels, only channel members can create
+            (get(/databases/$(database)/documents/projects/$(projectId)/channels/$(channelId)).data.isPrivate == true && exists(/databases/$(database)/documents/projects/$(projectId)/channels/$(channelId)/members/$(request.auth.uid))) ||
+            // For public channels, collaborators (or public viewers for public projects) can create
+            (get(/databases/$(database)/documents/projects/$(projectId)/channels/$(channelId)).data.isPrivate == false && (isProjectCollaborator(projectId) || isPublicProject(projectId)))
+          ) && request.resource.data.senderId == request.auth.uid
+            && request.resource.data.projectId == projectId
+            && request.resource.data.channelId == channelId;
+
+          allow read: if isAuth() && (
+            (get(/databases/$(database)/documents/projects/$(projectId)/channels/$(channelId)).data.isPrivate == true && exists(/databases/$(database)/documents/projects/$(projectId)/channels/$(channelId)/members/$(request.auth.uid))) ||
+            (get(/databases/$(database)/documents/projects/$(projectId)/channels/$(channelId)).data.isPrivate == false && (isProjectCollaborator(projectId) || isPublicProject(projectId)))
+          );
+
+          allow update: if isAuth() && (
+            (resource.data.senderId == request.auth.uid) || isProjectAdmin(projectId)
+          ) && request.resource.data.senderId == resource.data.senderId;
+
+          allow delete: if isAuth() && (resource.data.senderId == request.auth.uid || isProjectAdmin(projectId));
+        }
       }
 
       match /callSessions/{callId} {
         allow read, create, update: if isProjectCollaborator(projectId);
         allow delete: if isProjectAdmin(projectId);
+      }
+
+      match /callSchedules/{scheduleId} {
+        allow read: if isProjectCollaborator(projectId);
+        allow create, delete: if isProjectAdmin(projectId);
+        allow update: if isProjectAdmin(projectId);
       }
 
       match /members/{memberId} {
@@ -182,11 +236,6 @@ service cloud.firestore {
       // DELETE: Only project admin can delete (for cleanup)
       allow delete: if isProjectAdmin(resource.data.projectId);
     }
-
-    // ============ FIREBASE STORAGE ============
-    // Secured via Google Cloud Storage rules (separate configuration)
-    // joinRequests/{projectId}/{requestId}/* - accessible to authenticated users,
-    // files belong to project admins
 
     // ============ DENY ALL OTHER ACCESS ============
     match /{document=**} {

@@ -1,21 +1,14 @@
+import 'dart:async';
 import 'dart:typed_data';
-import 'package:firebase_storage/firebase_storage.dart';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:file_picker/file_picker.dart' as picker;
 
-// File picker removed in v1.0 - using simple file model instead
-class PlatformFile {
-  final String name;
-  final String? path;
-  final Uint8List? bytes;
-  final int size;
+import 'user_service.dart';
 
-  PlatformFile({
-    required this.name,
-    this.path,
-    this.bytes,
-    required this.size,
-  });
-}
+typedef PlatformFile = picker.PlatformFile;
 
 
 class FileService {
@@ -25,6 +18,34 @@ class FileService {
 
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  Future<Uint8List> _resolveBytes(PlatformFile file) async {
+    if (file.bytes != null) {
+      return file.bytes!;
+    }
+
+    if (file.readStream != null) {
+      final chunks = <int>[];
+      await for (final chunk in file.readStream!) {
+        chunks.addAll(chunk);
+      }
+      return Uint8List.fromList(chunks);
+    }
+
+    throw Exception('Selected file has no readable content');
+  }
+
+  Future<String> _resolveUsername(String userId) async {
+    try {
+      final doc = await _firestore.collection('users').doc(userId).get();
+      final username = doc.data()?['username'] as String? ?? '';
+      return username.trim();
+    } catch (e) {
+      print('Failed to resolve uploader username: $e');
+      return '';
+    }
+  }
 
   Future<String> uploadBytes({
     required String storagePath,
@@ -128,6 +149,8 @@ class FileService {
     required String levelId,
     required String blockId,
     required PlatformFile file,
+    String? fileId,
+    void Function(double progress, String fileName)? onProgress,
   }) async {
     final authUser = _auth.currentUser;
     if (authUser == null) {
@@ -135,8 +158,9 @@ class FileService {
     }
 
     final fileName = file.name;
-    final storagePath =
-        'projects/$projectId/ideaBoard/$levelId/$blockId/${DateTime.now().millisecondsSinceEpoch}_$fileName';
+    final attachmentId = fileId ?? _firestore.collection('projectFiles').doc().id;
+    final storagePath = 'project_files/$projectId/$blockId/$attachmentId';
+    final uploadedByUsername = await _resolveUsername(authUser.uid);
 
     final ref = _storage.ref(storagePath);
     final metadata = SettableMetadata(
@@ -146,25 +170,126 @@ class FileService {
         'levelId': levelId,
         'blockId': blockId,
         'uploadedBy': authUser.uid,
+        'uploadedByUsername': uploadedByUsername,
+        'fileName': fileName,
       },
     );
 
-    if (file.bytes == null) {
-      throw Exception('Selected file has no readable content');
-    }
-    await ref.putData(file.bytes!, metadata);
+    final bytes = await _resolveBytes(file);
+    final task = ref.putData(bytes, metadata);
+
+    task.snapshotEvents.listen((snapshot) {
+      if (snapshot.totalBytes > 0) {
+        onProgress?.call(snapshot.bytesTransferred / snapshot.totalBytes, fileName);
+      }
+    }, onError: (error) {
+      print('Upload progress stream failed for $fileName: $error');
+    });
+
+    await task;
 
     final url = await ref.getDownloadURL();
     return {
-      'id': ref.name,
+      'id': attachmentId,
+      'fileName': fileName,
+      'fileUrl': url,
+      'fileType': _getCategory(fileName),
+      'fileSize': file.size,
+      'uploadedBy': authUser.uid,
+      'uploadedByUsername': uploadedByUsername,
+      'uploadedAt': DateTime.now().toIso8601String(),
+      'storagePath': ref.fullPath,
+      'projectId': projectId,
+      'blockId': blockId,
       'name': fileName,
       'url': url,
       'type': _getCategory(fileName),
       'sizeBytes': file.size,
+    };
+  }
+
+  Future<Map<String, dynamic>> uploadProjectChatAttachment({
+    required String projectId,
+    required String messageId,
+    required PlatformFile file,
+    String? fileId,
+    void Function(double progress, String fileName)? onProgress,
+  }) async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) {
+      throw Exception('User must be logged in');
+    }
+
+    final attachmentId = fileId ?? _firestore.collection('projectFiles').doc().id;
+    final storagePath = 'project_chat_files/$projectId/$messageId/$attachmentId';
+    final uploadedByUsername = await _resolveUsername(authUser.uid);
+
+    final ref = _storage.ref(storagePath);
+    final metadata = SettableMetadata(
+      contentType: _getContentType(file.name),
+      customMetadata: {
+        'projectId': projectId,
+        'messageId': messageId,
+        'uploadedBy': authUser.uid,
+        'uploadedByUsername': uploadedByUsername,
+        'fileName': file.name,
+      },
+    );
+
+    final bytes = await _resolveBytes(file);
+    final task = ref.putData(bytes, metadata);
+    task.snapshotEvents.listen((snapshot) {
+      if (snapshot.totalBytes > 0) {
+        onProgress?.call(snapshot.bytesTransferred / snapshot.totalBytes, file.name);
+      }
+    }, onError: (error) {
+      print('Upload progress stream failed for ${file.name}: $error');
+    });
+
+    await task;
+
+    final url = await ref.getDownloadURL();
+    return {
+      'id': attachmentId,
+      'fileName': file.name,
+      'fileUrl': url,
+      'fileType': _getCategory(file.name),
+      'fileSize': file.size,
       'uploadedBy': authUser.uid,
+      'uploadedByUsername': uploadedByUsername,
       'uploadedAt': DateTime.now().toIso8601String(),
       'storagePath': ref.fullPath,
+      'projectId': projectId,
+      'messageId': messageId,
+      'name': file.name,
+      'url': url,
+      'type': _getCategory(file.name),
+      'sizeBytes': file.size,
     };
+  }
+
+  Future<void> deleteIdeaBoardAttachment(String storagePath) async {
+    if (storagePath.trim().isEmpty) {
+      return;
+    }
+
+    try {
+      await _storage.ref(storagePath).delete();
+    } catch (e) {
+      print('Failed to delete idea board attachment [$storagePath]: ${e.toString()}');
+    }
+  }
+
+  Future<void> deleteProjectChatAttachment(String storagePath) async {
+    if (storagePath.trim().isEmpty) {
+      return;
+    }
+
+    try {
+      await _storage.ref(storagePath).delete();
+    } catch (e) {
+      print('Failed to delete chat attachment [$storagePath]: ${e.toString()}');
+    }
   }
 
   /// Get download URL for a file

@@ -1,0 +1,54 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function isProjectAdmin(projectId) {
+      return isAuth() &&
+        firestore.exists(/databases/(default)/documents/projects/$(projectId)) &&
+        (
+          firestore.get(/databases/(default)/documents/projects/$(projectId)).data.createdBy == request.auth.uid ||
+          firestore.get(/databases/(default)/documents/projects/$(projectId)).data.collaborators[request.auth.uid] == 'admin'
+        );
+    }
+
+    function isProjectCollaborator(projectId) {
+      return isAuth() &&
+        firestore.exists(/databases/(default)/documents/projects/$(projectId)) &&
+        (
+          firestore.get(/databases/(default)/documents/projects/$(projectId)).data.createdBy == request.auth.uid ||
+          request.auth.uid in firestore.get(/databases/(default)/documents/projects/$(projectId)).data.collaborators
+        );
+    }
+
+    function isPublicProject(projectId) {
+      return firestore.exists(/databases/(default)/documents/projects/$(projectId)) &&
+        firestore.get(/databases/(default)/documents/projects/$(projectId)).data.visibility == 'public';
+    }
+
+    function canReadProjectFile(projectId) {
+      return isProjectCollaborator(projectId) || isPublicProject(projectId);
+    }
+
+    match /project_files/{projectId}/{blockId}/{fileId} {
+      allow read: if canReadProjectFile(projectId);
+      allow write, delete: if isProjectCollaborator(projectId);
+    }
+
+    match /project_chat_files/{projectId}/{messageId}/{fileId} {
+      allow read: if canReadProjectFile(projectId);
+      allow write, delete: if isProjectCollaborator(projectId);
+    }
+
+    match /joinRequests/{projectId}/{requestId}/{fileName} {
+      allow read, write, delete: if isAuth();
+    }
+
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -53,8 +53,8 @@ class ProjectOverviewScreen extends StatelessWidget {
               if (isAdmin)
                 Padding(
                   padding: const EdgeInsets.only(right: 12),
-                  child: GestureDetector(
-                    onTap: () {
+                  child: TextButton.icon(
+                    onPressed: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => ProjectAdminScreen(
@@ -64,22 +64,14 @@ class ProjectOverviewScreen extends StatelessWidget {
                         ),
                       );
                     },
-                    child: Tooltip(
-                      message: 'Manage Project',
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primary.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(
-                          Icons.settings,
-                          color: AppTheme.primary,
-                          size: 20,
-                        ),
-                      ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppTheme.primary,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      backgroundColor: AppTheme.primary.withOpacity(0.08),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
+                    icon: const Icon(Icons.settings, size: 18),
+                    label: const Text('Manage Project'),
                   ),
                 ),
               Padding(
@@ -247,9 +239,11 @@ class ProjectOverviewScreen extends StatelessWidget {
                           const SizedBox(height: 12),
                           ...memberIds.map((userId) {
                             final user = members[userId];
-                            final isAdmin = project.createdBy == userId;
-                            final username = user?.username.isNotEmpty == true ? user!.username : userId.substring(0, 6);
-                            final displayName = user?.name.isNotEmpty == true ? user!.name : username;
+                            final isAdmin = project.isAdmin(userId);
+                            final username = user?.username.trim().isNotEmpty == true ? user!.username : '';
+                            final displayName = user?.name.trim().isNotEmpty == true
+                                ? user!.name
+                                : (username.isNotEmpty ? username : 'Unknown');
                             final photoUrl = user?.photoUrl ?? '';
                             return Container(
                               margin: const EdgeInsets.only(bottom: 10),
@@ -261,7 +255,12 @@ class ProjectOverviewScreen extends StatelessWidget {
                               ),
                               child: Row(
                                 children: [
-                                  UserAvatar(name: displayName, size: 38, imageUrl: photoUrl),
+                                  UserAvatar(
+                                    name: displayName,
+                                    username: username,
+                                    size: 38,
+                                    imageUrl: photoUrl,
+                                  ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
@@ -277,7 +276,7 @@ class ProjectOverviewScreen extends StatelessWidget {
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
-                                          '@$username',
+                                          '@${username.isNotEmpty ? username : '?'}',
                                           style: const TextStyle(
                                             fontSize: 12,
                                             color: AppTheme.textSecondary,
@@ -437,9 +436,11 @@ class ProjectOverviewScreen extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () =>
-                      Navigator.pushNamed(context, '/project/$projectId/idea-board'),
-                  icon: const Icon(Icons.space_dashboard_outlined),
+                  onPressed: () => Navigator.pushNamed(
+                    context,
+                    '/project/$projectId/workspace',
+                  ),
+                  icon: const Icon(Icons.folder_open_outlined),
                   label: const Text('Open Project Workspace'),
                 ),
               ),
@@ -468,29 +469,25 @@ class _CollaboratorAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Transform.translate(
       offset: const Offset(-8.0, 0),
-      child: Tooltip(
-        message: '$role',
-        child: Container(
-          width: 28,
-          height: 28,
-          decoration: BoxDecoration(
-            color: role == 'admin'
-                ? const Color(0xFF3B82F6)
-                : const Color(0xFF7C3AED),
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 1.5),
-          ),
-          child: Center(
-            child: Text(
-              userId.substring(0, 1).toUpperCase(),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-              ),
+      child: FutureBuilder<AppUser?>(
+        future: UserService.instance.getUserById(userId),
+        builder: (context, snapshot) {
+          final user = snapshot.data;
+          return Tooltip(
+            message: user?.username.isNotEmpty == true
+                ? '@${user!.username} · $role'
+                : role,
+            child: UserAvatar(
+              name: user?.name ?? '',
+              username: user?.username,
+              size: 28,
+              imageUrl: user?.photoUrl,
+              color: role == 'admin'
+                  ? const Color(0xFF3B82F6)
+                  : const Color(0xFF7C3AED),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/models.dart';
+import 'file_service.dart';
 import 'user_service.dart';
 
 class ProjectService {
@@ -22,6 +23,24 @@ class ProjectService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final UserService _userService = UserService.instance;
 
+  bool _isAdminRole(Map<String, dynamic> data, String userId) {
+    final createdBy = data['createdBy'] as String?;
+    final collaborators = _parseCollaboratorsMap(
+      data['collaborators'],
+      docId: data['id'] as String? ?? '',
+    );
+    return createdBy == userId || collaborators[userId] == 'admin';
+  }
+
+  bool _canEditIdeaBoard(Map<String, dynamic> data, String userId) {
+    final createdBy = data['createdBy'] as String? ?? '';
+    final collaborators = _parseCollaboratorsMap(
+      data['collaborators'],
+      docId: data['id'] as String? ?? '',
+    );
+    return createdBy == userId || collaborators.containsKey(userId);
+  }
+
   // ============ PROJECT STREAMS ============
 
   /// Get all projects for the current user (created by or collaborator)
@@ -32,93 +51,123 @@ class ProjectService {
         return Stream.value([]);
       }
 
-      // Listen to all projects and filter on client side
-      return _firestore
-          .collection('projects')
-          .snapshots()
-          .map<List<Project>>((snapshot) {
-            try {
-              final projects = <Project>[];
-              
-              for (final doc in snapshot.docs) {
-                try {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final createdBy = data['createdBy'] as String? ?? '';
-                  final collaborators = _parseCollaboratorsMap(
-                    data['collaborators'],
-                    docId: doc.id,
-                  );
-                  
-                  // Include if user created it OR user is a collaborator
-                  if (createdBy == authUser.uid || collaborators.containsKey(authUser.uid)) {
-                    print('📁 Project ${doc.id} visible to ${authUser.uid}');
-                    final project = _parseProject(doc);
-                    projects.add(project);
-                  }
-                } catch (e) {
-                  print('⚠️  Error parsing project ${doc.id}: $e');
-                  // Skip broken documents, continue with others
-                }
-              }
-              
-              print('✅ Loaded ${projects.length} accessible projects');
-              return projects;
-            } catch (e) {
-              print('❌ Error filtering projects: $e');
-              return [];
-            }
-          });
+      // Create a stream controller first
+      late StreamController<List<Project>> controller;
+      controller = StreamController<List<Project>>.broadcast(onCancel: () {
+        // Will be managed in onListen
+      });
+
+      // We'll manually subscribe to the three queries
+      late StreamSubscription<QuerySnapshot<Map<String, dynamic>>> subCreated;
+      late StreamSubscription<QuerySnapshot<Map<String, dynamic>>> subAdmin;
+      late StreamSubscription<QuerySnapshot<Map<String, dynamic>>> subCollaborator;
+
+      QuerySnapshot<Map<String, dynamic>>? lastCreated;
+      QuerySnapshot<Map<String, dynamic>>? lastAdmin;
+      QuerySnapshot<Map<String, dynamic>>? lastCollaborator;
+
+      void emitCombined() {
+        final docsMap = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+        if (lastCreated != null) {
+          for (final d in lastCreated!.docs) docsMap[d.id] = d;
+        }
+        if (lastAdmin != null) {
+          for (final d in lastAdmin!.docs) docsMap[d.id] = d;
+        }
+        if (lastCollaborator != null) {
+          for (final d in lastCollaborator!.docs) docsMap[d.id] = d;
+        }
+
+        final projects = <Project>[];
+        for (final doc in docsMap.values) {
+          try {
+            projects.add(_parseProject(doc));
+          } catch (e) {
+            print('⚠️ Error parsing project ${doc.id}: $e');
+          }
+        }
+
+        if (!controller.isClosed) {
+          controller.add(projects);
+        }
+      }
+
+      try {
+        // Query 1: projects created by the user
+        final createdQuery = _firestore
+            .collection('projects')
+            .where('createdBy', isEqualTo: authUser.uid)
+            .snapshots();
+
+        // Query 2: projects where user is admin
+        final adminQuery = _firestore
+            .collection('projects')
+            .where('collaborators.${authUser.uid}', isEqualTo: 'admin')
+            .snapshots();
+
+        // Query 3: projects where user is collaborator
+        final collaboratorQuery = _firestore
+            .collection('projects')
+            .where('collaborators.${authUser.uid}', isEqualTo: 'collaborator')
+            .snapshots();
+
+        subCreated = createdQuery.listen((snap) {
+          lastCreated = snap;
+          emitCombined();
+        }, onError: (e, st) {
+          print('⚠️ watchMyProjects createdQuery error: $e');
+        });
+
+        subAdmin = adminQuery.listen((snap) {
+          lastAdmin = snap;
+          emitCombined();
+        }, onError: (e, st) {
+          print('⚠️ watchMyProjects adminQuery error: $e');
+        });
+
+        subCollaborator = collaboratorQuery.listen((snap) {
+          lastCollaborator = snap;
+          emitCombined();
+        }, onError: (e, st) {
+          print('⚠️ watchMyProjects collaboratorQuery error: $e');
+        });
+
+        controller.onCancel = () async {
+          await subCreated.cancel();
+          await subAdmin.cancel();
+          await subCollaborator.cancel();
+        };
+      } catch (e) {
+        print('❌ Error setting up watchMyProjects queries: $e');
+        if (!controller.isClosed) {
+          controller.addError(e);
+        }
+      }
+
+      return controller.stream;
     });
   }
 
   /// Get all public projects for discovery
   Stream<List<Project>> watchPublicProjects() {
-    return _auth.authStateChanges().asyncExpand((authUser) {
-      return _firestore
-          .collection('projects')
-          .where('visibility', isEqualTo: 'public')
-          .snapshots()
-          .map((snapshot) {
-        return snapshot.docs
-            .where((doc) {
-              // Exclude projects where user is already a collaborator.
-              if (authUser == null) return true;
-              final data = doc.data();
-              final createdBy = data['createdBy'] as String? ?? '';
-              final collaborators = _parseCollaboratorsMap(
-                data['collaborators'],
-                docId: doc.id,
-              );
-
-              return createdBy != authUser.uid &&
-                  !collaborators.containsKey(authUser.uid);
-            })
-            .map((doc) => _parseProject(doc))
-            .toList();
-      });
-    });
+    return _firestore
+        .collection('projects')
+        .where('visibility', isEqualTo: 'public')
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs
+              .map((doc) => _parseProject(doc))
+              .toList();
+        });
   }
 
   /// Get a single project by ID
   Stream<Project?> watchProject(String projectId) {
-    return _auth.authStateChanges().asyncExpand((authUser) {
-      return _firestore.collection('projects').doc(projectId).snapshots().asyncMap((doc) async {
-        if (!doc.exists) {
-          return null;
-        }
-
-        final project = _parseProject(doc);
-        if (project.levels.isEmpty && authUser != null && project.createdBy == authUser.uid) {
-          await _ensureDefaultLevelsIfMissing(projectId);
-          final refreshed = await _firestore.collection('projects').doc(projectId).get();
-          if (!refreshed.exists) {
-            return null;
-          }
-          return _parseProject(refreshed);
-        }
-
-        return project;
-      });
+    return _firestore.collection('projects').doc(projectId).snapshots().map((doc) {
+      if (!doc.exists) {
+        return null;
+      }
+      return _parseProject(doc);
     });
   }
 
@@ -213,7 +262,27 @@ class ProjectService {
     };
 
     try {
-      await projectRef.set(projectData);
+      // Create project atomically with default #general channel
+      final batch = _firestore.batch();
+      
+      batch.set(projectRef, projectData);
+      
+      // Create default #general channel
+      final generalChannelRef = projectRef.collection('channels').doc('general');
+      final channelData = {
+        'id': 'general',
+        'projectId': projectRef.id,
+        'name': 'general',
+        'createdBy': authUser.uid,
+        'members': <String>[],
+        'isPrivate': false,
+        'createdAt': Timestamp.now(),
+        'lastMessageAt': null,
+        'messageCount': 0,
+      };
+      batch.set(generalChannelRef, channelData);
+      
+      await batch.commit();
       return projectRef.id;
     } catch (e) {
       throw Exception('Failed to create project: ${e.toString()}');
@@ -236,8 +305,8 @@ class ProjectService {
 
     // Verify user is admin
     final projectDoc = await _firestore.collection('projects').doc(projectId).get();
-    final createdBy = projectDoc.data()?['createdBy'];
-    if (createdBy != authUser.uid) {
+    final projectData = projectDoc.data()!;
+    if (!_isAdminRole(projectData, authUser.uid)) {
       throw Exception('Only project admin can update settings');
     }
 
@@ -269,8 +338,8 @@ class ProjectService {
       throw Exception('Project not found');
     }
 
-    final createdBy = projectDoc.data()?['createdBy'] as String?;
-    if (createdBy != authUser.uid) {
+    final projectData = projectDoc.data()!;
+    if (!_isAdminRole(projectData, authUser.uid)) {
       throw Exception('Only project admin can modify levels');
     }
 
@@ -352,6 +421,7 @@ class ProjectService {
   Future<void> addCollaboratorByUsername({
     required String projectId,
     required String collaboratorUsername,
+    bool makeAdmin = false,
   }) async {
     final authUser = _auth.currentUser;
     if (authUser == null) {
@@ -365,8 +435,7 @@ class ProjectService {
     }
 
     final data = projectDoc.data()!;
-    final createdBy = data['createdBy'] as String?;
-    if (createdBy != authUser.uid) {
+    if (!_isAdminRole(data, authUser.uid)) {
       throw Exception('Only project admin can add collaborators');
     }
 
@@ -389,15 +458,18 @@ class ProjectService {
     );
 
     if (collaborators.containsKey(userId)) {
-      throw Exception('User "@${collaboratorUsername}" is already a collaborator');
+      if (makeAdmin && collaborators[userId] != 'admin') {
+        collaborators[userId] = 'admin';
+      } else {
+        throw Exception('User "@${collaboratorUsername}" is already a collaborator');
+      }
+    } else {
+      collaborators[userId] = makeAdmin ? 'admin' : 'collaborator';
     }
-
-    // Add to collaborators map
-    collaborators[userId] = 'collaborator';
 
     await _firestore.collection('projects').doc(projectId).update({
       'collaborators': collaborators,
-      'lastUpdated': DateTime.now().toIso8601String(),
+      'lastUpdated': Timestamp.now(),
     });
 
     await _fanOutProjectNotification(
@@ -415,6 +487,7 @@ class ProjectService {
   Future<void> removeCollaborator({
     required String projectId,
     required String userId,
+    bool deleteContributions = false,
   }) async {
     final authUser = _auth.currentUser;
     if (authUser == null) {
@@ -428,8 +501,7 @@ class ProjectService {
     }
 
     final data = projectDoc.data()!;
-    final createdBy = data['createdBy'] as String?;
-    if (createdBy != authUser.uid) {
+    if (!_isAdminRole(data, authUser.uid)) {
       throw Exception('Only project admin can remove collaborators');
     }
 
@@ -449,10 +521,34 @@ class ProjectService {
 
     collaborators.remove(userId);
 
-    await _firestore.collection('projects').doc(projectId).update({
-      'collaborators': collaborators,
-      'lastUpdated': DateTime.now().toIso8601String(),
+    final projectRef = _firestore.collection('projects').doc(projectId);
+
+    await _firestore.runTransaction((transaction) async {
+      transaction.update(projectRef, {
+        'collaborators': collaborators,
+        'lastUpdated': Timestamp.now(),
+      });
     });
+
+    if (deleteContributions) {
+      final projectSnapshot = await projectRef.get();
+      final projectData = projectSnapshot.data();
+      if (projectData != null) {
+        final blocks = _toMapList(projectData['ideaBoardBlocks']);
+        final remainingBlocks = blocks.where((block) => block['createdBy'] != userId).toList();
+        if (remainingBlocks.length != blocks.length) {
+          await projectRef.update({
+            'ideaBoardBlocks': remainingBlocks,
+            'lastUpdated': Timestamp.now(),
+          });
+        }
+      }
+
+      final messageQuery = await projectRef.collection('messages').where('senderId', isEqualTo: userId).get();
+      for (final doc in messageQuery.docs) {
+        await doc.reference.delete();
+      }
+    }
 
     await _fanOutProjectNotification(
       projectId: projectId,
@@ -463,6 +559,30 @@ class ProjectService {
       excludedUserIds: {authUser.uid},
       data: {'collaboratorId': userId},
     );
+  }
+
+  /// Move a level up or down in the project order.
+  Future<void> moveProjectLevel({
+    required String projectId,
+    required String levelId,
+    required bool moveUp,
+  }) async {
+    await _updateLevels(projectId, (currentLevels) {
+      final index = currentLevels.indexWhere((level) => level['id'] == levelId);
+      if (index == -1) {
+        throw Exception('Level not found');
+      }
+
+      final targetIndex = moveUp ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= currentLevels.length) {
+        return currentLevels;
+      }
+
+      final temp = currentLevels[index];
+      currentLevels[index] = currentLevels[targetIndex];
+      currentLevels[targetIndex] = temp;
+      return currentLevels;
+    });
   }
 
   // ============ JOIN REQUEST MANAGEMENT ============
@@ -570,9 +690,9 @@ class ProjectService {
           // Verify user is admin
           final projectDoc = 
               await _firestore.collection('projects').doc(projectId).get();
-          final createdBy = projectDoc.data()?['createdBy'];
-          
-          if (createdBy != authUser.uid) {
+          final projectData = projectDoc.data();
+
+          if (projectData == null || !_isAdminRole(projectData, authUser.uid)) {
             return []; // Non-admin gets empty list
           }
 
@@ -621,9 +741,9 @@ class ProjectService {
 
     // Verify user is admin
     final projectDoc = 
-        await _firestore.collection('projects').doc(projectId).get();
-    final createdBy = projectDoc.data()?['createdBy'];
-    if (createdBy != authUser.uid) {
+      await _firestore.collection('projects').doc(projectId).get();
+    final projectData = projectDoc.data()!;
+    if (!_isAdminRole(projectData, authUser.uid)) {
       throw Exception('Only project admin can accept join requests');
     }
 
@@ -631,16 +751,16 @@ class ProjectService {
     final batch = _firestore.batch();
 
     // Update project collaborators
-    final collaborators = (projectDoc.data()?['collaborators'] 
-        as Map<String, dynamic>? ?? {})
-      ..cast<String, dynamic>();
+    final collaborators = Map<String, dynamic>.from(
+      projectData['collaborators'] as Map<String, dynamic>? ?? {},
+    );
     collaborators[requestedBy] = 'collaborator';
 
     batch.update(
       _firestore.collection('projects').doc(projectId),
       {
         'collaborators': collaborators,
-        'lastUpdated': DateTime.now().toIso8601String(),
+        'lastUpdated': Timestamp.now(),
       },
     );
 
@@ -687,9 +807,9 @@ class ProjectService {
 
     // Verify user is admin
     final projectDoc = 
-        await _firestore.collection('projects').doc(projectId).get();
-    final createdBy = projectDoc.data()?['createdBy'];
-    if (createdBy != authUser.uid) {
+      await _firestore.collection('projects').doc(projectId).get();
+    final projectData = projectDoc.data()!;
+    if (!_isAdminRole(projectData, authUser.uid)) {
       throw Exception('Only project admin can reject join requests');
     }
 
@@ -747,12 +867,7 @@ class ProjectService {
       }
 
       final data = snapshot.data()!;
-      final isCreator = data['createdBy'] == authUser.uid;
-      final collaborators = _parseCollaboratorsMap(
-        data['collaborators'],
-        docId: projectId,
-      );
-      if (!isCreator && !collaborators.containsKey(authUser.uid)) {
+      if (!_canEditIdeaBoard(data, authUser.uid)) {
         throw Exception('Only collaborators can edit idea board');
       }
 
@@ -794,12 +909,7 @@ class ProjectService {
       }
 
       final data = snapshot.data()!;
-      final isCreator = data['createdBy'] == authUser.uid;
-      final collaborators = _parseCollaboratorsMap(
-        data['collaborators'],
-        docId: projectId,
-      );
-      if (!isCreator && !collaborators.containsKey(authUser.uid)) {
+      if (!_canEditIdeaBoard(data, authUser.uid)) {
         throw Exception('Only collaborators can edit idea board');
       }
 
@@ -841,17 +951,56 @@ class ProjectService {
       }
 
       final data = snapshot.data()!;
-      final isCreator = data['createdBy'] == authUser.uid;
-      final collaborators = _parseCollaboratorsMap(
-        data['collaborators'],
-        docId: projectId,
-      );
-      if (!isCreator && !collaborators.containsKey(authUser.uid)) {
+      if (!_canEditIdeaBoard(data, authUser.uid)) {
         throw Exception('Only collaborators can edit idea board');
       }
 
       final current = _toMapList(data['ideaBoardBlocks']);
       current.removeWhere((item) => item['id'] == blockId);
+
+      transaction.update(ref, {
+        'ideaBoardBlocks': current,
+        'lastUpdated': Timestamp.now(),
+      });
+    });
+  }
+
+  Future<void> moveIdeaBoardBlock({
+    required String projectId,
+    required String blockId,
+    required bool moveUp,
+  }) async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) {
+      throw Exception('User must be logged in');
+    }
+
+    await _firestore.runTransaction((transaction) async {
+      final ref = _firestore.collection('projects').doc(projectId);
+      final snapshot = await transaction.get(ref);
+      if (!snapshot.exists) {
+        throw Exception('Project not found');
+      }
+
+      final data = snapshot.data()!;
+      if (!_canEditIdeaBoard(data, authUser.uid)) {
+        throw Exception('Only collaborators can edit idea board');
+      }
+
+      final current = _toMapList(data['ideaBoardBlocks']);
+      final index = current.indexWhere((item) => item['id'] == blockId);
+      if (index == -1) {
+        throw Exception('Block not found');
+      }
+
+      final targetIndex = moveUp ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= current.length) {
+        return;
+      }
+
+      final temp = current[index];
+      current[index] = current[targetIndex];
+      current[targetIndex] = temp;
 
       transaction.update(ref, {
         'ideaBoardBlocks': current,
@@ -1097,17 +1246,9 @@ class ProjectService {
         for (final file in filesRaw) {
           if (file is! Map) continue;
           final fileMap = Map<String, dynamic>.from(file);
-          files.add(
-            IdeaBoardFile(
-              id: fileMap['id'] as String? ?? _firestore.collection('projects').doc().id,
-              name: fileMap['name'] as String? ?? 'Attachment',
-              url: fileMap['url'] as String? ?? '',
-              type: fileMap['type'] as String? ?? 'file',
-              sizeBytes: fileMap['sizeBytes'] as int? ?? 0,
-              uploadedBy: fileMap['uploadedBy'] as String? ?? '',
-              uploadedAt: _parseDateTime(fileMap['uploadedAt']) ?? DateTime.now(),
-            ),
-          );
+          final normalized = Map<String, dynamic>.from(fileMap)
+            ..putIfAbsent('id', () => _firestore.collection('projects').doc().id);
+          files.add(IdeaBoardFile.fromMap(normalized));
         }
       }
 
@@ -1208,8 +1349,7 @@ class ProjectService {
       }
 
       final data = snapshot.data()!;
-      final createdBy = data['createdBy'] as String?;
-      if (createdBy != authUser.uid) {
+      if (!_isAdminRole(data, authUser.uid)) {
         throw Exception('Only project admin can modify levels');
       }
 
@@ -1292,7 +1432,7 @@ class ProjectService {
       }
 
       final data = snapshot.data()!;
-      if (data['createdBy'] != authUser.uid) {
+      if (!_isAdminRole(data, authUser.uid)) {
         throw Exception('Only project admin can update tracker progress');
       }
 
@@ -1435,11 +1575,255 @@ class ProjectService {
     }
   }
 
-  // ============ CHAT SYSTEM ============
+  // ============ CHANNEL SYSTEM (Discord-style) ============
 
-  /// Watch all messages in a project, ordered newest first with pagination support
-  Stream<List<ProjectChatMessage>> watchProjectMessages(
-    String projectId, {
+  /// Watch all channels in a project
+  Stream<List<ProjectChannel>> watchProjectChannels(String projectId) {
+    return _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('channels')
+        .orderBy('createdAt', descending: false)
+        .snapshots()
+        .map((snapshot) {
+          try {
+            return snapshot.docs
+                .map((doc) => _parseProjectChannel(doc))
+                .toList();
+          } catch (e) {
+            print('❌ Error parsing channels: $e');
+            return [];
+          }
+        });
+  }
+
+  /// Create a new channel in a project
+  Future<String> createChannel({
+    required String projectId,
+    required String name,
+    bool isPrivate = false,
+    List<String> invitedMembers = const [],
+  }) async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) {
+      throw Exception('User must be logged in');
+    }
+
+    // Verify user is collaborator
+    final projectDoc = await _firestore.collection('projects').doc(projectId).get();
+    if (!projectDoc.exists) {
+      throw Exception('Project not found');
+    }
+
+    final projectData = projectDoc.data()!;
+    if (!_canEditIdeaBoard(projectData, authUser.uid)) {
+      throw Exception('You do not have access to this project');
+    }
+
+    // Validate channel name
+    final trimmedName = name
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9-_]'), '-');
+    if (trimmedName.isEmpty) {
+      throw Exception('Channel name cannot be empty');
+    }
+
+    // Check for duplicate channel name
+    final existing = await _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('channels')
+        .where('name', isEqualTo: trimmedName)
+        .get();
+
+    if (existing.docs.isNotEmpty) {
+      throw Exception('Channel "$trimmedName" already exists');
+    }
+
+    final channelRef =
+        _firestore.collection('projects').doc(projectId).collection('channels').doc();
+
+    final channelData = {
+      'id': channelRef.id,
+      'projectId': projectId,
+      'name': trimmedName,
+      'createdBy': authUser.uid,
+      'members': isPrivate ? invitedMembers : <String>[],
+      'isPrivate': isPrivate,
+      'createdAt': Timestamp.now(),
+      'lastMessageAt': null,
+      'messageCount': 0,
+    };
+
+    try {
+      await channelRef.set(channelData);
+      return channelRef.id;
+    } catch (e) {
+      throw Exception('Failed to create channel: ${e.toString()}');
+    }
+  }
+
+  /// Delete a channel (admin or creator only)
+  Future<void> deleteChannel({
+    required String projectId,
+    required String channelId,
+  }) async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) {
+      throw Exception('User must be logged in');
+    }
+
+    // Cannot delete #general channel
+    if (channelId == 'general') {
+      throw Exception('Cannot delete the #general channel');
+    }
+
+    // Verify user is admin
+    final projectDoc = await _firestore.collection('projects').doc(projectId).get();
+    final projectData = projectDoc.data() ?? <String, dynamic>{};
+    if (!_isAdminRole(projectData, authUser.uid)) {
+      throw Exception('Only project admin can delete channels');
+    }
+
+    // Delete all messages in channel, then the channel itself
+    final batch = _firestore.batch();
+    final messagesDocs = await _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('channels')
+        .doc(channelId)
+        .collection('messages')
+        .get();
+
+    for (final msg in messagesDocs.docs) {
+      batch.delete(msg.reference);
+    }
+
+    batch.delete(_firestore.collection('projects').doc(projectId).collection('channels').doc(channelId));
+
+    try {
+      await batch.commit();
+    } catch (e) {
+      throw Exception('Failed to delete channel: ${e.toString()}');
+    }
+  }
+
+  /// Add a member to a private channel
+  Future<void> addChannelMember({
+    required String projectId,
+    required String channelId,
+    required String memberUsername,
+  }) async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) {
+      throw Exception('User must be logged in');
+    }
+
+    // Verify user is channel creator or admin
+    final channelDoc = await _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('channels')
+        .doc(channelId)
+        .get();
+
+    if (!channelDoc.exists) {
+      throw Exception('Channel not found');
+    }
+
+    final channelData = channelDoc.data()!;
+    final createdBy = channelData['createdBy'] as String?;
+
+    if (createdBy != authUser.uid) {
+      final projectDoc = await _firestore.collection('projects').doc(projectId).get();
+      final projectData = projectDoc.data() ?? <String, dynamic>{};
+      if (!_isAdminRole(projectData, authUser.uid)) {
+        throw Exception('Only channel creator or project admin can add members');
+      }
+    }
+
+    // Lookup member by username
+    final member = await _userService.getUserByUsername(memberUsername);
+    if (member == null) {
+      throw Exception('User "@$memberUsername" not found');
+    }
+
+    final members = List<String>.from((channelData['members'] as List? ?? []).cast<String>());
+    if (members.contains(member.$1)) {
+      throw Exception('User is already a member of this channel');
+    }
+
+    members.add(member.$1);
+    await channelDoc.reference.update({'members': members});
+  }
+
+  /// Rename a channel (creator or admin only)
+  Future<void> renameChannel({
+    required String projectId,
+    required String channelId,
+    required String newName,
+  }) async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) throw Exception('User must be logged in');
+
+    final channelRef = _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('channels')
+        .doc(channelId);
+
+    final channelDoc = await channelRef.get();
+    if (!channelDoc.exists) throw Exception('Channel not found');
+
+    final channelData = channelDoc.data()!;
+    final createdBy = channelData['createdBy'] as String?;
+
+    // Only creator or project admin can rename
+    if (createdBy != authUser.uid) {
+      final projectDoc = await _firestore.collection('projects').doc(projectId).get();
+      final projectData = projectDoc.data() ?? <String, dynamic>{};
+      if (!_isAdminRole(projectData, authUser.uid)) {
+        throw Exception('Only channel creator or project admin can rename this channel');
+      }
+    }
+
+    final trimmed = newName.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9-_]'), '-');
+    if (trimmed.isEmpty) throw Exception('Channel name cannot be empty');
+
+    await channelRef.update({'name': trimmed});
+  }
+
+  /// Leave a private channel (removes current user from members). For public channels this is a no-op.
+  Future<void> leaveChannel({
+    required String projectId,
+    required String channelId,
+  }) async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) throw Exception('User must be logged in');
+
+    final channelRef = _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('channels')
+        .doc(channelId);
+
+    final channelDoc = await channelRef.get();
+    if (!channelDoc.exists) throw Exception('Channel not found');
+
+    final channelData = channelDoc.data()!;
+    final isPrivate = channelData['isPrivate'] as bool? ?? false;
+    if (!isPrivate) return; // nothing to do for public channels
+
+    final members = List<String>.from((channelData['members'] as List? ?? []).cast<String>());
+    members.remove(authUser.uid);
+    await channelRef.update({'members': members});
+  }
+
+  /// Watch messages in a specific channel (paginated)
+  Stream<List<ProjectChatMessage>> watchChannelMessages(
+    String projectId,
+    String channelId, {
     int limit = 30,
   }) {
     final authUser = _auth.currentUser;
@@ -1450,6 +1834,8 @@ class ProjectService {
     return _firestore
         .collection('projects')
         .doc(projectId)
+        .collection('channels')
+        .doc(channelId)
         .collection('messages')
         .orderBy('createdAt', descending: true)
         .limit(limit)
@@ -1462,15 +1848,16 @@ class ProjectService {
                 .reversed
                 .toList();
           } catch (e) {
-            print('❌ Error parsing chat messages: $e');
+            print('❌ Error parsing channel messages: $e');
             return [];
           }
         });
   }
 
-  /// Load older messages for pagination
-  Future<List<ProjectChatMessage>> loadOlderProjectMessages(
-    String projectId, {
+  /// Load older messages in a channel for pagination
+  Future<List<ProjectChatMessage>> loadOlderChannelMessages(
+    String projectId,
+    String channelId, {
     required DateTime before,
     int limit = 30,
   }) async {
@@ -1478,6 +1865,8 @@ class ProjectService {
       final snapshot = await _firestore
           .collection('projects')
           .doc(projectId)
+          .collection('channels')
+          .doc(channelId)
           .collection('messages')
           .where('createdAt', isLessThan: before)
           .orderBy('createdAt', descending: true)
@@ -1490,16 +1879,47 @@ class ProjectService {
           .reversed
           .toList();
     } catch (e) {
-      print('❌ Error loading older messages: $e');
+      print('❌ Error loading older channel messages: $e');
       return [];
     }
   }
 
-  /// Send a message in project chat
-  Future<void> sendProjectMessage({
+  // ============ CHAT SYSTEM ============
+
+  /// Watch all messages in a project, ordered newest first with pagination support
+  Stream<List<ProjectChatMessage>> watchProjectMessages(
+    String projectId, {
+    int limit = 30,
+  }) {
+    final authUser = _auth.currentUser;
+    if (authUser == null) {
+      return Stream.value([]);
+    }
+    // DEPRECATED: Project-wide message listeners have been removed in favor of
+    // channel-scoped listeners. Use `watchChannelMessages(projectId, channelId)`.
+    print('⚠️ watchProjectMessages is deprecated. Use watchChannelMessages instead.');
+    return Stream.value([]);
+  }
+
+  /// Load older messages for pagination
+  Future<List<ProjectChatMessage>> loadOlderProjectMessages(
+    String projectId, {
+    required DateTime before,
+    int limit = 30,
+  }) async {
+    // DEPRECATED: Use `loadOlderChannelMessages(projectId, channelId, before)`
+    print('⚠️ loadOlderProjectMessages is deprecated. Use loadOlderChannelMessages instead.');
+    return [];
+  }
+
+  /// Send a message in a specific project channel
+  Future<void> sendChannelMessage({
     required String projectId,
+    required String channelId,
     required String text,
     String replyToMessageId = '',
+    List<Map<String, dynamic>> attachments = const [],
+    String? messageId,
   }) async {
     final authUser = _auth.currentUser;
     if (authUser == null) {
@@ -1507,21 +1927,35 @@ class ProjectService {
     }
 
     // Verify user has access to project
-    final projectDoc =
-        await _firestore.collection('projects').doc(projectId).get();
+    final projectDoc = await _firestore.collection('projects').doc(projectId).get();
     if (!projectDoc.exists) {
       throw Exception('Project not found');
     }
 
     final projectData = projectDoc.data()!;
-    final createdBy = projectData['createdBy'] as String? ?? '';
-    final collaborators = _parseCollaboratorsMap(
-      projectData['collaborators'],
-      docId: projectId,
-    );
-
-    if (createdBy != authUser.uid && !collaborators.containsKey(authUser.uid)) {
+    if (!_canEditIdeaBoard(projectData, authUser.uid)) {
       throw Exception('You do not have access to this project');
+    }
+
+    // Verify channel exists and user has access
+    final channelDoc = await _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('channels')
+        .doc(channelId)
+        .get();
+
+    if (!channelDoc.exists) {
+      throw Exception('Channel not found');
+    }
+
+    final channelData = channelDoc.data()!;
+    final isPrivate = channelData['isPrivate'] as bool? ?? false;
+    final members = List<String>.from((channelData['members'] as List? ?? []).cast<String>());
+
+    // Check private channel access
+    if (isPrivate && !members.contains(authUser.uid)) {
+      throw Exception('You do not have access to this channel');
     }
 
     final userDoc = await _firestore.collection('users').doc(authUser.uid).get();
@@ -1531,12 +1965,15 @@ class ProjectService {
     final messageRef = _firestore
         .collection('projects')
         .doc(projectId)
+        .collection('channels')
+        .doc(channelId)
         .collection('messages')
-        .doc();
+        .doc(messageId);
 
     final messageData = {
       'id': messageRef.id,
       'projectId': projectId,
+      'channelId': channelId,
       'senderId': authUser.uid,
       'senderUsername': userUsername,
       'senderPhoto': userPhoto,
@@ -1547,31 +1984,73 @@ class ProjectService {
       'createdAt': Timestamp.now(),
       'updatedAt': Timestamp.now(),
       'reactions': <String, List<String>>{},
+      'attachments': attachments,
     };
 
     try {
       await messageRef.set(messageData);
+      
+      // Update channel's lastMessageAt and messageCount
+      await channelDoc.reference.update({
+        'lastMessageAt': Timestamp.now(),
+        'messageCount': FieldValue.increment(1),
+      });
 
-      // Fan out notification to other collaborators
+      // Fan out notification to channel members
       final projectTitle = projectData['title'] as String? ?? 'Project';
-      final messagePreview =
-          text.substring(0, (text.length > 50 ? 50 : text.length));
-      await _fanOutProjectNotification(
-        projectId: projectId,
-        type: 'new_message',
-        title: 'New message in $projectTitle',
-        body: '$userUsername: $messagePreview...',
-        excludedUserIds: {authUser.uid},
-        data: {'messageId': messageRef.id},
-      );
+      final messagePreview = text.substring(0, (text.length > 50 ? 50 : text.length));
+      
+      // For private channels, send only to members; for public channels, broadcast to all
+      if (isPrivate && members.isNotEmpty) {
+        await _fanOutProjectNotification(
+          projectId: projectId,
+          type: 'new_message',
+          title: 'New message in $projectTitle',
+          body: '$userUsername: $messagePreview...',
+          onlyUserIds: members.toSet(),
+          excludedUserIds: {authUser.uid},
+          data: {'messageId': messageRef.id, 'channelId': channelId},
+        );
+      } else {
+        // Public channel - broadcast to all collaborators
+        await _fanOutProjectNotification(
+          projectId: projectId,
+          type: 'new_message',
+          title: 'New message in $projectTitle',
+          body: '$userUsername: $messagePreview...',
+          excludedUserIds: {authUser.uid},
+          data: {'messageId': messageRef.id, 'channelId': channelId},
+        );
+      }
     } catch (e) {
       throw Exception('Failed to send message: ${e.toString()}');
     }
   }
 
-  /// Edit a message (sender or admin only)
-  Future<void> editProjectMessage({
+  /// Send a message in project chat (DEPRECATED: use sendChannelMessage with channelId='general')
+  /// This method now writes to the #general channel for backward compatibility
+  Future<void> sendProjectMessage({
     required String projectId,
+    required String text,
+    String replyToMessageId = '',
+    List<Map<String, dynamic>> attachments = const [],
+    String? messageId,
+  }) async {
+    // Delegate to channel-aware method with default #general channel
+    await sendChannelMessage(
+      projectId: projectId,
+      channelId: 'general',
+      text: text,
+      replyToMessageId: replyToMessageId,
+      attachments: attachments,
+      messageId: messageId,
+    );
+  }
+
+  /// Edit a message in a channel (sender or admin only)
+  Future<void> editChannelMessage({
+    required String projectId,
+    required String channelId,
     required String messageId,
     required String newText,
   }) async {
@@ -1583,6 +2062,8 @@ class ProjectService {
     final messageRef = _firestore
         .collection('projects')
         .doc(projectId)
+        .collection('channels')
+        .doc(channelId)
         .collection('messages')
         .doc(messageId);
 
@@ -1597,22 +2078,80 @@ class ProjectService {
     // Verify sender or admin
     final projectDoc =
         await _firestore.collection('projects').doc(projectId).get();
-    final createdBy = projectDoc.data()?['createdBy'] as String? ?? '';
+    final projectData = projectDoc.data() ?? <String, dynamic>{};
 
-    if (senderId != authUser.uid && createdBy != authUser.uid) {
+    if (senderId != authUser.uid && !_isAdminRole(projectData, authUser.uid)) {
       throw Exception('You can only edit your own messages');
     }
 
-    await messageRef.update({
-      'text': newText.trim(),
-      'edited': true,
-      'updatedAt': Timestamp.now(),
-    });
+    try {
+      await messageRef.update({
+        'text': newText.trim(),
+        'edited': true,
+        'updatedAt': Timestamp.now(),
+      });
+    } catch (e) {
+      throw Exception('Failed to edit message: ${e.toString()}');
+    }
+  }
+
+  /// Edit a message (sender or admin only) - DEPRECATED: use editChannelMessage
+  Future<void> editProjectMessage({
+    required String projectId,
+    required String messageId,
+    required String newText,
+  }) async {
+    // Try both old and new storage locations for backward compatibility
+    final oldMessageRef = _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('messages')
+        .doc(messageId);
+
+    final oldDoc = await oldMessageRef.get();
+    if (oldDoc.exists) {
+      // Old location - still support it for now
+      final data = oldDoc.data()!;
+      final senderId = data['senderId'] as String?;
+      final authUser = _auth.currentUser;
+
+      if (authUser == null) {
+        throw Exception('User must be logged in');
+      }
+
+      final projectDoc = await _firestore.collection('projects').doc(projectId).get();
+      final projectData = projectDoc.data() ?? <String, dynamic>{};
+
+      if (senderId != authUser.uid && !_isAdminRole(projectData, authUser.uid)) {
+        throw Exception('You can only edit your own messages');
+      }
+
+      try {
+        await oldMessageRef.update({
+          'text': newText.trim(),
+          'edited': true,
+          'updatedAt': Timestamp.now(),
+        });
+      } catch (e) {
+        throw Exception('Failed to edit message: ${e.toString()}');
+      }
+      return;
+    }
+
+    // New location - delegate to channel-aware method
+    await editChannelMessage(
+      projectId: projectId,
+      channelId: 'general',
+      messageId: messageId,
+      newText: newText,
+    );
   }
 
   /// Delete a message (sender or admin only)
-  Future<void> deleteProjectMessage({
+  /// Delete a message in a channel (sender or admin only)
+  Future<void> deleteChannelMessage({
     required String projectId,
+    required String channelId,
     required String messageId,
   }) async {
     final authUser = _auth.currentUser;
@@ -1623,6 +2162,8 @@ class ProjectService {
     final messageRef = _firestore
         .collection('projects')
         .doc(projectId)
+        .collection('channels')
+        .doc(channelId)
         .collection('messages')
         .doc(messageId);
 
@@ -1633,20 +2174,96 @@ class ProjectService {
 
     final messageData = messageDoc.data()!;
     final senderId = messageData['senderId'] as String?;
+    final attachments = List<Map<String, dynamic>>.from(
+      (messageData['attachments'] as List? ?? []).map(
+        (item) => Map<String, dynamic>.from(item as Map),
+      ),
+    );
 
     final projectDoc =
         await _firestore.collection('projects').doc(projectId).get();
-    final createdBy = projectDoc.data()?['createdBy'] as String? ?? '';
+    final projectData = projectDoc.data() ?? <String, dynamic>{};
 
-    if (senderId != authUser.uid && createdBy != authUser.uid) {
+    if (senderId != authUser.uid && !_isAdminRole(projectData, authUser.uid)) {
       throw Exception('You can only delete your own messages');
     }
 
-    await messageRef.update({
-      'deleted': true,
-      'text': '[This message was deleted]',
-      'updatedAt': Timestamp.now(),
-    });
+    try {
+      // Delete associated files from storage
+      for (final attachment in attachments) {
+        final storagePath = attachment['storagePath'] as String? ?? '';
+        if (storagePath.isNotEmpty) {
+          await FileService.instance.deleteProjectChatAttachment(storagePath);
+        }
+      }
+
+      // Soft-delete the message (mark as deleted)
+      await messageRef.update({
+        'deleted': true,
+        'text': '[This message was deleted]',
+        'updatedAt': Timestamp.now(),
+      });
+    } catch (e) {
+      throw Exception('Failed to delete message: ${e.toString()}');
+    }
+  }
+
+  /// Delete a message (sender or admin only) - DEPRECATED: use deleteChannelMessage
+  Future<void> deleteProjectMessage({
+    required String projectId,
+    required String messageId,
+  }) async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) {
+      throw Exception('User must be logged in');
+    }
+
+    // Try both old and new storage locations for backward compatibility
+    final oldMessageRef = _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('messages')
+        .doc(messageId);
+
+    final oldDoc = await oldMessageRef.get();
+    if (oldDoc.exists) {
+      // Old location - still support it
+      final data = oldDoc.data()!;
+      final senderId = data['senderId'] as String?;
+      final attachments = List<Map<String, dynamic>>.from(
+        (data['attachments'] as List? ?? []).map(
+          (item) => Map<String, dynamic>.from(item as Map),
+        ),
+      );
+
+      final projectDoc = await _firestore.collection('projects').doc(projectId).get();
+      final projectData = projectDoc.data() ?? <String, dynamic>{};
+
+      if (senderId != authUser.uid && !_isAdminRole(projectData, authUser.uid)) {
+        throw Exception('You can only delete your own messages');
+      }
+
+      for (final attachment in attachments) {
+        final storagePath = attachment['storagePath'] as String? ?? '';
+        if (storagePath.isNotEmpty) {
+          await FileService.instance.deleteProjectChatAttachment(storagePath);
+        }
+      }
+
+      await oldMessageRef.update({
+        'deleted': true,
+        'text': '[This message was deleted]',
+        'updatedAt': Timestamp.now(),
+      });
+      return;
+    }
+
+    // New location - delegate to channel-aware method
+    await deleteChannelMessage(
+      projectId: projectId,
+      channelId: 'general',
+      messageId: messageId,
+    );
   }
 
   /// Clear all chat history for a project (admin only)
@@ -1658,9 +2275,9 @@ class ProjectService {
 
     final projectDoc =
         await _firestore.collection('projects').doc(projectId).get();
-    final createdBy = projectDoc.data()?['createdBy'] as String? ?? '';
+    final projectData = projectDoc.data() ?? <String, dynamic>{};
 
-    if (createdBy != authUser.uid) {
+    if (!_isAdminRole(projectData, authUser.uid)) {
       throw Exception('Only project admin can clear chat');
     }
 
@@ -1699,6 +2316,92 @@ class ProjectService {
           );
     } catch (e) {
       print('⚠️  Error marking chat read: $e');
+    }
+  }
+
+  // ============ UNREAD / PRESENCE HELPERS ============
+
+  /// Mark a channel as read for the current user. Stores per-channel lastReadAt
+  /// under `projects/{projectId}/channels/{channelId}/members/{userId}`.
+  Future<void> markChannelRead({required String projectId, required String channelId}) async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) return;
+
+    final memberRef = _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('channels')
+        .doc(channelId)
+        .collection('members')
+        .doc(authUser.uid);
+
+    try {
+      await memberRef.set({
+        'userId': authUser.uid,
+        'lastReadAt': Timestamp.now(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      print('⚠️ Error marking channel read: $e');
+    }
+  }
+
+  /// Get unread count for a channel for a specific user. This is a simple
+  /// server query: count messages newer than the user's lastReadAt.
+  Future<int> getChannelUnreadCount({required String projectId, required String channelId, required String userId}) async {
+    try {
+      final memberDoc = await _firestore
+          .collection('projects')
+          .doc(projectId)
+          .collection('channels')
+          .doc(channelId)
+          .collection('members')
+          .doc(userId)
+          .get();
+
+      final lastReadAt = _parseDateTime(memberDoc.data()?['lastReadAt']) ?? DateTime.fromMillisecondsSinceEpoch(0);
+
+      final snapshot = await _firestore
+          .collection('projects')
+          .doc(projectId)
+          .collection('channels')
+          .doc(channelId)
+          .collection('messages')
+          .where('createdAt', isGreaterThan: Timestamp.fromDate(lastReadAt))
+          .get();
+
+      return snapshot.docs.length;
+    } catch (e) {
+      print('⚠️ Error getting unread count: $e');
+      return 0;
+    }
+  }
+
+  /// Persist the user's active channel selection under `projects/{projectId}/members/{userId}.lastSelectedChannel`
+  Future<void> setUserActiveChannel({required String projectId, required String channelId}) async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) return;
+
+    try {
+      await _firestore
+          .collection('projects')
+          .doc(projectId)
+          .collection('members')
+          .doc(authUser.uid)
+          .set({'lastSelectedChannel': channelId}, SetOptions(merge: true));
+    } catch (e) {
+      print('⚠️ Error setting active channel: $e');
+    }
+  }
+
+  /// Read the user's last selected channel if present
+  Future<String?> getUserActiveChannel({required String projectId, required String userId}) async {
+    try {
+      final doc = await _firestore.collection('projects').doc(projectId).collection('members').doc(userId).get();
+      final val = doc.data()?['lastSelectedChannel'] as String?;
+      return val;
+    } catch (e) {
+      print('⚠️ Error getting active channel: $e');
+      return null;
     }
   }
 
@@ -1761,13 +2464,8 @@ class ProjectService {
     }
 
     final projectData = projectDoc.data()!;
-    final createdBy = projectData['createdBy'] as String? ?? '';
-    final collaborators = _parseCollaboratorsMap(
-      projectData['collaborators'],
-      docId: projectId,
-    );
 
-    if (createdBy != authUser.uid && !collaborators.containsKey(authUser.uid)) {
+    if (!_canEditIdeaBoard(projectData, authUser.uid)) {
       throw Exception('You do not have access to this project');
     }
 
@@ -1776,6 +2474,8 @@ class ProjectService {
         .doc(projectId)
         .collection('callSessions')
         .doc();
+    final roomName = 'teamsync-${projectId.toLowerCase()}-${callRef.id.toLowerCase()}';
+    final roomUrl = 'https://meet.jit.si/$roomName';
 
     final callData = {
       'id': callRef.id,
@@ -1785,6 +2485,8 @@ class ProjectService {
       'active': true,
       'type': type,
       'invitedParticipants': invitedParticipants,
+      'roomName': roomName,
+      'roomUrl': roomUrl,
       'startedAt': Timestamp.now(),
       'endedAt': null,
       'audioEnabled': true,
@@ -1795,6 +2497,11 @@ class ProjectService {
     try {
       await callRef.set(callData);
 
+      final collaborators = _parseCollaboratorsMap(
+        projectData['collaborators'],
+        docId: projectId,
+      );
+      final createdBy = projectData['createdBy'] as String? ?? '';
       final teamMembers = <String>{
         createdBy,
         ...collaborators.keys,
@@ -1815,6 +2522,96 @@ class ProjectService {
       return callRef.id;
     } catch (e) {
       throw Exception('Failed to start call: ${e.toString()}');
+    }
+  }
+
+  Future<String> scheduleProjectCall({
+    required String projectId,
+    required String title,
+    required String agenda,
+    required String description,
+    required DateTime scheduledAt,
+    required int durationMinutes,
+    required List<String> invitedParticipants,
+  }) async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) {
+      throw Exception('User must be logged in');
+    }
+
+    final projectDoc = await _firestore.collection('projects').doc(projectId).get();
+    if (!projectDoc.exists) {
+      throw Exception('Project not found');
+    }
+
+    final projectData = projectDoc.data()!;
+    if (!_isAdminRole(projectData, authUser.uid)) {
+      throw Exception('Only project admin can schedule calls');
+    }
+
+    final scheduleRef = _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('callSchedules')
+        .doc();
+
+    final reminderAt = scheduledAt.subtract(const Duration(minutes: 15));
+    final scheduleData = {
+      'id': scheduleRef.id,
+      'projectId': projectId,
+      'title': title.trim(),
+      'agenda': agenda.trim(),
+      'description': description.trim(),
+      'scheduledAt': Timestamp.fromDate(scheduledAt),
+      'durationMinutes': durationMinutes,
+      'invitedParticipants': invitedParticipants,
+      'createdBy': authUser.uid,
+      'createdAt': Timestamp.now(),
+      'reminderAt': Timestamp.fromDate(reminderAt),
+      'status': 'scheduled',
+    };
+
+    try {
+      await scheduleRef.set(scheduleData);
+
+      final collaborators = _parseCollaboratorsMap(
+        projectData['collaborators'],
+        docId: projectId,
+      );
+      final createdBy = projectData['createdBy'] as String? ?? '';
+      final teamMembers = <String>{createdBy, ...collaborators.keys};
+      final targets = invitedParticipants.isNotEmpty
+          ? invitedParticipants.toSet()
+          : teamMembers;
+
+      final projectTitle = projectData['title'] as String? ?? 'Project';
+      await _fanOutProjectNotification(
+        projectId: projectId,
+        type: 'call_scheduled',
+        title: 'Call scheduled in $projectTitle',
+        body: '$title at ${scheduledAt.toLocal()}',
+        onlyUserIds: targets,
+        excludedUserIds: {authUser.uid},
+        data: {'scheduleId': scheduleRef.id},
+        deliverAt: DateTime.now(),
+      );
+
+      if (reminderAt.isAfter(DateTime.now())) {
+        await _fanOutProjectNotification(
+          projectId: projectId,
+          type: 'call_reminder',
+          title: 'Scheduled call reminder',
+          body: '$title starts in 15 minutes',
+          onlyUserIds: targets,
+          excludedUserIds: {authUser.uid},
+          data: {'scheduleId': scheduleRef.id},
+          deliverAt: reminderAt,
+        );
+      }
+
+      return scheduleRef.id;
+    } catch (e) {
+      throw Exception('Failed to schedule call: ${e.toString()}');
     }
   }
 
@@ -1948,6 +2745,7 @@ class ProjectService {
           try {
             return snapshot.docs
                 .map((doc) => _parseNotificationItem(doc))
+                .where((item) => item.deliverAt == null || !item.deliverAt!.isAfter(DateTime.now()))
                 .toList();
           } catch (e) {
             print('❌ Error parsing notifications: $e');
@@ -1998,11 +2796,40 @@ class ProjectService {
     }
   }
 
+  Stream<int> watchUnreadNotificationCount() {
+    final authUser = _auth.currentUser;
+    if (authUser == null) {
+      return Stream.value(0);
+    }
+
+    return watchMyNotifications().map((notifications) {
+      return notifications.where((notification) => !notification.read).length;
+    });
+  }
+
+  Stream<List<ProjectCallSchedule>> watchProjectCallSchedules(String projectId) {
+    return _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('callSchedules')
+        .orderBy('scheduledAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          try {
+            return snapshot.docs.map((doc) => _parseProjectCallSchedule(doc)).toList();
+          } catch (e) {
+            print('❌ Error parsing call schedules: $e');
+            return [];
+          }
+        });
+  }
+
   Future<void> _fanOutProjectNotification({
     required String projectId,
     required String type,
     required String title,
     required String body,
+    DateTime? deliverAt,
     Set<String> onlyUserIds = const <String>{},
     Set<String> excludedUserIds = const <String>{},
     Map<String, dynamic> data = const <String, dynamic>{},
@@ -2049,6 +2876,7 @@ class ProjectService {
           'body': body,
           'read': false,
           'createdAt': Timestamp.now(),
+          'deliverAt': deliverAt != null ? Timestamp.fromDate(deliverAt) : null,
           'data': data,
         });
       }
@@ -2068,6 +2896,7 @@ class ProjectService {
     return ProjectChatMessage(
       id: doc.id,
       projectId: data['projectId'] as String? ?? '',
+      channelId: data['channelId'] as String? ?? 'general', // Default to 'general' for backward compatibility
       senderId: data['senderId'] as String? ?? '',
       senderUsername: data['senderUsername'] as String? ?? 'Unknown',
       senderPhoto: data['senderPhoto'] as String? ?? '',
@@ -2084,6 +2913,37 @@ class ProjectService {
                   List<String>.from((value as List? ?? []).cast<String>()),
                 )),
       ),
+      attachments: List<ProjectAttachment>.from(
+        (data['attachments'] as List? ?? []).map((attachment) {
+          final map = Map<String, dynamic>.from(attachment as Map);
+          return ProjectAttachment.fromMap(map);
+        }),
+      ),
+    );
+  }
+
+  ProjectChannel _parseProjectChannel(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data()!;
+    final lastMessageAtValue = data['lastMessageAt'];
+    DateTime? lastMessageAt;
+    if (lastMessageAtValue is Timestamp) {
+      lastMessageAt = lastMessageAtValue.toDate();
+    } else if (lastMessageAtValue is DateTime) {
+      lastMessageAt = lastMessageAtValue;
+    }
+
+    return ProjectChannel(
+      id: doc.id,
+      projectId: data['projectId'] as String? ?? '',
+      name: data['name'] as String? ?? 'general',
+      createdBy: data['createdBy'] as String? ?? '',
+      members: List<String>.from((data['members'] as List? ?? []).cast<String>()),
+      isPrivate: data['isPrivate'] as bool? ?? false,
+      createdAt: _parseDateTime(data['createdAt']) ?? DateTime.now(),
+      lastMessageAt: lastMessageAt,
+      messageCount: data['messageCount'] as int? ?? 0,
     );
   }
 
@@ -2108,6 +2968,30 @@ class ProjectService {
       audioEnabled: data['audioEnabled'] as bool? ?? true,
       videoEnabled: data['videoEnabled'] as bool? ?? true,
       screenSharing: data['screenSharing'] as bool? ?? false,
+      roomName: data['roomName'] as String? ?? '',
+      roomUrl: data['roomUrl'] as String? ?? '',
+    );
+  }
+
+  ProjectCallSchedule _parseProjectCallSchedule(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data()!;
+    return ProjectCallSchedule(
+      id: doc.id,
+      projectId: data['projectId'] as String? ?? '',
+      title: data['title'] as String? ?? '',
+      agenda: data['agenda'] as String? ?? '',
+      description: data['description'] as String? ?? '',
+      scheduledAt: _parseDateTime(data['scheduledAt']) ?? DateTime.now(),
+      durationMinutes: data['durationMinutes'] as int? ?? 30,
+      invitedParticipants: List<String>.from(
+        (data['invitedParticipants'] as List? ?? []).cast<String>(),
+      ),
+      createdBy: data['createdBy'] as String? ?? '',
+      createdAt: _parseDateTime(data['createdAt']) ?? DateTime.now(),
+      reminderAt: _parseDateTime(data['reminderAt']) ?? DateTime.now(),
+      status: data['status'] as String? ?? 'scheduled',
     );
   }
 
@@ -2124,6 +3008,7 @@ class ProjectService {
       body: data['body'] as String? ?? '',
       read: data['read'] as bool? ?? false,
       createdAt: _parseDateTime(data['createdAt']) ?? DateTime.now(),
+      deliverAt: _parseDateTime(data['deliverAt']),
       data: Map<String, dynamic>.from(data['data'] as Map? ?? {}),
     );
   }

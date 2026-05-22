@@ -147,16 +147,29 @@ class _VisibilityBadge extends StatelessWidget {
 
 class UserAvatar extends StatelessWidget {
   final String name;
+  final String? username;
   final double size;
   final Color? color;
   final String? imageUrl;
 
-  const UserAvatar({super.key, required this.name, this.size = 36, this.color, this.imageUrl});
+  const UserAvatar({
+    super.key,
+    required this.name,
+    this.username,
+    this.size = 36,
+    this.color,
+    this.imageUrl,
+  });
 
   String get initials {
-    final parts = name.trim().split(' ');
-    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    return name.isNotEmpty ? name[0].toUpperCase() : '?';
+    final source = (username != null && username!.trim().isNotEmpty)
+        ? username!.trim()
+        : name.trim();
+    if (source.isEmpty) {
+      return '?';
+    }
+    final match = RegExp(r'[A-Za-z]').firstMatch(source);
+    return match?.group(0)?.toUpperCase() ?? '?';
   }
 
   @override

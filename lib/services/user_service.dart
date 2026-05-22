@@ -10,14 +10,69 @@ class UserService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  static final RegExp _usernamePattern = RegExp(r'^[a-zA-Z][a-zA-Z0-9_]{2,19}$');
+  static final RegExp _usernameSearchPattern = RegExp(r'^[a-zA-Z][a-zA-Z0-9_]*$');
+
+  static String normalizeUsername(String username) {
+    return username.trim();
+  }
+
+  static String normalizeUsernameKey(String username) {
+    return normalizeUsername(username).toLowerCase();
+  }
+
+  static bool isValidUsernameFormat(String username) {
+    return _usernamePattern.hasMatch(normalizeUsername(username));
+  }
+
+  static bool isValidUsernameSearchQuery(String query) {
+    return _usernameSearchPattern.hasMatch(normalizeUsername(query));
+  }
+
+  static bool isLegacyEmailDerivedUsername({
+    required String username,
+    required String email,
+  }) {
+    final normalizedUsername = normalizeUsernameKey(username);
+    final emailLocalPart = email.trim().split('@').first.toLowerCase();
+    final sanitizedEmailLocalPart = emailLocalPart.replaceAll(RegExp(r'[^a-z0-9_]'), '_');
+    final collapsedSanitized = sanitizedEmailLocalPart.replaceAll(RegExp(r'_+'), '_');
+
+    return normalizedUsername.isNotEmpty &&
+        (normalizedUsername == emailLocalPart ||
+            normalizedUsername == sanitizedEmailLocalPart ||
+            normalizedUsername == collapsedSanitized ||
+            normalizedUsername.startsWith('user_'));
+  }
+
+  static bool needsUsernameRepair({
+    required String username,
+    required String email,
+  }) {
+    if (!isValidUsernameFormat(username)) {
+      return true;
+    }
+
+    if (email.trim().isEmpty) {
+      return false;
+    }
+
+    return isLegacyEmailDerivedUsername(username: username, email: email);
+  }
+
   /// Get user by username (case-insensitive lookup for UI, case-sensitive storage)
   Future<(String userId, String username, String name, String email)?> getUserByUsername(
     String username,
   ) async {
     try {
+      final normalized = normalizeUsernameKey(username);
+      if (!isValidUsernameSearchQuery(username)) {
+        return null;
+      }
+
       final query = await _firestore
           .collection('users')
-          .where('username', isEqualTo: username.toLowerCase().trim())
+          .where('usernameLower', isEqualTo: normalized)
           .limit(1)
           .get();
 
@@ -30,7 +85,7 @@ class UserService {
 
       return (
         doc.id,
-        data['username'] as String? ?? username,
+        data['username'] as String? ?? username.trim(),
         data['name'] as String? ?? 'Unknown',
         data['email'] as String? ?? 'unknown@email.com',
       );
@@ -73,13 +128,18 @@ class UserService {
     }
 
     try {
-      final lowerQuery = query.toLowerCase().trim();
+      final trimmedQuery = normalizeUsername(query);
+      if (!isValidUsernameSearchQuery(trimmedQuery)) {
+        return [];
+      }
+
+      final lowerQuery = normalizeUsernameKey(trimmedQuery);
 
       // Search by username
       final usernameQuery = await _firestore
           .collection('users')
           .where('usernameLower', isGreaterThanOrEqualTo: lowerQuery)
-          .where('usernameLower', isLessThan: lowerQuery + 'z')
+          .where('usernameLower', isLessThan: '$lowerQuery\uf8ff')
           .limit(10)
           .get();
 
@@ -168,12 +228,17 @@ class UserService {
     required String email,
   }) async {
     try {
-      final lowerUsername = username.toLowerCase().trim();
+      final exactUsername = normalizeUsername(username);
+      final lowerUsername = normalizeUsernameKey(username);
+
+      if (!isValidUsernameFormat(exactUsername)) {
+        throw Exception('Username must start with a letter and use only letters, numbers, or underscores');
+      }
 
       // Check if username already exists
       final existing = await _firestore
           .collection('users')
-          .where('username', isEqualTo: lowerUsername)
+          .where('usernameLower', isEqualTo: lowerUsername)
           .limit(1)
           .get();
 
@@ -183,7 +248,7 @@ class UserService {
 
       await _firestore.collection('users').doc(userId).set({
         'uid': userId,
-        'username': lowerUsername,
+        'username': exactUsername,
         'usernameLower': lowerUsername, // For case-insensitive search
         'name': name.trim(),
         'email': email.trim().toLowerCase(),
@@ -219,11 +284,17 @@ class UserService {
       }
 
       if (username != null && username.trim().isNotEmpty) {
-        final lowerUsername = username.toLowerCase().trim();
+        final exactUsername = normalizeUsername(username);
+        final lowerUsername = normalizeUsernameKey(username);
+
+        if (!isValidUsernameFormat(exactUsername)) {
+          throw Exception('Username must start with a letter and use only letters, numbers, or underscores');
+        }
+
         // Verify username is available (shouldn't happen in normal flow)
         final existing = await _firestore
             .collection('users')
-            .where('username', isEqualTo: lowerUsername)
+            .where('usernameLower', isEqualTo: lowerUsername)
             .get();
 
         if (existing.docs.isNotEmpty &&
@@ -231,7 +302,7 @@ class UserService {
           throw Exception('Username already taken');
         }
 
-        updateData['username'] = lowerUsername;
+        updateData['username'] = exactUsername;
         updateData['usernameLower'] = lowerUsername;
       }
 
@@ -247,9 +318,13 @@ class UserService {
   /// Check if username is available
   Future<bool> isUsernameAvailable(String username) async {
     try {
+      if (!isValidUsernameSearchQuery(username)) {
+        return false;
+      }
+
       final query = await _firestore
           .collection('users')
-          .where('username', isEqualTo: username.toLowerCase().trim())
+          .where('usernameLower', isEqualTo: normalizeUsernameKey(username))
           .limit(1)
           .get();
 

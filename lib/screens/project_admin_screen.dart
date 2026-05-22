@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/models.dart';
 import '../services/project_service.dart';
 import '../services/user_service.dart';
@@ -21,11 +22,18 @@ class ProjectAdminScreen extends StatefulWidget {
 
 class _ProjectAdminScreenState extends State<ProjectAdminScreen> {
   late PageController _pageController;
+  int _currentIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
+    _pageController.addListener(() {
+      final index = _pageController.page?.round() ?? 0;
+      if (index != _currentIndex) {
+        setState(() => _currentIndex = index);
+      }
+    });
   }
 
   @override
@@ -37,7 +45,7 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: SimpleAppBar(title: 'Manage: ${widget.project.title}'),
+      appBar: SimpleAppBar(title: 'Manage ${widget.project.title}'),
       body: PageView(
         controller: _pageController,
         children: [
@@ -66,7 +74,7 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> {
             label: 'Settings',
           ),
         ],
-        currentIndex: 0,
+        currentIndex: _currentIndex,
         onTap: (index) => _pageController.animateToPage(
           index,
           duration: const Duration(milliseconds: 300),
@@ -116,105 +124,164 @@ class _JoinRequestsTab extends StatelessWidget {
             final request = pendingRequests[index];
             final githubLink = request.githubLink ?? '';
             final linkedinLink = request.linkedinLink ?? '';
-            return Card(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+            return FutureBuilder<AppUser?>(
+              future: UserService.instance.getUserById(request.requestedBy),
+              builder: (context, userSnapshot) {
+                final user = userSnapshot.data;
+                final avatarName = user != null && user.name.isNotEmpty
+                  ? user.name
+                  : request.requestedByUsername;
+                final avatarUsername = user != null && user.username.isNotEmpty
+                  ? user.username
+                  : request.requestedByUsername;
+                final photoUrl = user?.photoUrl ?? '';
+
+                return Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            UserAvatar(
+                              name: avatarName,
+                              username: avatarUsername,
+                              size: 42,
+                              imageUrl: photoUrl,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    user != null && user.name.isNotEmpty ? user.name : request.requestedByName,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppTheme.textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '@${user != null && user.username.isNotEmpty ? user.username : request.requestedByUsername}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppTheme.textMuted,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    request.message,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppTheme.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              _formatDate(request.createdAt),
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: AppTheme.textMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Request is ready for admin review.',
+                          style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                        ),
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: request.skills
+                              .map((skill) => Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF8FAFC),
+                                      borderRadius: BorderRadius.circular(999),
+                                      border: Border.all(color: AppTheme.border),
+                                    ),
+                                    child: Text(
+                                      skill,
+                                      style: const TextStyle(fontSize: 11, color: AppTheme.textPrimary),
+                                    ),
+                                  ))
+                              .toList(),
+                        ),
+                        if (githubLink.isNotEmpty || linkedinLink.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 8,
                             children: [
-                              Text(
-                                request.requestedByName,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppTheme.textPrimary,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Skills: ${request.skills}',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppTheme.textSecondary,
-                                ),
-                              ),
+                              if (githubLink.isNotEmpty)
+                                _LinkChip(label: 'GitHub', url: githubLink),
+                              if (linkedinLink.isNotEmpty)
+                                _LinkChip(label: 'LinkedIn', url: linkedinLink),
                             ],
                           ),
-                        ),
-                        Text(
-                          _formatDate(request.createdAt),
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppTheme.textMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      request.message,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.textSecondary,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                    if (githubLink.isNotEmpty || linkedinLink.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          if (githubLink.isNotEmpty)
-                            const Icon(Icons.link, size: 14, color: AppTheme.primary),
-                          const SizedBox(width: 4),
-                          if (githubLink.isNotEmpty)
-                            const Text('GitHub', style: TextStyle(fontSize: 11, color: AppTheme.primary)),
-                          const SizedBox(width: 12),
-                          if (linkedinLink.isNotEmpty)
-                            const Icon(Icons.link, size: 14, color: AppTheme.primary),
-                          const SizedBox(width: 4),
-                          if (linkedinLink.isNotEmpty)
-                            const Text('LinkedIn', style: TextStyle(fontSize: 11, color: AppTheme.primary)),
                         ],
-                      ),
-                    ],
-                    if (request.fileUrls.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        '${request.fileUrls.length} files attached',
-                        style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
-                      ),
-                    ],
-                    const Divider(height: 20),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => _rejectRequest(context, request.id),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppTheme.textMuted,
-                              side: const BorderSide(color: AppTheme.border),
+                        if (request.fileUrls.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          Text(
+                            'Uploaded files',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 6),
+                          ...request.fileUrls.map(
+                            (url) => InkWell(
+                              onTap: () {},
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                child: Text(
+                                  url,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppTheme.primary,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                ),
+                              ),
                             ),
-                            child: const Text('Reject'),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () => _acceptRequest(context, request.id),
-                            child: const Text('Accept'),
-                          ),
+                        ],
+                        const Divider(height: 20),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => _confirmReject(context, request.id),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppTheme.textMuted,
+                                  side: const BorderSide(color: AppTheme.border),
+                                ),
+                                child: const Text('Deny'),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () => _confirmAccept(context, request.id),
+                                child: const Text('Approve'),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             );
           },
         );
@@ -226,46 +293,99 @@ class _JoinRequestsTab extends StatelessWidget {
     return '${date.day}/${date.month}';
   }
 
-  Future<void> _acceptRequest(BuildContext context, String requestId) async {
+  Future<void> _confirmAccept(BuildContext context, String requestId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Approve request?'),
+        content: const Text('This will add the user to collaborators and remove the pending request.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Approve'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
     try {
       await ProjectService.instance.acceptJoinRequest(requestId);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Request accepted'),
-          behavior: SnackBarBehavior.floating,
-        ),
+        const SnackBar(content: Text('Request approved'), behavior: SnackBarBehavior.floating),
       );
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          behavior: SnackBarBehavior.floating,
-        ),
+        SnackBar(content: Text('Error: ${e.toString()}'), behavior: SnackBarBehavior.floating),
       );
     }
   }
 
-  Future<void> _rejectRequest(BuildContext context, String requestId) async {
+  Future<void> _confirmReject(BuildContext context, String requestId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Deny request?'),
+        content: const Text('This will reject the join request immediately.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Deny'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
     try {
       await ProjectService.instance.rejectJoinRequest(requestId);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Request rejected'),
-          behavior: SnackBarBehavior.floating,
-        ),
+        const SnackBar(content: Text('Request denied'), behavior: SnackBarBehavior.floating),
       );
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          behavior: SnackBarBehavior.floating,
-        ),
+        SnackBar(content: Text('Error: ${e.toString()}'), behavior: SnackBarBehavior.floating),
       );
     }
+  }
+}
+
+class _LinkChip extends StatelessWidget {
+  final String label;
+  final String url;
+
+  const _LinkChip({required this.label, required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => launchUrl(Uri.parse(url), webOnlyWindowName: '_blank'),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEFF6FF),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 11, color: AppTheme.primary),
+        ),
+      ),
+    );
   }
 }
 
@@ -290,18 +410,40 @@ class _CollaboratorsTab extends StatelessWidget {
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            const Text(
-              'Team Members',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.textPrimary,
-              ),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Collaborators',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () => _showAddCollaboratorDialog(context),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.person_add_alt_1, size: 15),
+                      SizedBox(width: 5),
+                      Text('Add'),
+                    ],
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             ...collaboratorIds.map((userId) {
               final user = users[userId];
-              final isAdmin = userId == project.createdBy;
+              final isAdmin = project.isAdmin(userId) || project.collaborators[userId] == 'admin';
               final roleLabel = isAdmin ? 'ADMIN' : 'Collaborator';
               return Container(
                 margin: const EdgeInsets.only(bottom: 10),
@@ -315,6 +457,7 @@ class _CollaboratorsTab extends StatelessWidget {
                   children: [
                     UserAvatar(
                       name: user?.name ?? user?.username ?? userId,
+                      username: user?.username ?? userId,
                       size: 40,
                       imageUrl: user?.photoUrl,
                     ),
@@ -324,7 +467,7 @@ class _CollaboratorsTab extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            user?.name ?? user?.username ?? userId,
+                            user?.name ?? user?.username ?? 'Unknown',
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
@@ -333,7 +476,7 @@ class _CollaboratorsTab extends StatelessWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            '@${user?.username ?? userId.substring(0, 6)}',
+                                          '@${user?.username.isNotEmpty == true ? user!.username : '?'}',
                             style: const TextStyle(
                               fontSize: 12,
                               color: AppTheme.textMuted,
@@ -342,8 +485,9 @@ class _CollaboratorsTab extends StatelessWidget {
                         ],
                       ),
                     ),
+                                  const SizedBox(width: 10),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
                         color: isAdmin ? const Color(0xFFDBEAFE) : const Color(0xFFEDE9FE),
                         borderRadius: BorderRadius.circular(999),
@@ -357,11 +501,16 @@ class _CollaboratorsTab extends StatelessWidget {
                         ),
                       ),
                     ),
-                    if (!isAdmin)
-                      IconButton(
-                        onPressed: () => _removeCollaborator(context, userId),
-                        icon: const Icon(Icons.delete_outline, size: 18, color: AppTheme.textMuted),
-                      ),
+                                  if (!isAdmin) ...[
+                                    const SizedBox(width: 4),
+                                    IconButton(
+                                      onPressed: () => _confirmRemoveCollaborator(context, userId),
+                                      padding: EdgeInsets.zero,
+                                      visualDensity: VisualDensity.compact,
+                                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                      icon: const Icon(Icons.delete_outline, size: 18, color: AppTheme.textMuted),
+                                    ),
+                                  ],
                   ],
                 ),
               );
@@ -372,26 +521,126 @@ class _CollaboratorsTab extends StatelessWidget {
     );
   }
 
-  Future<void> _removeCollaborator(BuildContext context, String userId) async {
+  Future<void> _showAddCollaboratorDialog(BuildContext context) async {
+    final controller = TextEditingController();
+    bool makeAdmin = false;
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Add Collaborator'),
+          content: StatefulBuilder(
+            builder: (context, setDialogState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: controller,
+                    decoration: const InputDecoration(labelText: 'Username'),
+                  ),
+                  const SizedBox(height: 8),
+                  CheckboxListTile(
+                    value: makeAdmin,
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: const Text('Make admin'),
+                    subtitle: const Text('Can manage collaborators, levels, and requests'),
+                    onChanged: (value) {
+                      setDialogState(() {
+                        makeAdmin = value ?? false;
+                      });
+                    },
+                  ),
+                ],
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, {
+                'username': controller.text.trim(),
+                'makeAdmin': makeAdmin,
+              }),
+              child: const Text('Add'),
+            ),
+          ],
+        );
+      },
+    );
+
+    controller.dispose();
+
+    final username = result?['username'] as String? ?? '';
+    final grantAdmin = result?['makeAdmin'] as bool? ?? false;
+
+    if (username.isEmpty) {
+      return;
+    }
+
     try {
-      await ProjectService.instance.removeCollaborator(
+      await ProjectService.instance.addCollaboratorByUsername(
         projectId: projectId,
-        userId: userId,
+        collaboratorUsername: username,
+        makeAdmin: grantAdmin,
       );
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Collaborator removed'),
-          behavior: SnackBarBehavior.floating,
-        ),
+        const SnackBar(content: Text('Collaborator added'), behavior: SnackBarBehavior.floating),
       );
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          behavior: SnackBarBehavior.floating,
-        ),
+        SnackBar(content: Text('Error: ${e.toString()}'), behavior: SnackBarBehavior.floating),
+      );
+    }
+  }
+
+  Future<void> _confirmRemoveCollaborator(BuildContext context, String userId) async {
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Remove collaborator'),
+          content: const Text('Choose whether to keep or delete their contributions.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, 'keep'),
+              child: const Text('Remove only'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, 'delete'),
+              child: const Text('Remove + delete contributions'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (choice == null) return;
+
+    try {
+      await ProjectService.instance.removeCollaborator(
+        projectId: projectId,
+        userId: userId,
+        deleteContributions: choice == 'delete',
+      );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Collaborator removed'), behavior: SnackBarBehavior.floating),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString()}'), behavior: SnackBarBehavior.floating),
       );
     }
   }
@@ -489,6 +738,7 @@ class _LevelsTabState extends State<_LevelsTab> {
               )
             else
               ...orderedLevels.map((level) {
+                final levelIndex = orderedLevels.indexOf(level);
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(
@@ -509,6 +759,14 @@ class _LevelsTabState extends State<_LevelsTab> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        IconButton(
+                          icon: const Icon(Icons.keyboard_arrow_up),
+                          onPressed: levelIndex == 0 ? null : () => _moveLevel(level.id, true),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.keyboard_arrow_down),
+                          onPressed: levelIndex == orderedLevels.length - 1 ? null : () => _moveLevel(level.id, false),
+                        ),
                         IconButton(
                           icon: const Icon(Icons.percent_outlined),
                           onPressed: () => _updateProgress(level),
@@ -737,6 +995,24 @@ class _LevelsTabState extends State<_LevelsTab> {
       await ProjectService.instance.removeProjectLevel(
         projectId: widget.projectId,
         levelId: levelId,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _moveLevel(String levelId, bool moveUp) async {
+    try {
+      await ProjectService.instance.moveProjectLevel(
+        projectId: widget.projectId,
+        levelId: levelId,
+        moveUp: moveUp,
       );
     } catch (e) {
       if (!mounted) return;

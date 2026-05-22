@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/project_service.dart';
-import '../services/file_service.dart';
+import '../services/file_service.dart' show PlatformFile, FileService;
 import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
 import '../models/models.dart';

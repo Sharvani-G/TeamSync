@@ -1,7 +1,13 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:file_picker/file_picker.dart' as picker;
 
 import '../models/models.dart';
+import '../services/attachment_service.dart';
 import '../services/file_service.dart';
 import '../services/project_service.dart';
 import '../theme/app_theme.dart';
@@ -19,6 +25,19 @@ class IdeaBoardDocumentScreen extends StatefulWidget {
 
 class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
   bool _isMutating = false;
+  bool _isUploading = false;
+  double _uploadProgress = 0;
+  String _uploadLabel = '';
+
+  Future<List<picker.PlatformFile>> _pickFiles({bool allowMultiple = true}) async {
+    try {
+      return await AttachmentService.instance.pickFiles(allowMultiple: allowMultiple);
+    } catch (e, stackTrace) {
+      debugPrint('File picker failed: $e');
+      debugPrintStack(stackTrace: stackTrace);
+      rethrow;
+    }
+  }
 
   Future<void> _addBlock(String type) async {
     if (_isMutating) return;
@@ -68,26 +87,157 @@ class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
   }
 
   Future<void> _attachFiles(IdeaBoardBlock block) async {
-    // File picker dependency removed in v1.0 - coming in future release
+    try {
+      final files = await _pickFiles();
+      if (files.isEmpty) return;
+
+      await _uploadFilesToBlock(block, files);
+    } catch (e, stackTrace) {
+      debugPrint('Attachment upload failed: $e');
+      debugPrintStack(stackTrace: stackTrace);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Upload failed: ${e.toString()}'),
+          behavior: SnackBarBehavior.floating,
+          action: SnackBarAction(
+            label: 'Retry',
+            onPressed: () async {
+              try {
+                final files = await _pickFiles();
+                if (files.isEmpty) return;
+                await _uploadFilesToBlock(block, files);
+              } catch (retryError) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Retry failed: ${retryError.toString()}')),
+                );
+              }
+            },
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _uploadFilesToBlock(IdeaBoardBlock block, List<picker.PlatformFile> files) async {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('File attachment coming soon in v1.1')),
-    );
+    setState(() {
+      _isUploading = true;
+      _uploadProgress = 0;
+      _uploadLabel = files.isNotEmpty ? files.first.name : '';
+    });
+
+    try {
+      await AttachmentService.instance.attachToIdeaBoard(
+        projectId: widget.projectId,
+        levelId: widget.levelId,
+        blockId: block.id,
+        existingFiles: block.files.map((item) => item.toMap()).toList(),
+        files: files,
+        onProgress: (progress, currentFileName) {
+          if (!mounted) return;
+          setState(() {
+            _uploadLabel = currentFileName;
+            _uploadProgress = progress;
+          });
+        },
+      );
+    } catch (e, stackTrace) {
+      debugPrint('Attachment upload failed: $e');
+      debugPrintStack(stackTrace: stackTrace);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Upload failed: ${e.toString()}'),
+          behavior: SnackBarBehavior.floating,
+          action: SnackBarAction(
+            label: 'Retry',
+            onPressed: () async {
+              await _uploadFilesToBlock(block, files);
+            },
+          ),
+        ),
+      );
+      rethrow;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+          _uploadProgress = 0;
+          _uploadLabel = '';
+        });
+      }
+    }
+  }
+
+  Future<void> _replaceFile(IdeaBoardBlock block, IdeaBoardFile target) async {
+    try {
+      final files = await _pickFiles(allowMultiple: false);
+      if (files.isEmpty) return;
+
+      final uploaded = await AttachmentService.instance.uploadFiles(
+        storagePathPrefix: 'project_files/${widget.projectId}/${block.id}',
+        files: [files.first],
+        onProgress: null,
+      );
+
+      final attachment = uploaded.first;
+
+      final updatedFiles = block.files.map<Map<String, dynamic>>((item) {
+        if (item.id != target.id) {
+          return item.toMap();
+        }
+        return attachment.toMap();
+      }).toList();
+
+      await ProjectService.instance.updateIdeaBoardBlock(
+        projectId: widget.projectId,
+        blockId: block.id,
+        files: updatedFiles,
+      );
+
+      await FileService.instance.deleteIdeaBoardAttachment(target.storagePath);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
+  }
+
+  Future<void> _previewFile(IdeaBoardFile file) async {
+    final uri = Uri.parse(file.url);
+    await launchUrl(uri, webOnlyWindowName: '_blank');
+  }
+
+  Future<void> _downloadFile(IdeaBoardFile file) async {
+    final uri = Uri.parse(file.url);
+    await launchUrl(uri, webOnlyWindowName: '_blank');
+  }
+
+  Future<void> _moveBlock(IdeaBoardBlock block, bool moveUp) async {
+    try {
+      await ProjectService.instance.moveIdeaBoardBlock(
+        projectId: widget.projectId,
+        blockId: block.id,
+        moveUp: moveUp,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
   }
 
   Future<void> _removeFile(IdeaBoardBlock block, IdeaBoardFile file) async {
     final updated = block.files
         .where((item) => item.id != file.id)
-        .map((item) => {
-              'id': item.id,
-              'name': item.name,
-              'url': item.url,
-              'type': item.type,
-              'sizeBytes': item.sizeBytes,
-              'uploadedBy': item.uploadedBy,
-              'uploadedAt': item.uploadedAt.toIso8601String(),
-            })
+      .map((item) => item.toMap())
         .toList();
+
+    await FileService.instance.deleteIdeaBoardAttachment(file.storagePath);
 
     await ProjectService.instance.updateIdeaBoardBlock(
       projectId: widget.projectId,
@@ -165,6 +315,24 @@ class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
           appBar: SimpleAppBar(title: level.title),
           body: Column(
             children: [
+              if (_isUploading)
+                Material(
+                  color: const Color(0xFFF8FAFC),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _uploadLabel.isNotEmpty ? 'Uploading $_uploadLabel' : 'Uploading file...',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 8),
+                        LinearProgressIndicator(value: _uploadProgress),
+                      ],
+                    ),
+                  ),
+                ),
               if (!isCollaborator)
                 Container(
                   width: double.infinity,
@@ -215,7 +383,12 @@ class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
                             onDelete: () => _deleteBlock(block.id),
                             onSaveContent: (value) => _saveContent(block.id, value),
                             onAttachFiles: () => _attachFiles(block),
+                            onReplaceFile: (file) => _replaceFile(block, file),
+                            onPreviewFile: (file) => _previewFile(file),
+                            onDownloadFile: (file) => _downloadFile(file),
                             onRemoveFile: (file) => _removeFile(block, file),
+                            onMoveUp: () => _moveBlock(block, true),
+                            onMoveDown: () => _moveBlock(block, false),
                           ),
                         ),
                       ],
@@ -300,7 +473,12 @@ class _IdeaBlockCard extends StatefulWidget {
     required this.onDelete,
     required this.onSaveContent,
     required this.onAttachFiles,
+    required this.onReplaceFile,
+    required this.onPreviewFile,
+    required this.onDownloadFile,
     required this.onRemoveFile,
+    required this.onMoveUp,
+    required this.onMoveDown,
   });
 
   final IdeaBoardBlock block;
@@ -308,31 +486,49 @@ class _IdeaBlockCard extends StatefulWidget {
   final VoidCallback onDelete;
   final ValueChanged<String> onSaveContent;
   final VoidCallback onAttachFiles;
-  final ValueChanged<IdeaBoardFile> onRemoveFile;
+  final Future<void> Function(IdeaBoardFile file) onReplaceFile;
+  final Future<void> Function(IdeaBoardFile file) onPreviewFile;
+  final Future<void> Function(IdeaBoardFile file) onDownloadFile;
+  final Future<void> Function(IdeaBoardFile file) onRemoveFile;
+  final VoidCallback onMoveUp;
+  final VoidCallback onMoveDown;
 
   @override
   State<_IdeaBlockCard> createState() => _IdeaBlockCardState();
 }
 
 class _IdeaBlockCardState extends State<_IdeaBlockCard> {
-  late TextEditingController _controller;
+  late final TextEditingController _controller;
+  Timer? _saveTimer;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.block.content);
+    _controller.addListener(_scheduleSave);
   }
 
   @override
   void didUpdateWidget(covariant _IdeaBlockCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.block.content != widget.block.content) {
+    if (oldWidget.block.content != widget.block.content && _controller.text != widget.block.content) {
       _controller.text = widget.block.content;
     }
   }
 
+  void _scheduleSave() {
+    if (!widget.canEdit) return;
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(milliseconds: 700), () {
+      if (!mounted) return;
+      widget.onSaveContent(_controller.text);
+    });
+  }
+
   @override
   void dispose() {
+    _saveTimer?.cancel();
+    _controller.removeListener(_scheduleSave);
     _controller.dispose();
     super.dispose();
   }
@@ -376,11 +572,22 @@ class _IdeaBlockCardState extends State<_IdeaBlockCard> {
                 ),
               ),
               const Spacer(),
-              if (widget.canEdit)
+              if (widget.canEdit) ...[
+                IconButton(
+                  onPressed: widget.onMoveUp,
+                  icon: const Icon(Icons.keyboard_arrow_up, size: 18),
+                  tooltip: 'Move Up',
+                ),
+                IconButton(
+                  onPressed: widget.onMoveDown,
+                  icon: const Icon(Icons.keyboard_arrow_down, size: 18),
+                  tooltip: 'Move Down',
+                ),
                 IconButton(
                   onPressed: widget.onDelete,
                   icon: const Icon(Icons.delete_outline, size: 18),
                 ),
+              ],
             ],
           ),
           TextField(
@@ -396,8 +603,6 @@ class _IdeaBlockCardState extends State<_IdeaBlockCard> {
               border: InputBorder.none,
               hintText: isTitle ? 'Section title' : 'Write content...',
             ),
-            onSubmitted: widget.onSaveContent,
-            onEditingComplete: () => widget.onSaveContent(_controller.text),
           ),
           if (widget.block.files.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -408,6 +613,7 @@ class _IdeaBlockCardState extends State<_IdeaBlockCard> {
                 decoration: BoxDecoration(
                   color: const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
                 ),
                 child: Row(
                   children: [
@@ -420,11 +626,28 @@ class _IdeaBlockCardState extends State<_IdeaBlockCard> {
                         style: const TextStyle(fontSize: 12),
                       ),
                     ),
-                    if (widget.canEdit)
+                    IconButton(
+                      onPressed: () => widget.onPreviewFile(file),
+                      icon: const Icon(Icons.open_in_new, size: 16),
+                      tooltip: 'Preview',
+                    ),
+                    IconButton(
+                      onPressed: () => widget.onDownloadFile(file),
+                      icon: const Icon(Icons.download_outlined, size: 16),
+                      tooltip: 'Download',
+                    ),
+                    if (widget.canEdit) ...[
+                      IconButton(
+                        onPressed: () => widget.onReplaceFile(file),
+                        icon: const Icon(Icons.swap_horiz, size: 16),
+                        tooltip: 'Replace',
+                      ),
                       IconButton(
                         onPressed: () => widget.onRemoveFile(file),
                         icon: const Icon(Icons.close, size: 16),
+                        tooltip: 'Remove',
                       ),
+                    ],
                   ],
                 ),
               ),
