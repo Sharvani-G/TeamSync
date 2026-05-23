@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/models.dart';
 import 'file_service.dart';
 import 'user_service.dart';
+import 'pagination_service.dart';
+import 'firestore_query_optimizer.dart';
 
 class ProjectService {
   ProjectService._();
@@ -3011,5 +3013,376 @@ class ProjectService {
       deliverAt: _parseDateTime(data['deliverAt']),
       data: Map<String, dynamic>.from(data['data'] as Map? ?? {}),
     );
+  }
+
+  // ============ PAGINATION & LAZY LOADING ============
+
+  /// Fetch first page of user's projects with pagination
+  /// Uses composite index: (createdBy, createdAt DESC)
+  Future<PaginatedResults<Project>> fetchMyProjectsPage({
+    int pageSize = 20,
+  }) async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) {
+      return PaginatedResults(
+        items: [],
+        nextCursor: PaginationCursor.initial(pageSize: pageSize),
+      );
+    }
+
+    try {
+      final query = FirestoreQueryOptimizer.instance
+          .buildUserProjectsQuery(
+            userId: authUser.uid,
+            limit: pageSize,
+          );
+
+      final snapshot = await query.get();
+      final docs = snapshot.docs;
+
+      // Determine if more results exist
+      bool hasMore = docs.length > pageSize;
+      if (hasMore) {
+        docs.removeLast(); // Remove extra document used to check for more
+      }
+
+      final projects = docs
+          .map((doc) => _parseProject(doc))
+          .toList();
+
+      final nextCursor = PaginationCursor(
+        lastDocument: docs.isNotEmpty ? docs.last : null,
+        hasMore: hasMore,
+        pageSize: pageSize,
+      );
+
+      return PaginatedResults(
+        items: projects,
+        nextCursor: nextCursor,
+        totalCount: projects.length,
+      );
+    } catch (e) {
+      print('❌ Error fetching projects page: $e');
+      return PaginatedResults(
+        items: [],
+        nextCursor: PaginationCursor.initial(pageSize: pageSize),
+      );
+    }
+  }
+
+  /// Fetch next page of user's projects
+  Future<PaginatedResults<Project>> fetchMyProjectsNextPage(
+    PaginationCursor currentCursor,
+  ) async {
+    if (!currentCursor.hasMore || currentCursor.lastDocument == null) {
+      return PaginatedResults(
+        items: [],
+        nextCursor: currentCursor,
+      );
+    }
+
+    try {
+      final authUser = _auth.currentUser;
+      if (authUser == null) {
+        return PaginatedResults(
+          items: [],
+          nextCursor: currentCursor,
+        );
+      }
+
+      final query = FirestoreQueryOptimizer.instance
+          .buildUserProjectsQuery(
+            userId: authUser.uid,
+            limit: currentCursor.pageSize,
+            startAfter: currentCursor.lastDocument,
+          );
+
+      final snapshot = await query.get();
+      final docs = snapshot.docs;
+
+      bool hasMore = docs.length > currentCursor.pageSize;
+      if (hasMore) {
+        docs.removeLast();
+      }
+
+      final projects = docs
+          .map((doc) => _parseProject(doc))
+          .toList();
+
+      final nextCursor = PaginationCursor(
+        lastDocument: docs.isNotEmpty ? docs.last : null,
+        hasMore: hasMore,
+        pageSize: currentCursor.pageSize,
+      );
+
+      return PaginatedResults(
+        items: projects,
+        nextCursor: nextCursor,
+        totalCount: projects.length,
+      );
+    } catch (e) {
+      print('❌ Error fetching next projects page: $e');
+      return PaginatedResults(
+        items: [],
+        nextCursor: currentCursor,
+      );
+    }
+  }
+
+  /// Fetch public projects for discovery with pagination
+  Future<PaginatedResults<Project>> fetchPublicProjectsPage({
+    int pageSize = 20,
+  }) async {
+    try {
+      final query = FirestoreQueryOptimizer.instance
+          .buildPublicProjectsQuery(limit: pageSize);
+
+      final snapshot = await query.get();
+      final docs = snapshot.docs;
+
+      bool hasMore = docs.length > pageSize;
+      if (hasMore) {
+        docs.removeLast();
+      }
+
+      final projects = docs
+          .map((doc) => _parseProject(doc))
+          .toList();
+
+      final nextCursor = PaginationCursor(
+        lastDocument: docs.isNotEmpty ? docs.last : null,
+        hasMore: hasMore,
+        pageSize: pageSize,
+      );
+
+      return PaginatedResults(
+        items: projects,
+        nextCursor: nextCursor,
+        totalCount: projects.length,
+      );
+    } catch (e) {
+      print('❌ Error fetching public projects: $e');
+      return PaginatedResults(
+        items: [],
+        nextCursor: PaginationCursor.initial(pageSize: pageSize),
+      );
+    }
+  }
+
+  /// Fetch next page of public projects
+  Future<PaginatedResults<Project>> fetchPublicProjectsNextPage(
+    PaginationCursor currentCursor,
+  ) async {
+    if (!currentCursor.hasMore || currentCursor.lastDocument == null) {
+      return PaginatedResults(
+        items: [],
+        nextCursor: currentCursor,
+      );
+    }
+
+    try {
+      final query = FirestoreQueryOptimizer.instance
+          .buildPublicProjectsQuery(
+            limit: currentCursor.pageSize,
+            startAfter: currentCursor.lastDocument,
+          );
+
+      final snapshot = await query.get();
+      final docs = snapshot.docs;
+
+      bool hasMore = docs.length > currentCursor.pageSize;
+      if (hasMore) {
+        docs.removeLast();
+      }
+
+      final projects = docs
+          .map((doc) => _parseProject(doc))
+          .toList();
+
+      final nextCursor = PaginationCursor(
+        lastDocument: docs.isNotEmpty ? docs.last : null,
+        hasMore: hasMore,
+        pageSize: currentCursor.pageSize,
+      );
+
+      return PaginatedResults(
+        items: projects,
+        nextCursor: nextCursor,
+        totalCount: projects.length,
+      );
+    } catch (e) {
+      print('❌ Error fetching next public projects page: $e');
+      return PaginatedResults(
+        items: [],
+        nextCursor: currentCursor,
+      );
+    }
+  }
+
+  /// Lazily load older channel messages
+  /// Returns messages before [beforeTime], limiting to [pageSize]
+  Future<PaginatedResults<ProjectChatMessage>> loadOlderChannelMessagesPage({
+    required String projectId,
+    required String channelId,
+    required DateTime beforeTime,
+    int pageSize = 30,
+  }) async {
+    try {
+      final query = FirestoreQueryOptimizer.instance
+          .buildChannelMessagesQuery(
+            projectId: projectId,
+            channelId: channelId,
+            limit: pageSize,
+            beforeTime: Timestamp.fromDate(beforeTime),
+          );
+
+      final snapshot = await query.get();
+      final docs = snapshot.docs;
+
+      bool hasMore = docs.length > pageSize;
+      if (hasMore) {
+        docs.removeLast();
+      }
+
+      final messages = docs
+          .map((doc) => _parseProjectChatMessage(doc))
+          .toList()
+          .reversed
+          .toList();
+
+      final nextCursor = PaginationCursor(
+        lastDocument: docs.isNotEmpty ? docs.first : null,
+        hasMore: hasMore,
+        pageSize: pageSize,
+      );
+
+      return PaginatedResults(
+        items: messages,
+        nextCursor: nextCursor,
+        totalCount: messages.length,
+      );
+    } catch (e) {
+      print('❌ Error loading older channel messages: $e');
+      return PaginatedResults(
+        items: [],
+        nextCursor: PaginationCursor.initial(pageSize: pageSize),
+      );
+    }
+  }
+
+  /// Fetch call history with pagination
+  Future<PaginatedResults<ProjectCallSession>> fetchCallHistoryPage({
+    required String projectId,
+    int pageSize = 20,
+  }) async {
+    try {
+      final query = FirestoreQueryOptimizer.instance
+          .buildCallHistoryQuery(
+            projectId: projectId,
+            limit: pageSize,
+          );
+
+      final snapshot = await query.get();
+      final docs = snapshot.docs;
+
+      bool hasMore = docs.length > pageSize;
+      if (hasMore) {
+        docs.removeLast();
+      }
+
+      final calls = docs
+          .map((doc) => _parseProjectCallSession(doc))
+          .toList();
+
+      final nextCursor = PaginationCursor(
+        lastDocument: docs.isNotEmpty ? docs.last : null,
+        hasMore: hasMore,
+        pageSize: pageSize,
+      );
+
+      return PaginatedResults(
+        items: calls,
+        nextCursor: nextCursor,
+        totalCount: calls.length,
+      );
+    } catch (e) {
+      print('❌ Error fetching call history: $e');
+      return PaginatedResults(
+        items: [],
+        nextCursor: PaginationCursor.initial(pageSize: pageSize),
+      );
+    }
+  }
+
+  /// Fetch next page of call history
+  Future<PaginatedResults<ProjectCallSession>> fetchCallHistoryNextPage(
+    String projectId,
+    PaginationCursor currentCursor,
+  ) async {
+    if (!currentCursor.hasMore || currentCursor.lastDocument == null) {
+      return PaginatedResults(
+        items: [],
+        nextCursor: currentCursor,
+      );
+    }
+
+    try {
+      final query = FirestoreQueryOptimizer.instance
+          .buildCallHistoryQuery(
+            projectId: projectId,
+            limit: currentCursor.pageSize,
+            startAfter: currentCursor.lastDocument,
+          );
+
+      final snapshot = await query.get();
+      final docs = snapshot.docs;
+
+      bool hasMore = docs.length > currentCursor.pageSize;
+      if (hasMore) {
+        docs.removeLast();
+      }
+
+      final calls = docs
+          .map((doc) => _parseProjectCallSession(doc))
+          .toList();
+
+      final nextCursor = PaginationCursor(
+        lastDocument: docs.isNotEmpty ? docs.last : null,
+        hasMore: hasMore,
+        pageSize: currentCursor.pageSize,
+      );
+
+      return PaginatedResults(
+        items: calls,
+        nextCursor: nextCursor,
+        totalCount: calls.length,
+      );
+    } catch (e) {
+      print('❌ Error fetching next call history page: $e');
+      return PaginatedResults(
+        items: [],
+        nextCursor: currentCursor,
+      );
+    }
+  }
+
+  /// Get count estimate for projects (non-transactional)
+  /// Real count requires document counting which has limitations in Firestore
+  Future<int> estimateMyProjectsCount() async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) return 0;
+
+    try {
+      // This is an estimate - actual count requires cloud functions
+      final query = _firestore
+          .collection('projects')
+          .where('createdBy', isEqualTo: authUser.uid);
+
+      final snapshot = await query.count().get();
+      return snapshot.count ?? 0;
+    } catch (e) {
+      print('⚠️ Error estimating projects count: $e');
+      return 0;
+    }
   }
 }

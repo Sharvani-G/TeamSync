@@ -364,49 +364,64 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
               ),
             ],
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 360;
+              return Stack(
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Welcome back, ${user.name}!',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
+                  Positioned.fill(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: IgnorePointer(
+                        child: Container(
+                          width: isNarrow ? 116 : 140,
+                          height: isNarrow ? 116 : 140,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.08),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.rocket_launch_outlined,
+                              color: Colors.white,
+                              size: 40,
+                            ),
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'You have $totalProjects projects in progress',
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(
-                      Icons.rocket_launch_outlined,
-                      color: Colors.white,
-                      size: 32,
+                  ),
+                  Padding(
+                    padding: EdgeInsets.only(right: isNarrow ? 88 : 120),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Welcome back, ${user.name}!',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'You have $totalProjects projects in progress',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
-              ),
-            ],
+              );
+            },
           ),
         ),
       ),
@@ -420,53 +435,79 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
       ),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16),
-        child: Row(
-          children: [
-            Expanded(
-              child: MouseRegion(
-                onEnter: (_) {},
-                child: GestureDetector(
-                  onTap: () {
-                    Navigator.pushNamed(context, '/create-project');
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [AppTheme.primary, AppTheme.primary.withOpacity(0.8)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final stacked = constraints.maxWidth < 360;
+            Widget buildButton({
+              required String title,
+              required IconData icon,
+              required Color background,
+              required Color foreground,
+              required Color borderColor,
+              required VoidCallback onTap,
+            }) {
+              return GestureDetector(
+                onTap: onTap,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: background,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: borderColor, width: 1),
+                    boxShadow: background == Colors.white
+                        ? null
+                        : [
+                            BoxShadow(
+                              color: AppTheme.primary.withOpacity(0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(icon, color: foreground, size: 24),
+                      const SizedBox(height: 4),
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: foreground,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
                       ),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppTheme.primary.withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: const Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.add_circle_outline, color: Colors.white, size: 24),
-                        SizedBox(height: 4),
-                        Text(
-                          'Add Project',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
+                    ],
                   ),
                 ),
+              );
+            }
+
+            final first = Expanded(
+              child: buildButton(
+                title: 'Add Project',
+                icon: Icons.add_circle_outline,
+                background: AppTheme.primary,
+                foreground: Colors.white,
+                borderColor: AppTheme.primary,
+                onTap: () => Navigator.pushNamed(context, '/create-project'),
               ),
-            ),
-          ],
+            );
+            final second = Expanded(
+              child: buildButton(
+                title: 'Discover',
+                icon: Icons.explore_outlined,
+                background: Colors.white,
+                foreground: AppTheme.primary,
+                borderColor: Colors.grey[200]!,
+                onTap: () => Navigator.pushNamed(context, '/discover'),
+              ),
+            );
+
+            return stacked
+                ? Column(children: [first, const SizedBox(height: 12), second])
+                : Row(children: [first, const SizedBox(width: 12), second]);
+          },
         ),
       ),
     );
@@ -479,36 +520,37 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
     required int pending,
   }) {
     final stats = [
-      {'label': 'Total Projects', 'count': total, 'color': AppTheme.primary, 'icon': Icons.folder},
-      {'label': 'With Levels', 'count': completed, 'color': const Color(0xFF10B981), 'icon': Icons.view_list},
-      {'label': 'Total Levels', 'count': running, 'color': const Color(0xFFF59E0B), 'icon': Icons.view_week},
-      {'label': 'Without Levels', 'count': pending, 'color': const Color(0xFFEF4444), 'icon': Icons.remove_circle_outline},
+      {'label': 'Total', 'count': total, 'color': const Color(0xFF3B82F6), 'icon': Icons.folder_open_outlined},
+      {'label': 'Completed', 'count': completed, 'color': const Color(0xFF10B981), 'icon': Icons.check_circle_outline},
+      {'label': 'Running', 'count': running, 'color': const Color(0xFFF59E0B), 'icon': Icons.play_circle_outline},
+      {'label': 'Pending', 'count': pending, 'color': const Color(0xFF8B5CF6), 'icon': Icons.hourglass_bottom_outlined},
     ];
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
-      child: GridView.count(
-        crossAxisCount: 2,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        children: List.generate(stats.length, (index) {
-          return ScaleTransition(
-            scale: Tween<double>(begin: 0.7, end: 1).animate(
-              CurvedAnimation(
-                parent: _scaleController,
-                curve: Interval(0.1 * (index + 1), 1),
-              ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final crossAxisCount = constraints.maxWidth < 360 ? 1 : 2;
+          return GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: stats.length,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: constraints.maxWidth < 360 ? 3.1 : 2.35,
             ),
-            child: _buildStatCard(
-              label: stats[index]['label'] as String,
-              count: stats[index]['count'] as int,
-              color: stats[index]['color'] as Color,
-              icon: stats[index]['icon'] as IconData,
-            ),
+            itemBuilder: (context, index) {
+              return _buildStatCard(
+                label: stats[index]['label'] as String,
+                count: stats[index]['count'] as int,
+                color: stats[index]['color'] as Color,
+                icon: stats[index]['icon'] as IconData,
+              );
+            },
           );
-        }),
+        },
       ),
     );
   }

@@ -68,48 +68,52 @@ class _ChatChannelViewState extends State<ChatChannelView> {
   String _uploadLabel = '';
 
   @override
-  void initState() {
-    super.initState();
-    _scrollController.addListener(_handleScroll);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ProjectService.instance.markChannelRead(projectId: widget.projectId, channelId: widget.channelId);
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _scrollController.removeListener(_handleScroll);
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  void _handleScroll() {
-    if (_scrollController.position.pixels <= 100 && !_isLoadingOlder && _hasMoreOlder) {
-      _loadOlderMessages();
-    }
-    _autoScroll = _scrollController.position.extentAfter < 160;
-  }
-
-  Future<void> _loadOlderMessages() async {
-    final oldest = _combinedMessages.isNotEmpty ? _combinedMessages.first.createdAt : null;
-    if (oldest == null) {
-      return;
-    }
-
-    setState(() => _isLoadingOlder = true);
-    try {
-      final older = await ProjectService.instance.loadOlderChannelMessages(
-        widget.projectId,
-        widget.channelId,
-        limit: _pageSize,
-        before: oldest,
-      );
-
-      if (!mounted) return;
-      setState(() {
-        final existingIds = _olderMessages.map((message) => message.id).toSet();
-        for (final message in older) {
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    children: message.attachments.map((attachment) {
+                                      return Padding(
+                                        padding: const EdgeInsets.only(right: 8),
+                                        child: InkWell(
+                                          onTap: () => launchUrl(
+                                            Uri.parse(attachment.fileUrl),
+                                            mode: LaunchMode.externalApplication,
+                                          ),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                            decoration: BoxDecoration(
+                                              color: isMe
+                                                  ? Colors.white.withOpacity(0.12)
+                                                  : const Color(0xFFF8FAFC),
+                                              borderRadius: BorderRadius.circular(12),
+                                              border: Border.all(
+                                                color: isMe ? Colors.white.withOpacity(0.18) : AppTheme.border,
+                                              ),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  _iconForAttachmentType(attachment.fileType),
+                                                  size: 16,
+                                                  color: isMe ? Colors.white : AppTheme.primary,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  attachment.fileName,
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: isMe ? Colors.white : AppTheme.textPrimary,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
           if (!existingIds.contains(message.id)) {
             _olderMessages.insert(0, message);
           }
@@ -648,17 +652,24 @@ class _ChatChannelViewState extends State<ChatChannelView> {
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: AppTheme.border),
                       ),
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: List.generate(_pendingAttachments.length, (index) {
-                          final file = _pendingAttachments[index];
-                          return Chip(
-                            label: Text(file.name, overflow: TextOverflow.ellipsis),
-                            avatar: Icon(_iconForAttachmentType(file.name.split('.').last), size: 16),
-                            onDeleted: () => _removePendingAttachment(index),
-                          );
-                        }),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: List.generate(_pendingAttachments.length, (index) {
+                            final file = _pendingAttachments[index];
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: Chip(
+                                label: SizedBox(
+                                  width: 120,
+                                  child: Text(file.name, overflow: TextOverflow.ellipsis),
+                                ),
+                                avatar: Icon(_iconForAttachmentType(file.name.split('.').last), size: 16),
+                                onDeleted: () => _removePendingAttachment(index),
+                              ),
+                            );
+                          }),
+                        ),
                       ),
                     ),
                   Row(
@@ -679,7 +690,7 @@ class _ChatChannelViewState extends State<ChatChannelView> {
                       Expanded(
                         child: TextField(
                           controller: _controller,
-                          maxLines: 5,
+                          maxLines: 4,
                           minLines: 1,
                           textInputAction: TextInputAction.newline,
                           decoration: InputDecoration(
@@ -696,8 +707,8 @@ class _ChatChannelViewState extends State<ChatChannelView> {
                           return GestureDetector(
                             onTap: active ? _sendMessage : null,
                             child: Container(
-                              width: 40,
-                              height: 40,
+                              width: 42,
+                              height: 42,
                               decoration: BoxDecoration(
                                 color: active ? AppTheme.primary : const Color(0xFFD1D5DB),
                                 borderRadius: BorderRadius.circular(12),

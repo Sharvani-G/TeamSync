@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'models/models.dart';
 import 'app/router.dart';
@@ -37,8 +38,46 @@ Future<void> main() async {
   runApp(const ProjectSyncApp());
 }
 
-class ProjectSyncApp extends StatelessWidget {
+class ProjectSyncApp extends StatefulWidget {
   const ProjectSyncApp({super.key});
+
+  @override
+  State<ProjectSyncApp> createState() => _ProjectSyncAppState();
+}
+
+class _ProjectSyncAppState extends State<ProjectSyncApp> {
+  ThemeMode _themeMode = ThemeMode.system;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadThemePreference();
+  }
+
+  Future<void> _loadThemePreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    final themeName = prefs.getString('theme_mode') ?? 'system';
+    setState(() {
+      _themeMode = switch (themeName) {
+        'light' => ThemeMode.light,
+        'dark' => ThemeMode.dark,
+        _ => ThemeMode.system,
+      };
+    });
+  }
+
+  Future<void> _changeTheme(ThemeMode themeMode) async {
+    final prefs = await SharedPreferences.getInstance();
+    final themeName = switch (themeMode) {
+      ThemeMode.light => 'light',
+      ThemeMode.dark => 'dark',
+      ThemeMode.system => 'system',
+    };
+    await prefs.setString('theme_mode', themeName);
+    setState(() {
+      _themeMode = themeMode;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,14 +85,29 @@ class ProjectSyncApp extends StatelessWidget {
       title: 'TeamSync',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      onGenerateRoute: generateRoute,
-      home: const _AuthGate(),
+      darkTheme: AppTheme.darkTheme,
+      themeMode: _themeMode,
+      onGenerateRoute: (settings) => generateRoute(settings, _changeTheme),
+      home: _AuthGateWrapper(onThemeChanged: _changeTheme),
     );
   }
 }
 
+class _AuthGateWrapper extends StatelessWidget {
+  final Function(ThemeMode) onThemeChanged;
+
+  const _AuthGateWrapper({required this.onThemeChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return _AuthGate(onThemeChanged: onThemeChanged);
+  }
+}
+
 class _AuthGate extends StatelessWidget {
-  const _AuthGate();
+  final Function(ThemeMode) onThemeChanged;
+
+  const _AuthGate({required this.onThemeChanged});
 
   @override
   Widget build(BuildContext context) {

@@ -168,17 +168,59 @@ service cloud.firestore {
 
           allow delete: if isAuth() && (resource.data.senderId == request.auth.uid || isProjectAdmin(projectId));
         }
+
+        // ============ TYPING INDICATORS ============
+        match /typing/{userId} {
+          // All channel members can see who's typing
+          allow read: if isAuth() && (
+            (get(/databases/$(database)/documents/projects/$(projectId)/channels/$(channelId)).data.isPrivate == true && 
+              exists(/databases/$(database)/documents/projects/$(projectId)/channels/$(channelId)/members/$(request.auth.uid))) ||
+            (get(/databases/$(database)/documents/projects/$(projectId)/channels/$(channelId)).data.isPrivate == false && 
+              (isProjectCollaborator(projectId) || isPublicProject(projectId)))
+          );
+          
+          // Users can only write their own typing indicator
+          allow write: if isAuth() && request.auth.uid == userId;
+          
+          // Auto-cleanup: anyone in channel can delete (for cleanup)
+          allow delete: if isAuth() && (
+            request.auth.uid == userId ||
+            (get(/databases/$(database)/documents/projects/$(projectId)/channels/$(channelId)).data.isPrivate == true && 
+              exists(/databases/$(database)/documents/projects/$(projectId)/channels/$(channelId)/members/$(request.auth.uid))) ||
+            (get(/databases/$(database)/documents/projects/$(projectId)/channels/$(channelId)).data.isPrivate == false && 
+              (isProjectCollaborator(projectId) || isPublicProject(projectId)))
+          );
+        }
+
+        // ============ PINNED MESSAGES ============
+        // Handled as field in channel document - no separate subcollection needed
       }
 
-      match /callSessions/{callId} {
-        allow read, create, update: if isProjectCollaborator(projectId);
-        allow delete: if isProjectAdmin(projectId);
-      }
-
-      match /callSchedules/{scheduleId} {
+      // ============ CALLS ============
+      match /calls/{callId} {
+        // All project collaborators can read calls
         allow read: if isProjectCollaborator(projectId);
-        allow create, delete: if isProjectAdmin(projectId);
-        allow update: if isProjectAdmin(projectId);
+        
+        // Any collaborator can create/schedule a new call
+        allow create: if isProjectCollaborator(projectId) && 
+                         isAuth() && 
+                         request.resource.data.initiatorId == request.auth.uid &&
+                         request.resource.data.status in ['scheduled', 'inProgress'];
+        
+        // Call initiator or admin can update (status, participants, sharing state)
+        allow update: if isAuth() && (
+          (resource.data.initiatorId == request.auth.uid) || 
+          isProjectAdmin(projectId)
+        );
+        
+        // Only admin can delete calls
+        allow delete: if isProjectAdmin(projectId);
+        
+        // Participants subcollection (for advanced tracking)
+        match /participants/{userId} {
+          allow read: if isProjectCollaborator(projectId);
+          allow write: if isProjectAdmin(projectId) || (isAuth() && resource.data.initiatorId == request.auth.uid);
+        }
       }
 
       match /members/{memberId} {
@@ -197,6 +239,19 @@ service cloud.firestore {
           isProjectAdmin(request.resource.data.projectId)
         );
       allow update: if isUser(userId);
+    }
+
+    // ============ CALL NOTIFICATIONS ============
+    // /users/{userId}/callNotifications/{notificationId}
+    match /users/{userId}/callNotifications/{notificationId} {
+      // Users can only read their own call notifications
+      allow read: if isUser(userId);
+      
+      // Any authenticated user or admin can create (for incoming/reminder notifications)
+      allow create: if isAuth();
+      
+      // Users can update/delete their own notifications (to acknowledge/dismiss)
+      allow update, delete: if isUser(userId);
     }
 
     // ============ JOIN REQUESTS COLLECTION ============
@@ -238,6 +293,17 @@ service cloud.firestore {
     }
 
     // ============ DENY ALL OTHER ACCESS ============
+    
+    // Collection group for all messages - enables global search
+    match /{path=**}/messages/{messageId} {
+      allow read: if isAuth() && (
+        // Extract projectId and check collaborator access
+        path[1] == request.auth.uid && path[0] == 'projects' ||
+        path[0] == 'projects' && isProjectCollaborator(path[1])
+      );
+    }
+
+    // Catch-all deny
     match /{document=**} {
       allow read, write: if false;
     }

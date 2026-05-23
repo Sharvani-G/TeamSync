@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
+  // Light Colors
   static const Color primary = Color(0xFF2563EB);
   static const Color primaryDark = Color(0xFF1D4ED8);
   static const Color secondary = Color(0xFF7C3AED);
@@ -14,6 +15,14 @@ class AppTheme {
   static const Color textPrimary = Color(0xFF111827);
   static const Color textSecondary = Color(0xFF6B7280);
   static const Color textMuted = Color(0xFF9CA3AF);
+
+  // Dark Colors
+  static const Color darkSurface = Color(0xFF1F2937);
+  static const Color darkBackground = Color(0xFF111827);
+  static const Color darkBorder = Color(0xFF374151);
+  static const Color darkTextPrimary = Color(0xFFF9FAFB);
+  static const Color darkTextSecondary = Color(0xFFD1D5DB);
+  static const Color darkTextMuted = Color(0xFF9CA3AF);
 
   static ThemeData get lightTheme {
     return ThemeData(
@@ -83,6 +92,84 @@ class AppTheme {
         backgroundColor: surface,
         selectedItemColor: primary,
         unselectedItemColor: textMuted,
+        elevation: 0,
+        type: BottomNavigationBarType.fixed,
+        selectedLabelStyle:
+            TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+        unselectedLabelStyle: TextStyle(fontSize: 11),
+      ),
+    );
+  }
+
+  static ThemeData get darkTheme {
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: primary,
+        brightness: Brightness.dark,
+        surface: darkSurface,
+      ),
+      scaffoldBackgroundColor: darkBackground,
+      canvasColor: darkSurface,
+      textTheme: GoogleFonts.dmSansTextTheme(ThemeData.dark().textTheme),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: darkSurface,
+        foregroundColor: darkTextPrimary,
+        elevation: 0,
+        centerTitle: false,
+        surfaceTintColor: Colors.transparent,
+        titleTextStyle: TextStyle(
+          color: darkTextPrimary,
+          fontSize: 17,
+          fontWeight: FontWeight.w600,
+        ),
+        iconTheme: IconThemeData(color: darkTextPrimary, size: 22),
+      ),
+      cardTheme: CardThemeData(
+        color: darkSurface,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: darkBorder, width: 1),
+        ),
+        margin: EdgeInsets.zero,
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: darkSurface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: darkBorder),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: darkBorder),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: primary, width: 2),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        hintStyle: const TextStyle(color: darkTextMuted, fontSize: 14),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: primary,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        ),
+      ),
+      dividerTheme:
+          const DividerThemeData(color: darkBorder, thickness: 1, space: 0),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: darkSurface,
+        selectedItemColor: primary,
+        unselectedItemColor: darkTextMuted,
         elevation: 0,
         type: BottomNavigationBarType.fixed,
         selectedLabelStyle:

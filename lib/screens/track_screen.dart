@@ -72,14 +72,21 @@ class TrackScreen extends StatelessWidget {
           body: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              GridView.count(
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                childAspectRatio: 1.4,
-                children: stats.map((s) => _StatCard(stat: s)).toList(),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = constraints.maxWidth;
+                  final crossAxisCount = width < 360 ? 1 : 2;
+                  final childAspectRatio = width < 360 ? 2.9 : 1.55;
+                  return GridView.count(
+                    crossAxisCount: crossAxisCount,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    childAspectRatio: childAspectRatio,
+                    children: stats.map((s) => _StatCard(stat: s)).toList(),
+                  );
+                },
               ),
               const SizedBox(height: 16),
               Card(
@@ -152,75 +159,95 @@ class TrackScreen extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(14),
                                   border: Border.all(color: const Color(0xFFE5E7EB)),
                                 ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
+                                child: LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final isNarrow = constraints.maxWidth < 320;
+                                    return Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        CircleAvatar(
-                                          radius: 16,
-                                          backgroundColor: level.completed
-                                              ? const Color(0xFFDCFCE7)
-                                              : AppTheme.primary.withOpacity(0.12),
-                                          foregroundColor: level.completed
-                                              ? const Color(0xFF15803D)
-                                              : AppTheme.primary,
-                                          child: Text('${level.order}'),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                level.title,
-                                                style: const TextStyle(
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: AppTheme.textPrimary,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 2),
-                                              Text(
-                                                'Updated ${level.updatedAt != null ? '${level.updatedAt!.month}/${level.updatedAt!.day}/${level.updatedAt!.year}' : '${level.createdAt.month}/${level.createdAt.day}/${level.createdAt.year}'}',
-                                                style: const TextStyle(
-                                                  fontSize: 11,
-                                                  color: AppTheme.textSecondary,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                          decoration: BoxDecoration(
-                                            color: level.completed ? const Color(0xFFDCFCE7) : const Color(0xFFE0F2FE),
-                                            borderRadius: BorderRadius.circular(999),
-                                          ),
-                                          child: Text(
-                                            level.completed ? 'Completed' : '${level.percentage}%',
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w700,
-                                              color: level.completed ? const Color(0xFF15803D) : const Color(0xFF0369A1),
+                                        Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            CircleAvatar(
+                                              radius: 16,
+                                              backgroundColor: level.completed
+                                                  ? const Color(0xFFDCFCE7)
+                                                  : AppTheme.primary.withOpacity(0.12),
+                                              foregroundColor: level.completed
+                                                  ? const Color(0xFF15803D)
+                                                  : AppTheme.primary,
+                                              child: Text('${level.order}'),
                                             ),
-                                          ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    level.title,
+                                                    maxLines: 2,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: const TextStyle(
+                                                      fontSize: 13,
+                                                      fontWeight: FontWeight.w700,
+                                                      color: AppTheme.textPrimary,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    'Updated ${level.updatedAt != null ? '${level.updatedAt!.month}/${level.updatedAt!.day}/${level.updatedAt!.year}' : '${level.createdAt.month}/${level.createdAt.day}/${level.createdAt.year}'}',
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: const TextStyle(
+                                                      fontSize: 11,
+                                                      color: AppTheme.textSecondary,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: ClipRRect(
+                                                borderRadius: BorderRadius.circular(999),
+                                                child: LinearProgressIndicator(
+                                                  value: level.percentage / 100,
+                                                  minHeight: 8,
+                                                  backgroundColor: const Color(0xFFE5E7EB),
+                                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                                    level.completed ? const Color(0xFF16A34A) : AppTheme.primary,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Container(
+                                              constraints: BoxConstraints(maxWidth: isNarrow ? 92 : 110),
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                              decoration: BoxDecoration(
+                                                color: level.completed ? const Color(0xFFDCFCE7) : const Color(0xFFE0F2FE),
+                                                borderRadius: BorderRadius.circular(999),
+                                              ),
+                                              child: Text(
+                                                level.completed ? 'Completed' : '${level.percentage}%',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: level.completed ? const Color(0xFF15803D) : const Color(0xFF0369A1),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ],
-                                    ),
-                                    const SizedBox(height: 12),
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(999),
-                                      child: LinearProgressIndicator(
-                                        value: level.percentage / 100,
-                                        minHeight: 8,
-                                        backgroundColor: const Color(0xFFE5E7EB),
-                                        valueColor: AlwaysStoppedAnimation<Color>(
-                                          level.completed ? const Color(0xFF16A34A) : AppTheme.primary,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                                    );
+                                  },
                                 ),
                               ),
                             )),

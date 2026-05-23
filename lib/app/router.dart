@@ -16,8 +16,16 @@ import '../screens/profile_screen.dart';
 import '../screens/entry_screen.dart';
 import '../screens/forgot_password_screen.dart';
 import '../screens/check_email_screen.dart';
+import '../screens/profile/profile_page.dart';
+import '../screens/profile/edit_profile_page.dart';
+import '../screens/profile/change_password_page.dart';
+import '../screens/settings/settings_page.dart';
+import '../screens/notifications/notifications_page.dart';
+import '../screens/faq/faq_page.dart';
+import '../screens/about/about_page.dart';
+import '../screens/transactions/transactions_page.dart';
 
-Route<dynamic> generateRoute(RouteSettings settings) {
+Route<dynamic> generateRoute(RouteSettings settings, [Function(ThemeMode)? onThemeChanged]) {
   final name = settings.name ?? '/';
   final isAuthed = FirebaseAuth.instance.currentUser != null;
 
@@ -137,9 +145,24 @@ Route<dynamic> generateRoute(RouteSettings settings) {
     case '/create-project':
       return _slide(const CreateProjectScreen(), settings);
     case '/notifications':
-      return _slide(const NotificationsScreen(), settings);
+      return _slide(const NotificationsPage(), settings);
     case '/profile':
-      return _slide(const ProfileScreen(), settings);
+      return _slide(const ProfilePage(), settings);
+    case '/profile/edit':
+      return _slide(const EditProfilePage(), settings);
+    case '/profile/change-password':
+      return _slide(const ChangePasswordPage(), settings);
+    case '/settings':
+      return _slide(
+        SettingsPage(onThemeChanged: onThemeChanged ?? (_) {}),
+        settings,
+      );
+    case '/faq':
+      return _slide(const FAQPage(), settings);
+    case '/about':
+      return _slide(const AboutPage(), settings);
+    case '/transactions':
+      return _slide(const TransactionsPage(), settings);
     default:
       return _fade(const MainShell(), settings);
   }

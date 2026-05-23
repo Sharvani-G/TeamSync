@@ -55,13 +55,17 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
         if (isMobile) {
           // MOBILE: Show channel list only
           return Scaffold(
-            appBar: SimpleAppBar(title: project.title),
-            body: _buildChannelList(),
-            floatingActionButton: FloatingActionButton(
-              onPressed: _showCreateChannelDialog,
-              tooltip: 'Create channel',
-              child: const Icon(Icons.add),
+            appBar: SimpleAppBar(
+              title: project.title,
+              actions: [
+                IconButton(
+                  tooltip: 'Create channel',
+                  onPressed: _showCreateChannelDialog,
+                  icon: const Icon(Icons.add_circle_outline),
+                ),
+              ],
             ),
+            body: _buildChannelList(),
           );
         } else {
           // DESKTOP: Show split view
@@ -114,12 +118,16 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
       builder: (context, snapshot) {
         final channels = snapshot.data ?? [];
 
-        if (channels.isEmpty) {
-          return const Center(child: Text('No channels'));
-        }
-
         final screenWidth = MediaQuery.of(context).size.width;
         final isMobile = screenWidth < _mobileBreakpoint;
+
+        if (channels.isEmpty) {
+          return const EmptyState(
+            icon: Icons.tag,
+            title: 'No channels yet',
+            subtitle: 'Create a channel to start the conversation.',
+          );
+        }
 
         return ListView.builder(
           itemCount: channels.length,
@@ -133,9 +141,9 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 child: Card(
                   elevation: 0,
-                  color: isActive ? AppTheme.primary.withOpacity(0.1) : null,
+                  color: isActive ? AppTheme.primary.withOpacity(0.1) : const Color(0xFFF8FAFC),
                   child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     leading: const Icon(Icons.tag),
                     title: Text('# ${ch.name}', maxLines: 1, overflow: TextOverflow.ellipsis),
                     trailing: FutureBuilder<int>(

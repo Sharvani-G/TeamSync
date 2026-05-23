@@ -25,6 +25,12 @@ class ProjectWorkspaceScreen extends StatefulWidget {
 class _ProjectWorkspaceScreenState extends State<ProjectWorkspaceScreen> {
   late int _currentIndex = widget.initialTabIndex.clamp(0, 2);
 
+  static const _tabItems = [
+    _WorkspaceSection(label: 'Idea Board', icon: Icons.space_dashboard_outlined),
+    _WorkspaceSection(label: 'Chat', icon: Icons.chat_bubble_outline),
+    _WorkspaceSection(label: 'Calls', icon: Icons.call_outlined),
+  ];
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<Project?>(
@@ -42,21 +48,6 @@ class _ProjectWorkspaceScreenState extends State<ProjectWorkspaceScreen> {
             body: Center(child: Text('Project not found')),
           );
         }
-
-        final sections = [
-          _WorkspaceSection(
-            label: 'Idea Board',
-            icon: Icons.space_dashboard_outlined,
-          ),
-          _WorkspaceSection(
-            label: 'Chat',
-            icon: Icons.chat_bubble_outline,
-          ),
-          _WorkspaceSection(
-            label: 'Calls',
-            icon: Icons.call_outlined,
-          ),
-        ];
 
         final screens = [
           IdeaBoardScreen(projectId: widget.projectId),
@@ -108,42 +99,72 @@ class _ProjectWorkspaceScreenState extends State<ProjectWorkspaceScreen> {
                         ),
                       ),
                       const SizedBox(height: 14),
-                      Row(
-                        children: List.generate(sections.length, (index) {
-                          final section = sections[index];
-                          final selected = _currentIndex == index;
-                          return Expanded(
-                            child: Padding(
-                              padding: EdgeInsets.only(
-                                left: index == 0 ? 0 : 8,
-                              ),
-                              child: ChoiceChip(
-                                selected: selected,
-                                onSelected: (_) => setState(() => _currentIndex = index),
-                                labelPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                avatar: Icon(
-                                  section.icon,
-                                  size: 18,
-                                  color: selected ? Colors.white : AppTheme.textSecondary,
-                                ),
-                                label: Text(
-                                  section.label,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    color: selected ? Colors.white : AppTheme.textPrimary,
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final width = constraints.maxWidth;
+                          final itemWidth = (width - 16) / _tabItems.length;
+                          return Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3F4F6),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: AppTheme.border),
+                            ),
+                            child: Row(
+                              children: List.generate(_tabItems.length, (index) {
+                                final section = _tabItems[index];
+                                final selected = _currentIndex == index;
+                                return Expanded(
+                                  child: SizedBox(
+                                    width: itemWidth,
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 180),
+                                      curve: Curves.easeOut,
+                                      decoration: BoxDecoration(
+                                        color: selected ? AppTheme.primary : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          borderRadius: BorderRadius.circular(12),
+                                          onTap: () => setState(() => _currentIndex = index),
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                                            child: FittedBox(
+                                              fit: BoxFit.scaleDown,
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    section.icon,
+                                                    size: 18,
+                                                    color: selected ? Colors.white : AppTheme.textSecondary,
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    section.label,
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: TextStyle(
+                                                      fontSize: 13,
+                                                      fontWeight: FontWeight.w700,
+                                                      color: selected ? Colors.white : AppTheme.textPrimary,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                                selectedColor: AppTheme.primary,
-                                backgroundColor: const Color(0xFFF3F4F6),
-                                shape: StadiumBorder(
-                                  side: BorderSide(
-                                    color: selected ? AppTheme.primary : AppTheme.border,
-                                  ),
-                                ),
-                              ),
+                                );
+                              }),
                             ),
                           );
-                        }),
+                        },
                       ),
                     ],
                   ),
