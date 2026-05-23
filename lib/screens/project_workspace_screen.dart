@@ -81,8 +81,10 @@ class _ProjectWorkspaceScreenState extends State<ProjectWorkspaceScreen> {
                       const SizedBox(height: 4),
                       Text(
                         project.title,
-                        style: const TextStyle(
-                          fontSize: 22,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: MediaQuery.of(context).size.width < 360 ? 19 : 22,
                           fontWeight: FontWeight.w700,
                           color: AppTheme.textPrimary,
                         ),
@@ -102,6 +104,7 @@ class _ProjectWorkspaceScreenState extends State<ProjectWorkspaceScreen> {
                       LayoutBuilder(
                         builder: (context, constraints) {
                           final width = constraints.maxWidth;
+                          final isCompact = width < 360;
                           final itemWidth = (width - 16) / _tabItems.length;
                           return Container(
                             padding: const EdgeInsets.all(4),
@@ -130,7 +133,10 @@ class _ProjectWorkspaceScreenState extends State<ProjectWorkspaceScreen> {
                                           borderRadius: BorderRadius.circular(12),
                                           onTap: () => setState(() => _currentIndex = index),
                                           child: Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                                            padding: EdgeInsets.symmetric(
+                                              horizontal: isCompact ? 8 : 10,
+                                              vertical: isCompact ? 10 : 12,
+                                            ),
                                             child: FittedBox(
                                               fit: BoxFit.scaleDown,
                                               child: Row(
@@ -138,16 +144,16 @@ class _ProjectWorkspaceScreenState extends State<ProjectWorkspaceScreen> {
                                                 children: [
                                                   Icon(
                                                     section.icon,
-                                                    size: 18,
+                                                    size: isCompact ? 16 : 18,
                                                     color: selected ? Colors.white : AppTheme.textSecondary,
                                                   ),
-                                                  const SizedBox(width: 8),
+                                                  SizedBox(width: isCompact ? 6 : 8),
                                                   Text(
                                                     section.label,
                                                     maxLines: 1,
                                                     overflow: TextOverflow.ellipsis,
                                                     style: TextStyle(
-                                                      fontSize: 13,
+                                                      fontSize: isCompact ? 12 : 13,
                                                       fontWeight: FontWeight.w700,
                                                       color: selected ? Colors.white : AppTheme.textPrimary,
                                                     ),

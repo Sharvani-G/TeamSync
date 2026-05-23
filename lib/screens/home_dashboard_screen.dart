@@ -186,11 +186,122 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
   }
 
   PreferredSizeWidget _buildAnimatedAppBar(int unreadCount, BuildContext context) {
+    final isCompact = MediaQuery.of(context).size.width < 380;
+
+    Widget buildProfileButton({required double avatarSize}) {
+      return GestureDetector(
+        onTap: () => Navigator.pushNamed(context, '/profile'),
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0, end: 1).animate(_scaleController),
+          child: Container(
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: AppTheme.primary,
+                width: 2,
+              ),
+            ),
+            child: StreamBuilder<AppUser?>(
+              stream: UserProfileService.instance.watchCurrentUser(),
+              builder: (context, snapshot) {
+                final user = snapshot.data ?? AppUser(
+                  id: '',
+                  username: '',
+                  name: 'User',
+                  email: '',
+                  projectsJoined: 0,
+                  tasksCompleted: 0,
+                  createdAt: DateTime.now(),
+                );
+                return UserAvatar(
+                  name: user.name,
+                  username: user.username,
+                  size: avatarSize,
+                  imageUrl: user.photoUrl,
+                  color: AppTheme.primary,
+                );
+              },
+            ),
+          ),
+        ),
+      );
+    }
+
+    Widget buildSearchField() {
+      return SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(-0.3, 0),
+          end: Offset.zero,
+        ).animate(_slideController),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: TextField(
+            decoration: InputDecoration(
+              hintText: 'Search projects...',
+              hintStyle: TextStyle(color: Colors.grey[500]),
+              border: InputBorder.none,
+              prefixIcon: Icon(
+                Icons.search,
+                color: Colors.grey[600],
+                size: 20,
+              ),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+            ),
+            style: const TextStyle(fontSize: 14),
+          ),
+        ),
+      );
+    }
+
+    Widget buildNotificationButton() {
+      return Stack(
+        children: [
+          IconButton(
+            icon: Icon(
+              Icons.notifications_outlined,
+              color: Colors.grey[700],
+            ),
+            onPressed: () {
+              Navigator.pushNamed(context, '/notifications');
+            },
+          ),
+          if (unreadCount > 0)
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Container(
+                width: 18,
+                height: 18,
+                decoration: const BoxDecoration(
+                  color: AppTheme.danger,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    '$unreadCount',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
     return AppBar(
       automaticallyImplyLeading: false,
       elevation: 0,
       backgroundColor: Colors.white,
-      toolbarHeight: 104,
+      toolbarHeight: isCompact ? 128 : 104,
       flexibleSpace: FadeTransition(
         opacity: Tween<double>(begin: 0, end: 1).animate(_fadeController),
         child: Container(
@@ -200,130 +311,49 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
               bottom: BorderSide(color: Colors.grey[200]!, width: 1),
             ),
           ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 34, 12, 10),
-            child: Row(
-              children: [
-                // Profile Button (Left)
-                GestureDetector(
-                  onTap: () => Navigator.pushNamed(context, '/profile'),
-                  child: ScaleTransition(
-                    scale: Tween<double>(begin: 0, end: 1)
-                        .animate(_scaleController),
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: AppTheme.primary,
-                          width: 2,
-                        ),
-                      ),
-                      child: StreamBuilder<AppUser?>(
-                        stream: UserProfileService.instance.watchCurrentUser(),
-                        builder: (context, snapshot) {
-                          final user = snapshot.data ?? AppUser(
-                            id: '',
-                            username: '',
-                            name: 'User',
-                            email: '',
-                            projectsJoined: 0,
-                            tasksCompleted: 0,
-                            createdAt: DateTime.now(),
-                          );
-                          return UserAvatar(
-                            name: user.name,
-                            username: user.username,
-                            size: 36,
-                            imageUrl: user.photoUrl,
-                            color: AppTheme.primary,
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-
-                // Search Bar (Middle)
-                Expanded(
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(-0.3, 0),
-                      end: Offset.zero,
-                    ).animate(_slideController),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: TextField(
-                        decoration: InputDecoration(
-                          hintText: 'Search projects...',
-                          hintStyle: TextStyle(color: Colors.grey[500]),
-                          border: InputBorder.none,
-                          prefixIcon: Icon(
-                            Icons.search,
-                            color: Colors.grey[600],
-                            size: 20,
-                          ),
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 8),
-                        ),
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-
-                // Notifications (Right)
-                Stack(
-                  children: [
-                    IconButton(
-                      icon: Icon(
-                        Icons.notifications_outlined,
-                        color: Colors.grey[700],
-                      ),
-                      onPressed: () {
-                        Navigator.pushNamed(context, '/notifications');
-                      },
-                    ),
-                    if (unreadCount > 0)
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Container(
-                          width: 18,
-                          height: 18,
-                          decoration: const BoxDecoration(
-                            color: AppTheme.danger,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Center(
-                            child: Text(
-                              '$unreadCount',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(12, isCompact ? 14 : 34, 12, 10),
+              child: isCompact
+                  ? Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            buildProfileButton(32),
+                            const Spacer(),
+                            buildNotificationButton(),
+                            IconButton(
+                              icon: Icon(
+                                Icons.menu,
+                                color: Colors.grey[700],
                               ),
+                              onPressed: () => _showMenuBottomSheet(context),
                             ),
-                          ),
+                          ],
                         ),
-                      ),
-                  ],
-                ),
-
-                // Menu Button (Right)
-                IconButton(
-                  icon: Icon(
-                    Icons.menu,
-                    color: Colors.grey[700],
-                  ),
-                  onPressed: () => _showMenuBottomSheet(context),
-                ),
-              ],
+                        const SizedBox(height: 10),
+                        buildSearchField(),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        buildProfileButton(36),
+                        const SizedBox(width: 12),
+                        Expanded(child: buildSearchField()),
+                        const SizedBox(width: 12),
+                        buildNotificationButton(),
+                        IconButton(
+                          icon: Icon(
+                            Icons.menu,
+                            color: Colors.grey[700],
+                          ),
+                          onPressed: () => _showMenuBottomSheet(context),
+                        ),
+                      ],
+                    ),
             ),
           ),
         ),
@@ -676,8 +706,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
         child: Row(
           children: [
             for (final entry in projects.asMap().entries) ...[
+              final cardWidth = MediaQuery.of(context).size.width < 360 ? 150.0 : 160.0,
               SizedBox(
-                width: 160,
+                width: cardWidth,
                 height: 180,
                 child: SlideTransition(
                   position: Tween<Offset>(
@@ -992,113 +1023,158 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
     final projectsWithoutLevels = totalProjectsCount - projectsWithLevels;
     final totalLevels = levelCounts.fold<int>(0, (sum, count) => sum + count);
 
-    return Container(
-      height: 260,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.white, const Color(0xFFF8FAFF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFE9ECF5), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Level Overview',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.grey[900],
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'All levels come directly from Firebase',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: AppTheme.primary.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  '$totalLevels levels',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.primary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildLegendItem(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 360;
+
+        final legendRows = isCompact
+            ? [
+                _buildLegendItem(
                   'Projects with levels',
                   projectsWithLevels,
                   totalProjectsCount,
                   const Color(0xFF10B981),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _buildLegendItem(
+                const SizedBox(height: 10),
+                _buildLegendItem(
                   'Projects without levels',
                   projectsWithoutLevels,
                   totalProjectsCount,
                   const Color(0xFFEF4444),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _buildLegendItem(
+                const SizedBox(height: 10),
+                _buildLegendItem(
                   'Total levels',
                   totalLevels,
                   totalProjectsCount,
                   AppTheme.primary,
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _buildLegendItem(
+                const SizedBox(height: 10),
+                _buildLegendItem(
                   'Projects',
                   totalProjectsCount,
                   totalProjectsCount,
                   const Color(0xFFF59E0B),
                 ),
+              ]
+            : [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildLegendItem(
+                        'Projects with levels',
+                        projectsWithLevels,
+                        totalProjectsCount,
+                        const Color(0xFF10B981),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _buildLegendItem(
+                        'Projects without levels',
+                        projectsWithoutLevels,
+                        totalProjectsCount,
+                        const Color(0xFFEF4444),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildLegendItem(
+                        'Total levels',
+                        totalLevels,
+                        totalProjectsCount,
+                        AppTheme.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _buildLegendItem(
+                        'Projects',
+                        totalProjectsCount,
+                        totalProjectsCount,
+                        const Color(0xFFF59E0B),
+                      ),
+                    ),
+                  ],
+                ),
+              ];
+
+        return Container(
+          height: isCompact ? 330 : 260,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.white, const Color(0xFFF8FAFF)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: const Color(0xFFE9ECF5), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.06),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
               ),
             ],
           ),
-        ],
+          padding: EdgeInsets.fromLTRB(isCompact ? 14 : 18, isCompact ? 14 : 18, isCompact ? 14 : 18, 16),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Level Overview',
+                          style: TextStyle(
+                            fontSize: isCompact ? 16 : 17,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.grey[900],
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'All levels come directly from Firebase',
+                          style: TextStyle(
+                            fontSize: isCompact ? 11 : 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '$totalLevels levels',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              ...legendRows,
+            ],
+          ),
+        );
+      },
       ),
     );
   }

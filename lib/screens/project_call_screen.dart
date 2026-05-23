@@ -357,20 +357,28 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
   ) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        scrollable: true,
         title: const Text('Start Instant Call'),
-        content: const Text(
-          'Select collaborators to invite to this call.',
+        content: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 520,
+            maxHeight: MediaQuery.of(dialogContext).size.height * 0.55,
+          ),
+          child: const Text(
+            'Select collaborators to invite to this call.',
+          ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () {
               // TODO: Implement call start logic
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text('Call feature coming soon'),
@@ -390,39 +398,47 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
   ) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        scrollable: true,
         title: const Text('Schedule Call'),
-        content: const SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Title'),
-              TextField(
-                decoration: InputDecoration(hintText: 'Call title'),
-              ),
-              SizedBox(height: 12),
-              Text('Agenda'),
-              TextField(
-                decoration: InputDecoration(hintText: 'What will you discuss?'),
-                maxLines: 3,
-              ),
-              SizedBox(height: 12),
-              Text('Date & Time'),
-              TextField(
-                decoration: InputDecoration(hintText: 'Select date and time'),
-              ),
-            ],
+        content: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 520,
+            maxHeight: MediaQuery.of(dialogContext).size.height * 0.68,
+          ),
+          child: const SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Title'),
+                TextField(
+                  decoration: InputDecoration(hintText: 'Call title'),
+                ),
+                SizedBox(height: 12),
+                Text('Agenda'),
+                TextField(
+                  decoration: InputDecoration(hintText: 'What will you discuss?'),
+                  maxLines: 3,
+                ),
+                SizedBox(height: 12),
+                Text('Date & Time'),
+                TextField(
+                  decoration: InputDecoration(hintText: 'Select date and time'),
+                ),
+              ],
+            ),
           ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text('Call scheduled (feature coming soon)'),

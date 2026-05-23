@@ -8,6 +8,9 @@
 build/
 **/build/
 
+# Windows reserved placeholder that can appear in this workspace.
+/nul
+
 # Android
 android/.gradle/
 android/app/build/
