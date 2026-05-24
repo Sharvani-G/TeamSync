@@ -435,13 +435,25 @@ class ProjectOverviewScreen extends StatelessWidget {
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () => Navigator.pushNamed(
-                    context,
-                    '/project/$projectId/workspace',
+                child: GestureDetector(
+                  onTap: () => Navigator.pushNamed(context, '/project/$projectId/workspace'),
+                  child: Container(
+                    height: 56,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: [AppTheme.primary, AppTheme.primaryLight]),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [BoxShadow(color: AppTheme.primary.withOpacity(0.18), blurRadius: 8, offset: const Offset(0, 4))],
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.folder_open_outlined, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text('Open Project Workspace', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                      ],
+                    ),
                   ),
-                  icon: const Icon(Icons.folder_open_outlined),
-                  label: const Text('Open Project Workspace'),
                 ),
               ),
             ],

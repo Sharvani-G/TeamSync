@@ -414,7 +414,10 @@ class _SignInPaneState extends State<_SignInPane>
         password: _passwordController.text.trim(),
       );
       if (!mounted) return;
-      Navigator.pushReplacementNamed(context, '/main');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.pushReplacementNamed(context, '/main');
+      });
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       var message = 'Sign in failed. Please try again.';
@@ -428,9 +431,12 @@ class _SignInPaneState extends State<_SignInPane>
         message = 'Too many attempts. Try again later.';
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
-      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+        );
+      });
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);
@@ -826,7 +832,10 @@ class _RegisterPaneState extends State<_RegisterPane>
 
       
       if (!mounted) return;
-      Navigator.pushReplacementNamed(context, '/main');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.pushReplacementNamed(context, '/main');
+      });
     } on FirebaseAuthException catch (e) {
       debugPrint('Signup failed [${e.code}]: ${e.message}');
       if (!mounted) return;
@@ -846,9 +855,12 @@ class _RegisterPaneState extends State<_RegisterPane>
         message = e.message!;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
-      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+        );
+      });
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);

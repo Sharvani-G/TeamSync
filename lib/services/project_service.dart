@@ -4,8 +4,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/models.dart';
 import 'file_service.dart';
 import 'user_service.dart';
-import 'pagination_service.dart';
-import 'firestore_query_optimizer.dart';
 
 class ProjectService {
   ProjectService._();
@@ -62,7 +60,8 @@ class ProjectService {
       // We'll manually subscribe to the three queries
       late StreamSubscription<QuerySnapshot<Map<String, dynamic>>> subCreated;
       late StreamSubscription<QuerySnapshot<Map<String, dynamic>>> subAdmin;
-      late StreamSubscription<QuerySnapshot<Map<String, dynamic>>> subCollaborator;
+      late StreamSubscription<QuerySnapshot<Map<String, dynamic>>>
+          subCollaborator;
 
       QuerySnapshot<Map<String, dynamic>>? lastCreated;
       QuerySnapshot<Map<String, dynamic>>? lastAdmin;
@@ -157,15 +156,17 @@ class ProjectService {
         .where('visibility', isEqualTo: 'public')
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs
-              .map((doc) => _parseProject(doc))
-              .toList();
-        });
+      return snapshot.docs.map((doc) => _parseProject(doc)).toList();
+    });
   }
 
   /// Get a single project by ID
   Stream<Project?> watchProject(String projectId) {
-    return _firestore.collection('projects').doc(projectId).snapshots().map((doc) {
+    return _firestore
+        .collection('projects')
+        .doc(projectId)
+        .snapshots()
+        .map((doc) {
       if (!doc.exists) {
         return null;
       }
@@ -215,13 +216,12 @@ class ProjectService {
     }; // Map<userId, role>
 
     // Remove duplicates and current user from list
-    final uniqueUsernames = {...collaboratorUsernames}
-        .where((u) => u.trim().isNotEmpty)
-        .toList();
+    final uniqueUsernames =
+        {...collaboratorUsernames}.where((u) => u.trim().isNotEmpty).toList();
 
     for (final username in uniqueUsernames) {
       final user = await _userService.getUserByUsername(username);
-      
+
       if (user == null) {
         throw Exception('User "@$username" not found');
       }
@@ -241,7 +241,7 @@ class ProjectService {
 
     // Create project
     final projectRef = _firestore.collection('projects').doc();
-    
+
     final projectData = {
       'id': projectRef.id,
       'title': title.trim(),
@@ -266,11 +266,12 @@ class ProjectService {
     try {
       // Create project atomically with default #general channel
       final batch = _firestore.batch();
-      
+
       batch.set(projectRef, projectData);
-      
+
       // Create default #general channel
-      final generalChannelRef = projectRef.collection('channels').doc('general');
+      final generalChannelRef =
+          projectRef.collection('channels').doc('general');
       final channelData = {
         'id': 'general',
         'projectId': projectRef.id,
@@ -283,7 +284,7 @@ class ProjectService {
         'messageCount': 0,
       };
       batch.set(generalChannelRef, channelData);
-      
+
       await batch.commit();
       return projectRef.id;
     } catch (e) {
@@ -306,7 +307,8 @@ class ProjectService {
     }
 
     // Verify user is admin
-    final projectDoc = await _firestore.collection('projects').doc(projectId).get();
+    final projectDoc =
+        await _firestore.collection('projects').doc(projectId).get();
     final projectData = projectDoc.data()!;
     if (!_isAdminRole(projectData, authUser.uid)) {
       throw Exception('Only project admin can update settings');
@@ -317,8 +319,10 @@ class ProjectService {
     };
 
     if (visibility != null) updateData['visibility'] = visibility;
-    if (isOpenForRequests != null) updateData['isOpenForRequests'] = isOpenForRequests;
-    if (requiredCollaborators != null) updateData['requiredCollaborators'] = requiredCollaborators;
+    if (isOpenForRequests != null)
+      updateData['isOpenForRequests'] = isOpenForRequests;
+    if (requiredCollaborators != null)
+      updateData['requiredCollaborators'] = requiredCollaborators;
     if (requiredSkills != null) updateData['requiredSkills'] = requiredSkills;
     if (contactEmail != null) updateData['contactEmail'] = contactEmail;
 
@@ -335,7 +339,8 @@ class ProjectService {
       throw Exception('User must be logged in');
     }
 
-    final projectDoc = await _firestore.collection('projects').doc(projectId).get();
+    final projectDoc =
+        await _firestore.collection('projects').doc(projectId).get();
     if (!projectDoc.exists) {
       throw Exception('Project not found');
     }
@@ -362,7 +367,9 @@ class ProjectService {
         throw Exception('Level title cannot be empty');
       }
 
-      if (currentLevels.any((level) => (level['title'] as String? ?? '').toLowerCase() == trimmedTitle.toLowerCase())) {
+      if (currentLevels.any((level) =>
+          (level['title'] as String? ?? '').toLowerCase() ==
+          trimmedTitle.toLowerCase())) {
         throw Exception('A level with that title already exists');
       }
 
@@ -386,14 +393,16 @@ class ProjectService {
         throw Exception('Level title cannot be empty');
       }
 
-      final existingIndex = currentLevels.indexWhere((level) => level['id'] == levelId);
+      final existingIndex =
+          currentLevels.indexWhere((level) => level['id'] == levelId);
       if (existingIndex == -1) {
         throw Exception('Level not found');
       }
 
       if (currentLevels.any((level) =>
           level['id'] != levelId &&
-          (level['title'] as String? ?? '').toLowerCase() == trimmedTitle.toLowerCase())) {
+          (level['title'] as String? ?? '').toLowerCase() ==
+              trimmedTitle.toLowerCase())) {
         throw Exception('A level with that title already exists');
       }
 
@@ -431,7 +440,8 @@ class ProjectService {
     }
 
     // Verify user is admin
-    final projectDoc = await _firestore.collection('projects').doc(projectId).get();
+    final projectDoc =
+        await _firestore.collection('projects').doc(projectId).get();
     if (!projectDoc.exists) {
       throw Exception('Project not found');
     }
@@ -463,7 +473,8 @@ class ProjectService {
       if (makeAdmin && collaborators[userId] != 'admin') {
         collaborators[userId] = 'admin';
       } else {
-        throw Exception('User "@${collaboratorUsername}" is already a collaborator');
+        throw Exception(
+            'User "@${collaboratorUsername}" is already a collaborator');
       }
     } else {
       collaborators[userId] = makeAdmin ? 'admin' : 'collaborator';
@@ -497,7 +508,8 @@ class ProjectService {
     }
 
     // Verify user is admin
-    final projectDoc = await _firestore.collection('projects').doc(projectId).get();
+    final projectDoc =
+        await _firestore.collection('projects').doc(projectId).get();
     if (!projectDoc.exists) {
       throw Exception('Project not found');
     }
@@ -537,7 +549,8 @@ class ProjectService {
       final projectData = projectSnapshot.data();
       if (projectData != null) {
         final blocks = _toMapList(projectData['ideaBoardBlocks']);
-        final remainingBlocks = blocks.where((block) => block['createdBy'] != userId).toList();
+        final remainingBlocks =
+            blocks.where((block) => block['createdBy'] != userId).toList();
         if (remainingBlocks.length != blocks.length) {
           await projectRef.update({
             'ideaBoardBlocks': remainingBlocks,
@@ -546,7 +559,10 @@ class ProjectService {
         }
       }
 
-      final messageQuery = await projectRef.collection('messages').where('senderId', isEqualTo: userId).get();
+      final messageQuery = await projectRef
+          .collection('messages')
+          .where('senderId', isEqualTo: userId)
+          .get();
       for (final doc in messageQuery.docs) {
         await doc.reference.delete();
       }
@@ -605,14 +621,16 @@ class ProjectService {
     }
 
     // Validate project exists and is public with requests open
-    final projectDoc = await _firestore.collection('projects').doc(projectId).get();
+    final projectDoc =
+        await _firestore.collection('projects').doc(projectId).get();
     if (!projectDoc.exists) {
       throw Exception('Project not found');
     }
 
     final projectData = projectDoc.data()!;
     final visibility = projectData['visibility'] as String?;
-    final isOpenForRequests = projectData['isOpenForRequests'] as bool? ?? false;
+    final isOpenForRequests =
+        projectData['isOpenForRequests'] as bool? ?? false;
 
     if (visibility != 'public') {
       throw Exception('Cannot request to join private projects');
@@ -627,7 +645,7 @@ class ProjectService {
       projectData['collaborators'],
       docId: projectId,
     );
-    
+
     if (createdBy == authUser.uid || collaborators.containsKey(authUser.uid)) {
       throw Exception('You are already a collaborator on this project');
     }
@@ -641,11 +659,13 @@ class ProjectService {
         .get();
 
     if (existingRequest.docs.isNotEmpty) {
-      throw Exception('You already have a pending join request for this project');
+      throw Exception(
+          'You already have a pending join request for this project');
     }
 
     // Get user info
-    final userDoc = await _firestore.collection('users').doc(authUser.uid).get();
+    final userDoc =
+        await _firestore.collection('users').doc(authUser.uid).get();
     final userEmail = authUser.email ?? 'unknown@email.com';
     final userName = userDoc.data()?['name'] as String? ?? 'Unknown User';
     final userUsername = userDoc.data()?['username'] as String? ?? 'unknown';
@@ -689,19 +709,17 @@ class ProjectService {
         .where('projectId', isEqualTo: projectId)
         .snapshots()
         .asyncMap((snapshot) async {
-          // Verify user is admin
-          final projectDoc = 
-              await _firestore.collection('projects').doc(projectId).get();
-          final projectData = projectDoc.data();
+      // Verify user is admin
+      final projectDoc =
+          await _firestore.collection('projects').doc(projectId).get();
+      final projectData = projectDoc.data();
 
-          if (projectData == null || !_isAdminRole(projectData, authUser.uid)) {
-            return []; // Non-admin gets empty list
-          }
+      if (projectData == null || !_isAdminRole(projectData, authUser.uid)) {
+        return []; // Non-admin gets empty list
+      }
 
-          return snapshot.docs
-              .map((doc) => _parseJoinRequest(doc))
-              .toList();
-        });
+      return snapshot.docs.map((doc) => _parseJoinRequest(doc)).toList();
+    });
   }
 
   /// Get pending join requests for current user (to track own requests)
@@ -717,10 +735,8 @@ class ProjectService {
         .where('status', isEqualTo: 'pending')
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs
-              .map((doc) => _parseJoinRequest(doc))
-              .toList();
-        });
+      return snapshot.docs.map((doc) => _parseJoinRequest(doc)).toList();
+    });
   }
 
   /// Accept a join request (admin only)
@@ -731,7 +747,7 @@ class ProjectService {
       throw Exception('User must be logged in');
     }
 
-    final requestDoc = 
+    final requestDoc =
         await _firestore.collection('joinRequests').doc(requestId).get();
     if (!requestDoc.exists) {
       throw Exception('Join request not found');
@@ -742,8 +758,8 @@ class ProjectService {
     final requestedBy = requestData['requestedBy'] as String;
 
     // Verify user is admin
-    final projectDoc = 
-      await _firestore.collection('projects').doc(projectId).get();
+    final projectDoc =
+        await _firestore.collection('projects').doc(projectId).get();
     final projectData = projectDoc.data()!;
     if (!_isAdminRole(projectData, authUser.uid)) {
       throw Exception('Only project admin can accept join requests');
@@ -798,7 +814,7 @@ class ProjectService {
       throw Exception('User must be logged in');
     }
 
-    final requestDoc = 
+    final requestDoc =
         await _firestore.collection('joinRequests').doc(requestId).get();
     if (!requestDoc.exists) {
       throw Exception('Join request not found');
@@ -808,8 +824,8 @@ class ProjectService {
     final projectId = requestData['projectId'] as String;
 
     // Verify user is admin
-    final projectDoc = 
-      await _firestore.collection('projects').doc(projectId).get();
+    final projectDoc =
+        await _firestore.collection('projects').doc(projectId).get();
     final projectData = projectDoc.data()!;
     if (!_isAdminRole(projectData, authUser.uid)) {
       throw Exception('Only project admin can reject join requests');
@@ -1030,7 +1046,7 @@ class ProjectService {
           : data['title'] as String;
       final description = data['description'] as String? ?? '';
       final createdBy = data['createdBy'] as String? ?? '';
-      
+
       final collaboratorsMap = _parseCollaboratorsMap(
         data['collaborators'],
         docId: doc.id,
@@ -1039,20 +1055,19 @@ class ProjectService {
       final visibility = data['visibility'] as String? ?? 'private';
       final isOpenForRequests = data['isOpenForRequests'] as bool? ?? false;
       final requiredCollaborators = data['requiredCollaborators'] as int? ?? 0;
-      
+
       // Safe skills parsing
       final skillsData = data['requiredSkills'];
       List<String> requiredSkills = [];
       if (skillsData is List) {
-        requiredSkills = skillsData
-            .whereType<String>()
-            .toList();
+        requiredSkills = skillsData.whereType<String>().toList();
       }
-      
+
       final contactEmail = data['contactEmail'] as String? ?? '';
-      final lastUpdated = _parseTimestampString(data['lastUpdated']) ?? 'Recently';
+      final lastUpdated =
+          _parseTimestampString(data['lastUpdated']) ?? 'Recently';
       final createdAt = _parseDateTime(data['createdAt']) ?? DateTime.now();
-      
+
       // Safe levels parsing
       final levelsData = data['levels'];
       List<ProjectLevel> levels = [];
@@ -1065,7 +1080,7 @@ class ProjectService {
       if (ideaBoardBlocksData is List) {
         ideaBoardBlocks = _parseIdeaBoardBlocks(ideaBoardBlocksData);
       }
-      
+
       // Safe stats parsing
       final tasksCompleted = data['tasksCompleted'] as int? ?? 0;
       final ideasAdded = data['ideasAdded'] as int? ?? 0;
@@ -1205,8 +1220,8 @@ class ProjectService {
       linkedinLink: data['linkedinLink'] as String?,
       fileUrls: List<String>.from(data['fileUrls'] as List? ?? []),
       status: data['status'] as String? ?? 'pending',
-      createdAt:
-          DateTime.tryParse(data['createdAt'] as String? ?? '') ?? DateTime.now(),
+      createdAt: DateTime.tryParse(data['createdAt'] as String? ?? '') ??
+          DateTime.now(),
       respondedAt: data['respondedAt'] != null
           ? DateTime.tryParse(data['respondedAt'] as String? ?? '')
           : null,
@@ -1218,8 +1233,10 @@ class ProjectService {
     final parsedLevels = levelsList.map((level) {
       final levelData = level as Map<String, dynamic>? ?? {};
       return ProjectLevel(
-        id: levelData['id'] as String? ?? _firestore.collection('projects').doc().id,
-        title: levelData['title'] as String? ?? levelData['name'] as String? ?? '',
+        id: levelData['id'] as String? ??
+            _firestore.collection('projects').doc().id,
+        title:
+            levelData['title'] as String? ?? levelData['name'] as String? ?? '',
         order: levelData['order'] as int? ?? 0,
         createdAt: _parseDateTime(levelData['createdAt']) ?? DateTime.now(),
         completed: levelData['completed'] as bool? ?? false,
@@ -1249,14 +1266,16 @@ class ProjectService {
           if (file is! Map) continue;
           final fileMap = Map<String, dynamic>.from(file);
           final normalized = Map<String, dynamic>.from(fileMap)
-            ..putIfAbsent('id', () => _firestore.collection('projects').doc().id);
+            ..putIfAbsent(
+                'id', () => _firestore.collection('projects').doc().id);
           files.add(IdeaBoardFile.fromMap(normalized));
         }
       }
 
       parsed.add(
         IdeaBoardBlock(
-          id: blockMap['id'] as String? ?? _firestore.collection('projects').doc().id,
+          id: blockMap['id'] as String? ??
+              _firestore.collection('projects').doc().id,
           levelId: blockMap['levelId'] as String? ?? '',
           type: blockMap['type'] as String? ?? 'paragraph',
           content: blockMap['content'] as String? ?? '',
@@ -1298,33 +1317,37 @@ class ProjectService {
     };
   }
 
-  List<Map<String, dynamic>> _normalizeLevelEntries(List<Map<String, dynamic>>? levels) {
+  List<Map<String, dynamic>> _normalizeLevelEntries(
+      List<Map<String, dynamic>>? levels) {
     final entries = (levels == null || levels.isEmpty)
         ? _defaultLevelTitles
             .asMap()
             .entries
-            .map((entry) => _buildLevelEntry(title: entry.value, order: entry.key + 1))
+            .map((entry) =>
+                _buildLevelEntry(title: entry.value, order: entry.key + 1))
             .toList()
         : levels
             .map((level) => {
-                  'id': (level['id'] as String?) ?? _firestore.collection('projects').doc().id,
-                  'title': (level['title'] as String?)?.trim().isNotEmpty == true
-                      ? (level['title'] as String).trim()
-                      : 'Untitled Level',
+                  'id': (level['id'] as String?) ??
+                      _firestore.collection('projects').doc().id,
+                  'title':
+                      (level['title'] as String?)?.trim().isNotEmpty == true
+                          ? (level['title'] as String).trim()
+                          : 'Untitled Level',
                   'order': level['order'] as int? ?? 0,
                   'createdAt': level['createdAt'] ?? Timestamp.now(),
-                'completed': level['completed'] as bool? ?? false,
-                'percentage': level['percentage'] as int? ?? 0,
-                'updatedBy': level['updatedBy'] as String? ?? '',
-                'updatedAt': level['updatedAt'] ?? null,
+                  'completed': level['completed'] as bool? ?? false,
+                  'percentage': level['percentage'] as int? ?? 0,
+                  'updatedBy': level['updatedBy'] as String? ?? '',
+                  'updatedAt': level['updatedAt'] ?? null,
                 })
             .toList();
 
     final sorted = [...entries]..sort((a, b) {
-      final leftOrder = a['order'] as int? ?? 0;
-      final rightOrder = b['order'] as int? ?? 0;
-      return leftOrder.compareTo(rightOrder);
-    });
+        final leftOrder = a['order'] as int? ?? 0;
+        final rightOrder = b['order'] as int? ?? 0;
+        return leftOrder.compareTo(rightOrder);
+      });
 
     for (var index = 0; index < sorted.length; index++) {
       sorted[index]['order'] = index + 1;
@@ -1336,7 +1359,8 @@ class ProjectService {
 
   Future<void> _updateLevels(
     String projectId,
-    List<Map<String, dynamic>> Function(List<Map<String, dynamic>> levels) updater,
+    List<Map<String, dynamic>> Function(List<Map<String, dynamic>> levels)
+        updater,
   ) async {
     final authUser = _auth.currentUser;
     if (authUser == null) {
@@ -1375,8 +1399,7 @@ class ProjectService {
   }
 
   List<Map<String, dynamic>> _reorderLevels(List<Map<String, dynamic>> levels) {
-    final ordered = [...levels]
-      ..sort((a, b) {
+    final ordered = [...levels]..sort((a, b) {
         final leftOrder = a['order'] as int? ?? 0;
         final rightOrder = b['order'] as int? ?? 0;
         return leftOrder.compareTo(rightOrder);
@@ -1475,20 +1498,23 @@ class ProjectService {
           .doc(authUser.uid)
           .snapshots()
           .asyncExpand((memberDoc) {
-            final lastReadAt = _parseDateTime(memberDoc.data()?['lastReadAt']) ?? DateTime.fromMillisecondsSinceEpoch(0);
-            return _firestore
-                .collection('projects')
-                .doc(projectId)
-                .collection('messages')
-                .snapshots()
-                .map((snapshot) {
-                  return snapshot.docs.where((doc) {
-                    final data = doc.data();
-                    final createdAt = _parseDateTime(data['createdAt']) ?? DateTime.fromMillisecondsSinceEpoch(0);
-                    return createdAt.isAfter(lastReadAt) && data['senderId'] != authUser.uid;
-                  }).length;
-                });
-          });
+        final lastReadAt = _parseDateTime(memberDoc.data()?['lastReadAt']) ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        return _firestore
+            .collection('projects')
+            .doc(projectId)
+            .collection('messages')
+            .snapshots()
+            .map((snapshot) {
+          return snapshot.docs.where((doc) {
+            final data = doc.data();
+            final createdAt = _parseDateTime(data['createdAt']) ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+            return createdAt.isAfter(lastReadAt) &&
+                data['senderId'] != authUser.uid;
+          }).length;
+        });
+      });
     });
   }
 
@@ -1541,12 +1567,13 @@ class ProjectService {
       // Check where user is collaborator
       int collaboratingCount = 0;
       final collaboratingProjects = <Map<String, dynamic>>[];
-      
+
       for (final doc in allDocs.docs) {
         final data = doc.data();
         final createdBy = data['createdBy'] as String? ?? '';
-        final collaborators = data['collaborators'] as Map<String, dynamic>? ?? {};
-        
+        final collaborators =
+            data['collaborators'] as Map<String, dynamic>? ?? {};
+
         if (collaborators.containsKey(authUser.uid)) {
           collaboratingCount++;
           collaboratingProjects.add({
@@ -1588,15 +1615,13 @@ class ProjectService {
         .orderBy('createdAt', descending: false)
         .snapshots()
         .map((snapshot) {
-          try {
-            return snapshot.docs
-                .map((doc) => _parseProjectChannel(doc))
-                .toList();
-          } catch (e) {
-            print('❌ Error parsing channels: $e');
-            return [];
-          }
-        });
+      try {
+        return snapshot.docs.map((doc) => _parseProjectChannel(doc)).toList();
+      } catch (e) {
+        print('❌ Error parsing channels: $e');
+        return [];
+      }
+    });
   }
 
   /// Create a new channel in a project
@@ -1612,7 +1637,8 @@ class ProjectService {
     }
 
     // Verify user is collaborator
-    final projectDoc = await _firestore.collection('projects').doc(projectId).get();
+    final projectDoc =
+        await _firestore.collection('projects').doc(projectId).get();
     if (!projectDoc.exists) {
       throw Exception('Project not found');
     }
@@ -1623,10 +1649,8 @@ class ProjectService {
     }
 
     // Validate channel name
-    final trimmedName = name
-        .trim()
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9-_]'), '-');
+    final trimmedName =
+        name.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9-_]'), '-');
     if (trimmedName.isEmpty) {
       throw Exception('Channel name cannot be empty');
     }
@@ -1643,8 +1667,11 @@ class ProjectService {
       throw Exception('Channel "$trimmedName" already exists');
     }
 
-    final channelRef =
-        _firestore.collection('projects').doc(projectId).collection('channels').doc();
+    final channelRef = _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('channels')
+        .doc();
 
     final channelData = {
       'id': channelRef.id,
@@ -1682,7 +1709,8 @@ class ProjectService {
     }
 
     // Verify user is admin
-    final projectDoc = await _firestore.collection('projects').doc(projectId).get();
+    final projectDoc =
+        await _firestore.collection('projects').doc(projectId).get();
     final projectData = projectDoc.data() ?? <String, dynamic>{};
     if (!_isAdminRole(projectData, authUser.uid)) {
       throw Exception('Only project admin can delete channels');
@@ -1702,7 +1730,11 @@ class ProjectService {
       batch.delete(msg.reference);
     }
 
-    batch.delete(_firestore.collection('projects').doc(projectId).collection('channels').doc(channelId));
+    batch.delete(_firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('channels')
+        .doc(channelId));
 
     try {
       await batch.commit();
@@ -1738,10 +1770,12 @@ class ProjectService {
     final createdBy = channelData['createdBy'] as String?;
 
     if (createdBy != authUser.uid) {
-      final projectDoc = await _firestore.collection('projects').doc(projectId).get();
+      final projectDoc =
+          await _firestore.collection('projects').doc(projectId).get();
       final projectData = projectDoc.data() ?? <String, dynamic>{};
       if (!_isAdminRole(projectData, authUser.uid)) {
-        throw Exception('Only channel creator or project admin can add members');
+        throw Exception(
+            'Only channel creator or project admin can add members');
       }
     }
 
@@ -1751,7 +1785,8 @@ class ProjectService {
       throw Exception('User "@$memberUsername" not found');
     }
 
-    final members = List<String>.from((channelData['members'] as List? ?? []).cast<String>());
+    final members = List<String>.from(
+        (channelData['members'] as List? ?? []).cast<String>());
     if (members.contains(member.$1)) {
       throw Exception('User is already a member of this channel');
     }
@@ -1783,14 +1818,17 @@ class ProjectService {
 
     // Only creator or project admin can rename
     if (createdBy != authUser.uid) {
-      final projectDoc = await _firestore.collection('projects').doc(projectId).get();
+      final projectDoc =
+          await _firestore.collection('projects').doc(projectId).get();
       final projectData = projectDoc.data() ?? <String, dynamic>{};
       if (!_isAdminRole(projectData, authUser.uid)) {
-        throw Exception('Only channel creator or project admin can rename this channel');
+        throw Exception(
+            'Only channel creator or project admin can rename this channel');
       }
     }
 
-    final trimmed = newName.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9-_]'), '-');
+    final trimmed =
+        newName.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9-_]'), '-');
     if (trimmed.isEmpty) throw Exception('Channel name cannot be empty');
 
     await channelRef.update({'name': trimmed});
@@ -1817,7 +1855,8 @@ class ProjectService {
     final isPrivate = channelData['isPrivate'] as bool? ?? false;
     if (!isPrivate) return; // nothing to do for public channels
 
-    final members = List<String>.from((channelData['members'] as List? ?? []).cast<String>());
+    final members = List<String>.from(
+        (channelData['members'] as List? ?? []).cast<String>());
     members.remove(authUser.uid);
     await channelRef.update({'members': members});
   }
@@ -1828,32 +1867,33 @@ class ProjectService {
     String channelId, {
     int limit = 30,
   }) {
-    final authUser = _auth.currentUser;
-    if (authUser == null) {
-      return Stream.value([]);
-    }
+    return _auth.authStateChanges().asyncExpand((authUser) {
+      if (authUser == null) {
+        return Stream.value([]);
+      }
 
-    return _firestore
-        .collection('projects')
-        .doc(projectId)
-        .collection('channels')
-        .doc(channelId)
-        .collection('messages')
-        .orderBy('createdAt', descending: true)
-        .limit(limit)
-        .snapshots()
-        .map((snapshot) {
-          try {
-            return snapshot.docs
-                .map((doc) => _parseProjectChatMessage(doc))
-                .toList()
-                .reversed
-                .toList();
-          } catch (e) {
-            print('❌ Error parsing channel messages: $e');
-            return [];
-          }
-        });
+      return _firestore
+          .collection('projects')
+          .doc(projectId)
+          .collection('channels')
+          .doc(channelId)
+          .collection('messages')
+          .orderBy('createdAt', descending: true)
+          .limit(limit)
+          .snapshots()
+          .map((snapshot) {
+        try {
+          return snapshot.docs
+              .map((doc) => _parseProjectChatMessage(doc))
+              .toList()
+              .reversed
+              .toList();
+        } catch (e) {
+          print('❌ Error parsing channel messages: $e');
+          return [];
+        }
+      });
+    });
   }
 
   /// Load older messages in a channel for pagination
@@ -1899,7 +1939,8 @@ class ProjectService {
     }
     // DEPRECATED: Project-wide message listeners have been removed in favor of
     // channel-scoped listeners. Use `watchChannelMessages(projectId, channelId)`.
-    print('⚠️ watchProjectMessages is deprecated. Use watchChannelMessages instead.');
+    print(
+        '⚠️ watchProjectMessages is deprecated. Use watchChannelMessages instead.');
     return Stream.value([]);
   }
 
@@ -1910,7 +1951,8 @@ class ProjectService {
     int limit = 30,
   }) async {
     // DEPRECATED: Use `loadOlderChannelMessages(projectId, channelId, before)`
-    print('⚠️ loadOlderProjectMessages is deprecated. Use loadOlderChannelMessages instead.');
+    print(
+        '⚠️ loadOlderProjectMessages is deprecated. Use loadOlderChannelMessages instead.');
     return [];
   }
 
@@ -1929,7 +1971,8 @@ class ProjectService {
     }
 
     // Verify user has access to project
-    final projectDoc = await _firestore.collection('projects').doc(projectId).get();
+    final projectDoc =
+        await _firestore.collection('projects').doc(projectId).get();
     if (!projectDoc.exists) {
       throw Exception('Project not found');
     }
@@ -1953,14 +1996,16 @@ class ProjectService {
 
     final channelData = channelDoc.data()!;
     final isPrivate = channelData['isPrivate'] as bool? ?? false;
-    final members = List<String>.from((channelData['members'] as List? ?? []).cast<String>());
+    final members = List<String>.from(
+        (channelData['members'] as List? ?? []).cast<String>());
 
     // Check private channel access
     if (isPrivate && !members.contains(authUser.uid)) {
       throw Exception('You do not have access to this channel');
     }
 
-    final userDoc = await _firestore.collection('users').doc(authUser.uid).get();
+    final userDoc =
+        await _firestore.collection('users').doc(authUser.uid).get();
     final userUsername = userDoc.data()?['username'] as String? ?? 'Unknown';
     final userPhoto = userDoc.data()?['photoUrl'] as String? ?? '';
 
@@ -1991,7 +2036,7 @@ class ProjectService {
 
     try {
       await messageRef.set(messageData);
-      
+
       // Update channel's lastMessageAt and messageCount
       await channelDoc.reference.update({
         'lastMessageAt': Timestamp.now(),
@@ -2000,8 +2045,9 @@ class ProjectService {
 
       // Fan out notification to channel members
       final projectTitle = projectData['title'] as String? ?? 'Project';
-      final messagePreview = text.substring(0, (text.length > 50 ? 50 : text.length));
-      
+      final messagePreview =
+          text.substring(0, (text.length > 50 ? 50 : text.length));
+
       // For private channels, send only to members; for public channels, broadcast to all
       if (isPrivate && members.isNotEmpty) {
         await _fanOutProjectNotification(
@@ -2121,10 +2167,12 @@ class ProjectService {
         throw Exception('User must be logged in');
       }
 
-      final projectDoc = await _firestore.collection('projects').doc(projectId).get();
+      final projectDoc =
+          await _firestore.collection('projects').doc(projectId).get();
       final projectData = projectDoc.data() ?? <String, dynamic>{};
 
-      if (senderId != authUser.uid && !_isAdminRole(projectData, authUser.uid)) {
+      if (senderId != authUser.uid &&
+          !_isAdminRole(projectData, authUser.uid)) {
         throw Exception('You can only edit your own messages');
       }
 
@@ -2238,10 +2286,12 @@ class ProjectService {
         ),
       );
 
-      final projectDoc = await _firestore.collection('projects').doc(projectId).get();
+      final projectDoc =
+          await _firestore.collection('projects').doc(projectId).get();
       final projectData = projectDoc.data() ?? <String, dynamic>{};
 
-      if (senderId != authUser.uid && !_isAdminRole(projectData, authUser.uid)) {
+      if (senderId != authUser.uid &&
+          !_isAdminRole(projectData, authUser.uid)) {
         throw Exception('You can only delete your own messages');
       }
 
@@ -2311,11 +2361,11 @@ class ProjectService {
           .collection('members')
           .doc(authUser.uid)
           .set(
-            {
-              'lastReadAt': Timestamp.now(),
-            },
-            SetOptions(merge: true),
-          );
+        {
+          'lastReadAt': Timestamp.now(),
+        },
+        SetOptions(merge: true),
+      );
     } catch (e) {
       print('⚠️  Error marking chat read: $e');
     }
@@ -2325,7 +2375,8 @@ class ProjectService {
 
   /// Mark a channel as read for the current user. Stores per-channel lastReadAt
   /// under `projects/{projectId}/channels/{channelId}/members/{userId}`.
-  Future<void> markChannelRead({required String projectId, required String channelId}) async {
+  Future<void> markChannelRead(
+      {required String projectId, required String channelId}) async {
     final authUser = _auth.currentUser;
     if (authUser == null) return;
 
@@ -2349,7 +2400,10 @@ class ProjectService {
 
   /// Get unread count for a channel for a specific user. This is a simple
   /// server query: count messages newer than the user's lastReadAt.
-  Future<int> getChannelUnreadCount({required String projectId, required String channelId, required String userId}) async {
+  Future<int> getChannelUnreadCount(
+      {required String projectId,
+      required String channelId,
+      required String userId}) async {
     try {
       final memberDoc = await _firestore
           .collection('projects')
@@ -2360,7 +2414,8 @@ class ProjectService {
           .doc(userId)
           .get();
 
-      final lastReadAt = _parseDateTime(memberDoc.data()?['lastReadAt']) ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final lastReadAt = _parseDateTime(memberDoc.data()?['lastReadAt']) ??
+          DateTime.fromMillisecondsSinceEpoch(0);
 
       final snapshot = await _firestore
           .collection('projects')
@@ -2379,7 +2434,8 @@ class ProjectService {
   }
 
   /// Persist the user's active channel selection under `projects/{projectId}/members/{userId}.lastSelectedChannel`
-  Future<void> setUserActiveChannel({required String projectId, required String channelId}) async {
+  Future<void> setUserActiveChannel(
+      {required String projectId, required String channelId}) async {
     final authUser = _auth.currentUser;
     if (authUser == null) return;
 
@@ -2396,9 +2452,15 @@ class ProjectService {
   }
 
   /// Read the user's last selected channel if present
-  Future<String?> getUserActiveChannel({required String projectId, required String userId}) async {
+  Future<String?> getUserActiveChannel(
+      {required String projectId, required String userId}) async {
     try {
-      final doc = await _firestore.collection('projects').doc(projectId).collection('members').doc(userId).get();
+      final doc = await _firestore
+          .collection('projects')
+          .doc(projectId)
+          .collection('members')
+          .doc(userId)
+          .get();
       final val = doc.data()?['lastSelectedChannel'] as String?;
       return val;
     } catch (e) {
@@ -2417,16 +2479,16 @@ class ProjectService {
         .where('active', isEqualTo: true)
         .snapshots()
         .map((snapshot) {
-          try {
-            if (snapshot.docs.isEmpty) {
-              return null;
-            }
-            return _parseProjectCallSession(snapshot.docs.first);
-          } catch (e) {
-            print('❌ Error parsing active call: $e');
-            return null;
-          }
-        });
+      try {
+        if (snapshot.docs.isEmpty) {
+          return null;
+        }
+        return _parseProjectCallSession(snapshot.docs.first);
+      } catch (e) {
+        print('❌ Error parsing active call: $e');
+        return null;
+      }
+    });
   }
 
   Stream<List<ProjectCallSession>> watchProjectCallHistory(String projectId) {
@@ -2438,15 +2500,15 @@ class ProjectService {
         .limit(50)
         .snapshots()
         .map((snapshot) {
-          try {
-            return snapshot.docs
-                .map((doc) => _parseProjectCallSession(doc))
-                .toList();
-          } catch (e) {
-            print('❌ Error parsing call history: $e');
-            return [];
-          }
-        });
+      try {
+        return snapshot.docs
+            .map((doc) => _parseProjectCallSession(doc))
+            .toList();
+      } catch (e) {
+        print('❌ Error parsing call history: $e');
+        return [];
+      }
+    });
   }
 
   Future<String> startProjectCall({
@@ -2476,7 +2538,8 @@ class ProjectService {
         .doc(projectId)
         .collection('callSessions')
         .doc();
-    final roomName = 'teamsync-${projectId.toLowerCase()}-${callRef.id.toLowerCase()}';
+    final roomName =
+        'teamsync-${projectId.toLowerCase()}-${callRef.id.toLowerCase()}';
     final roomUrl = 'https://meet.jit.si/$roomName';
 
     final callData = {
@@ -2541,7 +2604,8 @@ class ProjectService {
       throw Exception('User must be logged in');
     }
 
-    final projectDoc = await _firestore.collection('projects').doc(projectId).get();
+    final projectDoc =
+        await _firestore.collection('projects').doc(projectId).get();
     if (!projectDoc.exists) {
       throw Exception('Project not found');
     }
@@ -2744,16 +2808,18 @@ class ProjectService {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
-          try {
-            return snapshot.docs
-                .map((doc) => _parseNotificationItem(doc))
-                .where((item) => item.deliverAt == null || !item.deliverAt!.isAfter(DateTime.now()))
-                .toList();
-          } catch (e) {
-            print('❌ Error parsing notifications: $e');
-            return [];
-          }
-        });
+      try {
+        return snapshot.docs
+            .map((doc) => _parseNotificationItem(doc))
+            .where((item) =>
+                item.deliverAt == null ||
+                !item.deliverAt!.isAfter(DateTime.now()))
+            .toList();
+      } catch (e) {
+        print('❌ Error parsing notifications: $e');
+        return [];
+      }
+    });
   }
 
   Future<void> markNotificationRead(String notificationId) async {
@@ -2809,7 +2875,8 @@ class ProjectService {
     });
   }
 
-  Stream<List<ProjectCallSchedule>> watchProjectCallSchedules(String projectId) {
+  Stream<List<ProjectCallSchedule>> watchProjectCallSchedules(
+      String projectId) {
     return _firestore
         .collection('projects')
         .doc(projectId)
@@ -2817,13 +2884,15 @@ class ProjectService {
         .orderBy('scheduledAt', descending: true)
         .snapshots()
         .map((snapshot) {
-          try {
-            return snapshot.docs.map((doc) => _parseProjectCallSchedule(doc)).toList();
-          } catch (e) {
-            print('❌ Error parsing call schedules: $e');
-            return [];
-          }
-        });
+      try {
+        return snapshot.docs
+            .map((doc) => _parseProjectCallSchedule(doc))
+            .toList();
+      } catch (e) {
+        print('❌ Error parsing call schedules: $e');
+        return [];
+      }
+    });
   }
 
   Future<void> _fanOutProjectNotification({
@@ -2898,7 +2967,8 @@ class ProjectService {
     return ProjectChatMessage(
       id: doc.id,
       projectId: data['projectId'] as String? ?? '',
-      channelId: data['channelId'] as String? ?? 'general', // Default to 'general' for backward compatibility
+      channelId: data['channelId'] as String? ??
+          'general', // Default to 'general' for backward compatibility
       senderId: data['senderId'] as String? ?? '',
       senderUsername: data['senderUsername'] as String? ?? 'Unknown',
       senderPhoto: data['senderPhoto'] as String? ?? '',
@@ -2909,11 +2979,10 @@ class ProjectService {
       createdAt: _parseDateTime(data['createdAt']) ?? DateTime.now(),
       updatedAt: _parseDateTime(data['updatedAt']) ?? DateTime.now(),
       reactions: Map<String, List<String>>.from(
-        (data['reactions'] as Map? ?? {})
-            .map((key, value) => MapEntry(
-                  key as String,
-                  List<String>.from((value as List? ?? []).cast<String>()),
-                )),
+        (data['reactions'] as Map? ?? {}).map((key, value) => MapEntry(
+              key as String,
+              List<String>.from((value as List? ?? []).cast<String>()),
+            )),
       ),
       attachments: List<ProjectAttachment>.from(
         (data['attachments'] as List? ?? []).map((attachment) {
@@ -2941,7 +3010,8 @@ class ProjectService {
       projectId: data['projectId'] as String? ?? '',
       name: data['name'] as String? ?? 'general',
       createdBy: data['createdBy'] as String? ?? '',
-      members: List<String>.from((data['members'] as List? ?? []).cast<String>()),
+      members:
+          List<String>.from((data['members'] as List? ?? []).cast<String>()),
       isPrivate: data['isPrivate'] as bool? ?? false,
       createdAt: _parseDateTime(data['createdAt']) ?? DateTime.now(),
       lastMessageAt: lastMessageAt,
@@ -3013,376 +3083,5 @@ class ProjectService {
       deliverAt: _parseDateTime(data['deliverAt']),
       data: Map<String, dynamic>.from(data['data'] as Map? ?? {}),
     );
-  }
-
-  // ============ PAGINATION & LAZY LOADING ============
-
-  /// Fetch first page of user's projects with pagination
-  /// Uses composite index: (createdBy, createdAt DESC)
-  Future<PaginatedResults<Project>> fetchMyProjectsPage({
-    int pageSize = 20,
-  }) async {
-    final authUser = _auth.currentUser;
-    if (authUser == null) {
-      return PaginatedResults(
-        items: [],
-        nextCursor: PaginationCursor.initial(pageSize: pageSize),
-      );
-    }
-
-    try {
-      final query = FirestoreQueryOptimizer.instance
-          .buildUserProjectsQuery(
-            userId: authUser.uid,
-            limit: pageSize,
-          );
-
-      final snapshot = await query.get();
-      final docs = snapshot.docs;
-
-      // Determine if more results exist
-      bool hasMore = docs.length > pageSize;
-      if (hasMore) {
-        docs.removeLast(); // Remove extra document used to check for more
-      }
-
-      final projects = docs
-          .map((doc) => _parseProject(doc))
-          .toList();
-
-      final nextCursor = PaginationCursor(
-        lastDocument: docs.isNotEmpty ? docs.last : null,
-        hasMore: hasMore,
-        pageSize: pageSize,
-      );
-
-      return PaginatedResults(
-        items: projects,
-        nextCursor: nextCursor,
-        totalCount: projects.length,
-      );
-    } catch (e) {
-      print('❌ Error fetching projects page: $e');
-      return PaginatedResults(
-        items: [],
-        nextCursor: PaginationCursor.initial(pageSize: pageSize),
-      );
-    }
-  }
-
-  /// Fetch next page of user's projects
-  Future<PaginatedResults<Project>> fetchMyProjectsNextPage(
-    PaginationCursor currentCursor,
-  ) async {
-    if (!currentCursor.hasMore || currentCursor.lastDocument == null) {
-      return PaginatedResults(
-        items: [],
-        nextCursor: currentCursor,
-      );
-    }
-
-    try {
-      final authUser = _auth.currentUser;
-      if (authUser == null) {
-        return PaginatedResults(
-          items: [],
-          nextCursor: currentCursor,
-        );
-      }
-
-      final query = FirestoreQueryOptimizer.instance
-          .buildUserProjectsQuery(
-            userId: authUser.uid,
-            limit: currentCursor.pageSize,
-            startAfter: currentCursor.lastDocument,
-          );
-
-      final snapshot = await query.get();
-      final docs = snapshot.docs;
-
-      bool hasMore = docs.length > currentCursor.pageSize;
-      if (hasMore) {
-        docs.removeLast();
-      }
-
-      final projects = docs
-          .map((doc) => _parseProject(doc))
-          .toList();
-
-      final nextCursor = PaginationCursor(
-        lastDocument: docs.isNotEmpty ? docs.last : null,
-        hasMore: hasMore,
-        pageSize: currentCursor.pageSize,
-      );
-
-      return PaginatedResults(
-        items: projects,
-        nextCursor: nextCursor,
-        totalCount: projects.length,
-      );
-    } catch (e) {
-      print('❌ Error fetching next projects page: $e');
-      return PaginatedResults(
-        items: [],
-        nextCursor: currentCursor,
-      );
-    }
-  }
-
-  /// Fetch public projects for discovery with pagination
-  Future<PaginatedResults<Project>> fetchPublicProjectsPage({
-    int pageSize = 20,
-  }) async {
-    try {
-      final query = FirestoreQueryOptimizer.instance
-          .buildPublicProjectsQuery(limit: pageSize);
-
-      final snapshot = await query.get();
-      final docs = snapshot.docs;
-
-      bool hasMore = docs.length > pageSize;
-      if (hasMore) {
-        docs.removeLast();
-      }
-
-      final projects = docs
-          .map((doc) => _parseProject(doc))
-          .toList();
-
-      final nextCursor = PaginationCursor(
-        lastDocument: docs.isNotEmpty ? docs.last : null,
-        hasMore: hasMore,
-        pageSize: pageSize,
-      );
-
-      return PaginatedResults(
-        items: projects,
-        nextCursor: nextCursor,
-        totalCount: projects.length,
-      );
-    } catch (e) {
-      print('❌ Error fetching public projects: $e');
-      return PaginatedResults(
-        items: [],
-        nextCursor: PaginationCursor.initial(pageSize: pageSize),
-      );
-    }
-  }
-
-  /// Fetch next page of public projects
-  Future<PaginatedResults<Project>> fetchPublicProjectsNextPage(
-    PaginationCursor currentCursor,
-  ) async {
-    if (!currentCursor.hasMore || currentCursor.lastDocument == null) {
-      return PaginatedResults(
-        items: [],
-        nextCursor: currentCursor,
-      );
-    }
-
-    try {
-      final query = FirestoreQueryOptimizer.instance
-          .buildPublicProjectsQuery(
-            limit: currentCursor.pageSize,
-            startAfter: currentCursor.lastDocument,
-          );
-
-      final snapshot = await query.get();
-      final docs = snapshot.docs;
-
-      bool hasMore = docs.length > currentCursor.pageSize;
-      if (hasMore) {
-        docs.removeLast();
-      }
-
-      final projects = docs
-          .map((doc) => _parseProject(doc))
-          .toList();
-
-      final nextCursor = PaginationCursor(
-        lastDocument: docs.isNotEmpty ? docs.last : null,
-        hasMore: hasMore,
-        pageSize: currentCursor.pageSize,
-      );
-
-      return PaginatedResults(
-        items: projects,
-        nextCursor: nextCursor,
-        totalCount: projects.length,
-      );
-    } catch (e) {
-      print('❌ Error fetching next public projects page: $e');
-      return PaginatedResults(
-        items: [],
-        nextCursor: currentCursor,
-      );
-    }
-  }
-
-  /// Lazily load older channel messages
-  /// Returns messages before [beforeTime], limiting to [pageSize]
-  Future<PaginatedResults<ProjectChatMessage>> loadOlderChannelMessagesPage({
-    required String projectId,
-    required String channelId,
-    required DateTime beforeTime,
-    int pageSize = 30,
-  }) async {
-    try {
-      final query = FirestoreQueryOptimizer.instance
-          .buildChannelMessagesQuery(
-            projectId: projectId,
-            channelId: channelId,
-            limit: pageSize,
-            beforeTime: Timestamp.fromDate(beforeTime),
-          );
-
-      final snapshot = await query.get();
-      final docs = snapshot.docs;
-
-      bool hasMore = docs.length > pageSize;
-      if (hasMore) {
-        docs.removeLast();
-      }
-
-      final messages = docs
-          .map((doc) => _parseProjectChatMessage(doc))
-          .toList()
-          .reversed
-          .toList();
-
-      final nextCursor = PaginationCursor(
-        lastDocument: docs.isNotEmpty ? docs.first : null,
-        hasMore: hasMore,
-        pageSize: pageSize,
-      );
-
-      return PaginatedResults(
-        items: messages,
-        nextCursor: nextCursor,
-        totalCount: messages.length,
-      );
-    } catch (e) {
-      print('❌ Error loading older channel messages: $e');
-      return PaginatedResults(
-        items: [],
-        nextCursor: PaginationCursor.initial(pageSize: pageSize),
-      );
-    }
-  }
-
-  /// Fetch call history with pagination
-  Future<PaginatedResults<ProjectCallSession>> fetchCallHistoryPage({
-    required String projectId,
-    int pageSize = 20,
-  }) async {
-    try {
-      final query = FirestoreQueryOptimizer.instance
-          .buildCallHistoryQuery(
-            projectId: projectId,
-            limit: pageSize,
-          );
-
-      final snapshot = await query.get();
-      final docs = snapshot.docs;
-
-      bool hasMore = docs.length > pageSize;
-      if (hasMore) {
-        docs.removeLast();
-      }
-
-      final calls = docs
-          .map((doc) => _parseProjectCallSession(doc))
-          .toList();
-
-      final nextCursor = PaginationCursor(
-        lastDocument: docs.isNotEmpty ? docs.last : null,
-        hasMore: hasMore,
-        pageSize: pageSize,
-      );
-
-      return PaginatedResults(
-        items: calls,
-        nextCursor: nextCursor,
-        totalCount: calls.length,
-      );
-    } catch (e) {
-      print('❌ Error fetching call history: $e');
-      return PaginatedResults(
-        items: [],
-        nextCursor: PaginationCursor.initial(pageSize: pageSize),
-      );
-    }
-  }
-
-  /// Fetch next page of call history
-  Future<PaginatedResults<ProjectCallSession>> fetchCallHistoryNextPage(
-    String projectId,
-    PaginationCursor currentCursor,
-  ) async {
-    if (!currentCursor.hasMore || currentCursor.lastDocument == null) {
-      return PaginatedResults(
-        items: [],
-        nextCursor: currentCursor,
-      );
-    }
-
-    try {
-      final query = FirestoreQueryOptimizer.instance
-          .buildCallHistoryQuery(
-            projectId: projectId,
-            limit: currentCursor.pageSize,
-            startAfter: currentCursor.lastDocument,
-          );
-
-      final snapshot = await query.get();
-      final docs = snapshot.docs;
-
-      bool hasMore = docs.length > currentCursor.pageSize;
-      if (hasMore) {
-        docs.removeLast();
-      }
-
-      final calls = docs
-          .map((doc) => _parseProjectCallSession(doc))
-          .toList();
-
-      final nextCursor = PaginationCursor(
-        lastDocument: docs.isNotEmpty ? docs.last : null,
-        hasMore: hasMore,
-        pageSize: currentCursor.pageSize,
-      );
-
-      return PaginatedResults(
-        items: calls,
-        nextCursor: nextCursor,
-        totalCount: calls.length,
-      );
-    } catch (e) {
-      print('❌ Error fetching next call history page: $e');
-      return PaginatedResults(
-        items: [],
-        nextCursor: currentCursor,
-      );
-    }
-  }
-
-  /// Get count estimate for projects (non-transactional)
-  /// Real count requires document counting which has limitations in Firestore
-  Future<int> estimateMyProjectsCount() async {
-    final authUser = _auth.currentUser;
-    if (authUser == null) return 0;
-
-    try {
-      // This is an estimate - actual count requires cloud functions
-      final query = _firestore
-          .collection('projects')
-          .where('createdBy', isEqualTo: authUser.uid);
-
-      final snapshot = await query.count().get();
-      return snapshot.count ?? 0;
-    } catch (e) {
-      print('⚠️ Error estimating projects count: $e');
-      return 0;
-    }
   }
 }

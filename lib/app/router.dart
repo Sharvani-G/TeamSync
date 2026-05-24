@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../app/main_shell.dart';
+import '../screens/auth_gate_screen.dart';
 import '../screens/create_project_screen.dart';
 import '../screens/project_overview_screen.dart';
 import '../screens/idea_board_screen.dart';
 import '../screens/idea_board_document_screen.dart';
 import '../screens/project_workspace_screen.dart';
+import '../screens/demo_workspace_screen.dart';
 import '../screens/track_screen.dart';
 import '../screens/ai_report_screen.dart';
 import '../screens/chat_home_screen.dart';
@@ -13,41 +14,12 @@ import '../screens/chat_channel_screen.dart';
 import '../screens/project_call_screen.dart';
 import '../screens/notifications_screen.dart';
 import '../screens/profile_screen.dart';
-import '../screens/entry_screen.dart';
+// entry_screen is referenced indirectly by the auth gate route
 import '../screens/forgot_password_screen.dart';
 import '../screens/check_email_screen.dart';
-import '../screens/profile/profile_page.dart';
-import '../screens/profile/edit_profile_page.dart';
-import '../screens/profile/change_password_page.dart';
-import '../screens/settings/settings_page.dart';
-import '../screens/notifications/notifications_page.dart';
-import '../screens/faq/faq_page.dart';
-import '../screens/about/about_page.dart';
-import '../screens/transactions/transactions_page.dart';
 
-Route<dynamic> generateRoute(RouteSettings settings, [Function(ThemeMode)? onThemeChanged]) {
+Route<dynamic> generateRoute(RouteSettings settings) {
   final name = settings.name ?? '/';
-  final isAuthed = FirebaseAuth.instance.currentUser != null;
-
-  bool requiresAuthPath(String routeName) {
-    if (routeName == '/main' ||
-        routeName == '/create-project' ||
-        routeName == '/notifications' ||
-        routeName == '/profile') {
-      return true;
-    }
-
-    return routeName.startsWith('/project/');
-  }
-
-  if (!isAuthed && requiresAuthPath(name)) {
-    return _fade(const EntryScreen(), settings);
-  }
-
-  if (isAuthed &&
-      (name == '/' || name == '/forgot-password' || name == '/check-email')) {
-    return _fade(const MainShell(), settings);
-  }
 
   // /project/:id/idea-board/:levelId
   final ideaBoardDocMatch =
@@ -134,7 +106,7 @@ Route<dynamic> generateRoute(RouteSettings settings, [Function(ThemeMode)? onThe
 
   switch (name) {
     case '/':
-      return _fade(const EntryScreen(), settings);
+      return _fade(const AuthGateScreen(), settings);
     case '/main':
       return _fade(const MainShell(), settings);
     case '/forgot-password':
@@ -144,25 +116,12 @@ Route<dynamic> generateRoute(RouteSettings settings, [Function(ThemeMode)? onThe
       return _slide(CheckEmailScreen(email: email), settings);
     case '/create-project':
       return _slide(const CreateProjectScreen(), settings);
+    case '/debug/workspace':
+      return _slide(const DemoWorkspaceScreen(), settings);
     case '/notifications':
-      return _slide(const NotificationsPage(), settings);
+      return _slide(const NotificationsScreen(), settings);
     case '/profile':
-      return _slide(const ProfilePage(), settings);
-    case '/profile/edit':
-      return _slide(const EditProfilePage(), settings);
-    case '/profile/change-password':
-      return _slide(const ChangePasswordPage(), settings);
-    case '/settings':
-      return _slide(
-        SettingsPage(onThemeChanged: onThemeChanged ?? (_) {}),
-        settings,
-      );
-    case '/faq':
-      return _slide(const FAQPage(), settings);
-    case '/about':
-      return _slide(const AboutPage(), settings);
-    case '/transactions':
-      return _slide(const TransactionsPage(), settings);
+      return _slide(const ProfileScreen(), settings);
     default:
       return _fade(const MainShell(), settings);
   }

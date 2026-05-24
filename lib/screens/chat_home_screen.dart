@@ -16,9 +16,6 @@ class ChatHomeScreen extends StatefulWidget {
 
 class _ChatHomeScreenState extends State<ChatHomeScreen> {
   String _selectedChannelId = 'general';
-  
-  // Breakpoint: 600dp is standard for tablet
-  static const double _mobileBreakpoint = 600;
 
   @override
   void initState() {
@@ -36,9 +33,6 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isMobile = screenWidth < _mobileBreakpoint;
-
     return StreamBuilder<Project?>(
       stream: ProjectService.instance.watchProject(widget.projectId),
       builder: (context, projectSnapshot) {
@@ -52,182 +46,167 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
           return const Scaffold(body: Center(child: Text('Project not found')));
         }
 
-        if (isMobile) {
-          // MOBILE: Show channel list only
-          return Scaffold(
-            appBar: SimpleAppBar(
-              title: project.title,
-              actions: [
-                IconButton(
-                  tooltip: 'Create channel',
-                  onPressed: _showCreateChannelDialog,
-                  icon: const Icon(Icons.add_circle_outline),
-                ),
-              ],
-            ),
-            body: _buildChannelList(),
-          );
-        } else {
-          // DESKTOP: Show split view
-          return Scaffold(
-            appBar: SimpleAppBar(title: project.title),
-            body: Row(
-              children: [
-                // LEFT SIDEBAR
-                SizedBox(
-                  width: 280,
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      border: Border(right: BorderSide(color: AppTheme.border)),
-                    ),
-                    child: Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          child: Row(
-                            children: [
-                              const Expanded(child: Text('Channels', style: TextStyle(fontWeight: FontWeight.w700))),
-                              IconButton(
-                                tooltip: 'Create channel',
-                                onPressed: _showCreateChannelDialog,
-                                icon: const Icon(Icons.add_circle_outline),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Expanded(child: _buildChannelList()),
-                      ],
-                    ),
-                  ),
-                ),
-                // RIGHT PANEL: Active channel messages
-                Expanded(
-                  child: ChatChannelView(projectId: widget.projectId, channelId: _selectedChannelId),
-                ),
-              ],
-            ),
-          );
-        }
-      },
-    );
-  }
-
-  Widget _buildChannelList() {
-    return StreamBuilder<List<ProjectChannel>>(
-      stream: ProjectService.instance.watchProjectChannels(widget.projectId),
-      builder: (context, snapshot) {
-        final channels = snapshot.data ?? [];
-
-        final screenWidth = MediaQuery.of(context).size.width;
-        final isMobile = screenWidth < _mobileBreakpoint;
-
-        if (channels.isEmpty) {
-          return const EmptyState(
-            icon: Icons.tag,
-            title: 'No channels yet',
-            subtitle: 'Create a channel to start the conversation.',
-          );
-        }
-
-        return ListView.builder(
-          itemCount: channels.length,
-          itemBuilder: (context, index) {
-            final ch = channels[index];
-            final isActive = ch.id == _selectedChannelId;
-
-            if (isMobile) {
-              // MOBILE: Full-screen navigation on tap
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: Card(
-                  elevation: 0,
-                  color: isActive ? AppTheme.primary.withOpacity(0.1) : const Color(0xFFF8FAFC),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    leading: const Icon(Icons.tag),
-                    title: Text('# ${ch.name}', maxLines: 1, overflow: TextOverflow.ellipsis),
-                    trailing: FutureBuilder<int>(
-                      future: _getUnread(ch.id),
-                      builder: (context, unreadSnap) {
-                        final unread = unreadSnap.data ?? 0;
-                        if (unread <= 0) return const SizedBox(width: 40);
-                        return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppTheme.danger,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            unread > 99 ? '99+' : '$unread',
-                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
-                          ),
-                        );
-                      },
-                    ),
-                    onTap: () {
-                      setState(() => _selectedChannelId = ch.id);
-                      ProjectService.instance.markChannelRead(projectId: widget.projectId, channelId: ch.id);
-                      ProjectService.instance.setUserActiveChannel(projectId: widget.projectId, channelId: ch.id);
-                      // Navigate to full-screen chat
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => Scaffold(
-                            appBar: SimpleAppBar(
-                              title: '# ${ch.name}',
-                              showBack: true,
-                            ),
-                            body: ChatChannelView(projectId: widget.projectId, channelId: ch.id),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              );
-            } else {
-              // DESKTOP: List view with menu
-              return ListTile(
-                dense: false,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                leading: const Icon(Icons.tag),
-                title: Row(
+        final isMobile = MediaQuery.of(context).size.width < 600;
+        return Scaffold(
+          appBar: SimpleAppBar(title: project.title),
+          body: isMobile
+              ? Column(
                   children: [
-                    Expanded(child: Text('# ${ch.name}', style: TextStyle(fontWeight: isActive ? FontWeight.w800 : FontWeight.w600))),
-                    FutureBuilder<int>(
-                      future: _getUnread(ch.id),
-                      builder: (context, unreadSnap) {
-                        final unread = unreadSnap.data ?? 0;
-                        if (unread <= 0) return const SizedBox.shrink();
-                        return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primary,
-                            borderRadius: BorderRadius.circular(999),
+                    // Compact channel row for mobile
+                    Container(
+                      height: 64,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border(bottom: BorderSide(color: AppTheme.border)),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: StreamBuilder<List<ProjectChannel>>(
+                              stream: ProjectService.instance.watchProjectChannels(widget.projectId),
+                              builder: (context, snapshot) {
+                                final channels = snapshot.data ?? [];
+                                if (channels.isEmpty) return const SizedBox.shrink();
+                                return ListView.separated(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: channels.length,
+                                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                                  itemBuilder: (ctx, i) {
+                                    final ch = channels[i];
+                                    final active = ch.id == _selectedChannelId;
+                                    return GestureDetector(
+                                      onTap: () {
+                                        setState(() => _selectedChannelId = ch.id);
+                                        ProjectService.instance.markChannelRead(projectId: widget.projectId, channelId: ch.id);
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                        decoration: BoxDecoration(
+                                          color: active ? AppTheme.primary : Colors.grey[100],
+                                          borderRadius: BorderRadius.circular(28),
+                                          border: Border.all(color: active ? AppTheme.primary : AppTheme.border),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.tag, size: 16, color: Colors.white),
+                                            const SizedBox(width: 8),
+                                            Text('# ${ch.name}', style: TextStyle(color: active ? Colors.white : AppTheme.textPrimary, fontWeight: active ? FontWeight.w800 : FontWeight.w600)),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                            ),
                           ),
-                          child: Text(unread > 99 ? '99+' : '$unread', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
-                        );
-                      },
+                          IconButton(
+                            tooltip: 'Create channel',
+                            onPressed: _showCreateChannelDialog,
+                            icon: Icon(Icons.add_circle_outline, color: AppTheme.primary),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Expanded chat view
+                    Expanded(child: ChatChannelView(projectId: widget.projectId, channelId: _selectedChannelId)),
+                  ],
+                )
+              : Row(
+                  children: [
+                    // LEFT SIDEBAR
+                    Container(
+                      width: 280,
+                      decoration: const BoxDecoration(
+                        border: Border(right: BorderSide(color: AppTheme.border)),
+                      ),
+                      child: Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            child: Row(
+                              children: [
+                                const Expanded(child: Text('Channels', style: TextStyle(fontWeight: FontWeight.w700))),
+                                IconButton(
+                                  tooltip: 'Create channel',
+                                  onPressed: _showCreateChannelDialog,
+                                  icon: const Icon(Icons.add_circle_outline),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: StreamBuilder<List<ProjectChannel>>(
+                              stream: ProjectService.instance.watchProjectChannels(widget.projectId),
+                              builder: (context, snapshot) {
+                                final channels = snapshot.data ?? [];
+
+                                if (channels.isEmpty) {
+                                  return const Center(child: Text('No channels'));
+                                }
+
+                                return ListView.builder(
+                                  itemCount: channels.length,
+                                  itemBuilder: (context, index) {
+                                    final ch = channels[index];
+                                    final isActive = ch.id == _selectedChannelId;
+
+                                    return ListTile(
+                                      dense: true,
+                                      leading: const Icon(Icons.tag),
+                                      title: Row(
+                                        children: [
+                                          Expanded(child: Text('# ${ch.name}', style: TextStyle(fontWeight: isActive ? FontWeight.w800 : FontWeight.w600))),
+                                          FutureBuilder<int>(
+                                            future: _getUnread(ch.id),
+                                            builder: (context, unreadSnap) {
+                                              final unread = unreadSnap.data ?? 0;
+                                              if (unread <= 0) return const SizedBox.shrink();
+                                              return Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: AppTheme.primary,
+                                                  borderRadius: BorderRadius.circular(999),
+                                                ),
+                                                child: Text(unread > 99 ? '99+' : '$unread', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+                                              );
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                      subtitle: ch.lastMessageAt != null ? Text(_formatLastActivity(ch.lastMessageAt!), style: const TextStyle(fontSize: 11)) : null,
+                                      selected: isActive,
+                                      onTap: () {
+                                        setState(() => _selectedChannelId = ch.id);
+                                        ProjectService.instance.markChannelRead(projectId: widget.projectId, channelId: ch.id);
+                                        ProjectService.instance.setUserActiveChannel(projectId: widget.projectId, channelId: ch.id);
+                                      },
+                                      trailing: PopupMenuButton<String>(
+                                        onSelected: (value) => _handleChannelAction(value, ch),
+                                        itemBuilder: (ctx) => [
+                                          const PopupMenuItem(value: 'rename', child: Text('Rename')),
+                                          if (ch.id != 'general') const PopupMenuItem(value: 'delete', child: Text('Delete')),
+                                          const PopupMenuItem(value: 'leave', child: Text('Leave')),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                      ),
+                    ),
+
+                    // RIGHT PANEL: Active channel messages
+                    Expanded(
+                      child: ChatChannelView(projectId: widget.projectId, channelId: _selectedChannelId),
                     ),
                   ],
                 ),
-                selected: isActive,
-                onTap: () {
-                  setState(() => _selectedChannelId = ch.id);
-                  ProjectService.instance.markChannelRead(projectId: widget.projectId, channelId: ch.id);
-                  ProjectService.instance.setUserActiveChannel(projectId: widget.projectId, channelId: ch.id);
-                },
-                trailing: PopupMenuButton<String>(
-                  onSelected: (value) => _handleChannelAction(value, ch),
-                  itemBuilder: (ctx) => [
-                    const PopupMenuItem(value: 'rename', child: Text('Rename')),
-                    if (ch.id != 'general') const PopupMenuItem(value: 'delete', child: Text('Delete')),
-                    const PopupMenuItem(value: 'leave', child: Text('Leave')),
-                  ],
-                ),
-              );
-            }
-          },
         );
       },
     );

@@ -1,0 +1,1 @@
+void appendBootLog(String message) {}

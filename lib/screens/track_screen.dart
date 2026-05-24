@@ -63,8 +63,8 @@ class TrackScreen extends StatelessWidget {
               icon: Icons.chat_bubble_outline,
               label: 'Messages Sent',
               value: '${project.stats.messagesSent}',
-              color: AppTheme.secondary,
-              bg: const Color(0xFFF5F3FF)),
+              color: AppTheme.primaryLight,
+              bg: AppTheme.tint),
         ];
 
         return Scaffold(

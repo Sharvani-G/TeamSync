@@ -46,8 +46,8 @@ class _HomeScreenState extends State<HomeScreen> {
               width: 32,
               height: 32,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF3B82F6), Color(0xFF7C3AED)],
+                gradient: LinearGradient(
+                  colors: [AppTheme.primary, AppTheme.darkRed],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -155,7 +155,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   const Icon(Icons.folder_open_outlined, 
                     size: 64, 
-                    color: Color(0xFFD1D5DB),
+                    color: AppTheme.textMuted,
                   ),
                   const SizedBox(height: 16),
                   const Text(
@@ -169,7 +169,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const Text(
                     'Create a new project or join existing ones',
                     style: TextStyle(
-                      color: Color(0xFF6B7280),
+                      color: AppTheme.textSecondary,
                       fontSize: 14,
                     ),
                   ),
@@ -240,7 +240,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               color: const Color(0xFFF3F4F6),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
-                                color: const Color(0xFFE5E7EB),
+                                color: AppTheme.border,
                               ),
                             ),
                             child: const Icon(
@@ -261,7 +261,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               color: const Color(0xFFF3F4F6),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
-                                color: const Color(0xFFE5E7EB),
+                                color: AppTheme.border,
                               ),
                             ),
                             child: const Icon(
@@ -287,11 +287,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     itemBuilder: (context, index) {
                       final project = projects[index];
                       final colors = [
-                        const Color(0xFF3B82F6), // Blue
-                        const Color(0xFF10B981), // Green
-                        const Color(0xFFA855F7), // Purple
-                        const Color(0xFFF59E0B), // Amber
-                        const Color(0xFFEF4444), // Red
+                        AppTheme.primary,
+                        AppTheme.primaryLight,
+                        AppTheme.primaryPale,
+                        AppTheme.primarySoft,
+                        AppTheme.darkRed,
                       ];
                       final color = colors[index % colors.length];
 

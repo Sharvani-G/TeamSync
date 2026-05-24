@@ -22,18 +22,11 @@ class ProjectAdminScreen extends StatefulWidget {
 
 class _ProjectAdminScreenState extends State<ProjectAdminScreen> {
   late PageController _pageController;
-  int _currentIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
-    _pageController.addListener(() {
-      final index = _pageController.page?.round() ?? 0;
-      if (index != _currentIndex) {
-        setState(() => _currentIndex = index);
-      }
-    });
   }
 
   @override
@@ -74,7 +67,7 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> {
             label: 'Settings',
           ),
         ],
-        currentIndex: _currentIndex,
+        currentIndex: 0,
         onTap: (index) => _pageController.animateToPage(
           index,
           duration: const Duration(milliseconds: 300),
@@ -489,7 +482,7 @@ class _CollaboratorsTab extends StatelessWidget {
                     Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
-                        color: isAdmin ? const Color(0xFFDBEAFE) : const Color(0xFFEDE9FE),
+                        color: isAdmin ? AppTheme.primary.withOpacity(0.12) : AppTheme.primaryLight.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
@@ -497,7 +490,7 @@ class _CollaboratorsTab extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
-                          color: isAdmin ? const Color(0xFF1D4ED8) : const Color(0xFF6D28D9),
+                          color: isAdmin ? AppTheme.primary : AppTheme.primaryLight,
                         ),
                       ),
                     ),

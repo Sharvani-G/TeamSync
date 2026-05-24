@@ -28,21 +28,21 @@ class AIReportScreen extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFEFF6FF), Color(0xFFF5F3FF)],
+                gradient: LinearGradient(
+                  colors: [AppTheme.primary.withOpacity(0.1), AppTheme.primaryLight.withOpacity(0.1)],
                 ),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.auto_awesome, size: 15, color: AppTheme.secondary),
+                  Icon(Icons.auto_awesome, size: 15, color: AppTheme.primary),
                   SizedBox(width: 6),
                   Text('AI Generated Report',
                       style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
-                          color: Color(0xFF581C87))),
+                          color: AppTheme.primary)),
                 ],
               ),
             ),
