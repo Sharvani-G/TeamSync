@@ -463,32 +463,41 @@ class _SignInPaneState extends State<_SignInPane>
         ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(28, 32, 28, 28),
-          child: Column(
-            children: [
-              Expanded(
-                child: Center(
-                  child: AnimatedBuilder(
-                    animation: _fadeAnimation,
-                    builder: (context, child) {
-                      return Transform.scale(
-                        scale: 0.8 + (_fadeAnimation.value * 0.2),
-                        child: child,
-                      );
-                    },
-                    child: Image.asset(
-                      widget.page.imagePath,
-                      fit: BoxFit.contain,
-                      height: 180,
-                    ),
-                  ),
-                ),
-              ),
-              FadeTransition(
-                opacity: _fadeAnimation,
-                child: SingleChildScrollView(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxHeight < 700;
+              final imageHeight = compact ? 120.0 : 180.0;
+
+              return SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      SizedBox(
+                        height: imageHeight,
+                        child: Center(
+                          child: AnimatedBuilder(
+                            animation: _fadeAnimation,
+                            builder: (context, child) {
+                              return Transform.scale(
+                                scale: 0.8 + (_fadeAnimation.value * 0.2),
+                                child: child,
+                              );
+                            },
+                            child: Image.asset(
+                              widget.page.imagePath,
+                              fit: BoxFit.contain,
+                              height: imageHeight,
+                            ),
+                          ),
+                        ),
+                      ),
+                      FadeTransition(
+                        opacity: _fadeAnimation,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
                       Text(
                         widget.page.title,
                         textAlign: TextAlign.center,
@@ -548,10 +557,14 @@ class _SignInPaneState extends State<_SignInPane>
                         ),
                       ),
                       const SizedBox(height: 14),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        runSpacing: 8,
+                        spacing: 12,
                         children: [
                           Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               SizedBox(
                                 width: 20,
@@ -636,8 +649,9 @@ class _SignInPaneState extends State<_SignInPane>
                         ),
                       ),
                       const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text(
                             'New Member? ',
@@ -663,8 +677,8 @@ class _SignInPaneState extends State<_SignInPane>
                     ],
                   ),
                 ),
-              ),
-            ],
+              );
+            },
           ),
         ),
       ),
@@ -887,32 +901,41 @@ class _RegisterPaneState extends State<_RegisterPane>
         ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(28, 32, 28, 28),
-          child: Column(
-            children: [
-              Expanded(
-                child: Center(
-                  child: AnimatedBuilder(
-                    animation: widget.floatAnimation,
-                    builder: (context, child) {
-                      return Transform.translate(
-                        offset: Offset(0, widget.floatAnimation.value),
-                        child: child,
-                      );
-                    },
-                    child: Image.asset(
-                      widget.page.imagePath,
-                      fit: BoxFit.contain,
-                      height: 180,
-                    ),
-                  ),
-                ),
-              ),
-              FadeTransition(
-                opacity: _fadeAnimation,
-                child: SingleChildScrollView(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxHeight < 760;
+              final imageHeight = compact ? 110.0 : 180.0;
+
+              return SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      SizedBox(
+                        height: imageHeight,
+                        child: Center(
+                          child: AnimatedBuilder(
+                            animation: widget.floatAnimation,
+                            builder: (context, child) {
+                              return Transform.translate(
+                                offset: Offset(0, widget.floatAnimation.value),
+                                child: child,
+                              );
+                            },
+                            child: Image.asset(
+                              widget.page.imagePath,
+                              fit: BoxFit.contain,
+                              height: imageHeight,
+                            ),
+                          ),
+                        ),
+                      ),
+                      FadeTransition(
+                        opacity: _fadeAnimation,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
                       Text(
                         widget.page.title,
                         textAlign: TextAlign.center,
@@ -1109,8 +1132,8 @@ class _RegisterPaneState extends State<_RegisterPane>
                     ],
                   ),
                 ),
-              ),
-            ],
+              );
+            },
           ),
         ),
       ),

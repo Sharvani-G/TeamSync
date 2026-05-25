@@ -12,6 +12,8 @@ import '../services/user_service.dart';
 import 'chat_channel_screen.dart';
 import 'entry_screen.dart';
 import 'username_repair_screen.dart';
+import '../services/web_utils_stub.dart'
+    if (dart.library.html) '../services/web_utils_web.dart';
 
 class AuthGateScreen extends StatefulWidget {
   const AuthGateScreen({super.key});
@@ -46,18 +48,13 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
         _authSub?.cancel();
         if (!mounted) return;
         setState(() {});
-        // If we already completed bootstrap and the UI is still on the
-        // unauthenticated entry screen, proactively navigate to the
-        // deep-linked startup route so the user lands where they expect.
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          final startup = _buildStartupRoute();
-          if (startup != null) {
-            appendBootLog('[ROUTE] restoring deep-link $startup');
+          final startupRoute = _buildStartupRouteName();
+          if (startupRoute != null) {
+            appendBootLog('[ROUTE] restoring deep-link $startupRoute');
             print(
-                '${DateTime.now().toIso8601String()} [ROUTE] restoring deep-link $startup');
-            Navigator.of(context).pushReplacement(MaterialPageRoute(
-              builder: (ctx) => startup,
-            ));
+                '${DateTime.now().toIso8601String()} [ROUTE] restoring deep-link $startupRoute');
+            Navigator.of(context).pushReplacementNamed(startupRoute);
             return;
           }
 
@@ -120,8 +117,14 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
   }
 
   String _startupPath() {
-    final fragment = Uri.base.fragment.trim();
+    final fragment = getLocationFragment().trim();
     if (fragment.isNotEmpty) {
+      // If fragment looks like an OAuth callback (contains '=' and
+      // does not start with '/'), clear it and fall back to '/'.
+      if (!fragment.startsWith('/') && fragment.contains('=')) {
+        clearOAuthCallbackState();
+        return '/';
+      }
       return fragment.startsWith('/') ? fragment : '/$fragment';
     }
 
@@ -129,16 +132,25 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
     return path.isEmpty ? '/' : path;
   }
 
-  Widget? _buildStartupRoute() {
+  String? _buildStartupRouteName() {
     final path = _startupPath();
     print('${DateTime.now().toIso8601String()} [ROUTE] browser hash = $path');
-    final chatMatch =
-        RegExp(r'^/project/(\w+)/chat/([\w-]+)$').firstMatch(path);
-    if (chatMatch != null) {
-      return ChatChannelScreen(
-        projectId: chatMatch.group(1)!,
-        channelId: chatMatch.group(2)!,
-      );
+    final supportedPrefixes = [
+      RegExp(r'^/project/\w+$'),
+      RegExp(r'^/project/\w+/idea-board$'),
+      RegExp(r'^/project/\w+/idea-board/\w+$'),
+      RegExp(r'^/project/\w+/chat$'),
+      RegExp(r'^/project/\w+/chat/[\w-]+$'),
+      RegExp(r'^/project/\w+/call$'),
+      RegExp(r'^/project/\w+/workspace(?:/(idea-board|chat|calls))?$'),
+      RegExp(r'^/project/\w+/track$'),
+      RegExp(r'^/project/\w+/ai-report$'),
+    ];
+
+    for (final pattern in supportedPrefixes) {
+      if (pattern.hasMatch(path)) {
+        return path;
+      }
     }
 
     return null;

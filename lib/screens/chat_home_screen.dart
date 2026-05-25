@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/models.dart';
 import '../services/project_service.dart';
+import '../services/user_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
 import 'chat_channel_screen.dart';
@@ -91,7 +92,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
                                           children: [
                                             const Icon(Icons.tag, size: 16, color: Colors.white),
                                             const SizedBox(width: 8),
-                                            Text('# ${ch.name}', style: TextStyle(color: active ? Colors.white : AppTheme.textPrimary, fontWeight: active ? FontWeight.w800 : FontWeight.w600)),
+                                            Text('#${ch.name.startsWith('#') ? ch.name.substring(1) : ch.name}', style: TextStyle(color: active ? Colors.white : AppTheme.textPrimary, fontWeight: active ? FontWeight.w800 : FontWeight.w600)),
                                           ],
                                         ),
                                       ),
@@ -151,13 +152,14 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
                                   itemBuilder: (context, index) {
                                     final ch = channels[index];
                                     final isActive = ch.id == _selectedChannelId;
+                                    final displayName = ch.name.startsWith('#') ? ch.name.substring(1) : ch.name;
 
                                     return ListTile(
                                       dense: true,
                                       leading: const Icon(Icons.tag),
                                       title: Row(
                                         children: [
-                                          Expanded(child: Text('# ${ch.name}', style: TextStyle(fontWeight: isActive ? FontWeight.w800 : FontWeight.w600))),
+                                          Expanded(child: Text('#$displayName', style: TextStyle(fontWeight: isActive ? FontWeight.w800 : FontWeight.w600))),
                                           FutureBuilder<int>(
                                             future: _getUnread(ch.id),
                                             builder: (context, unreadSnap) {
@@ -229,49 +231,108 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
 
   Future<void> _showCreateChannelDialog() async {
     final nameController = TextEditingController();
-    bool isPrivate = false;
-    final membersController = TextEditingController();
+    var isPrivate = false;
+    // Prefetch collaborators for the project so we can show a selectable list
+    final currentUser = FirebaseAuth.instance.currentUser;
+    Map<String, AppUser> usersById = {};
+    try {
+      final project = await ProjectService.instance.watchProject(widget.projectId).first;
+      if (project != null) {
+        final ids = project.collaborators.keys.toList();
+        if (!ids.contains(project.createdBy)) ids.add(project.createdBy);
+        // Exclude current user from invite list
+        if (currentUser != null) ids.remove(currentUser.uid);
+        usersById = await UserService.instance.getUsersByIds(ids);
+      }
+    } catch (_) {
+      usersById = {};
+    }
+
+    final selected = <String, bool>{};
+    final usersList = usersById.values.toList();
+    usersList.sort((a, b) => a.username.compareTo(b.username));
+    for (final u in usersList) selected[u.id] = false;
 
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Create Channel'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Channel name')),
-              Row(
-                children: [
-                  const Text('Private'),
-                  const Spacer(),
-                  StatefulBuilder(builder: (sctx, setStateSB) {
-                    return Switch(value: isPrivate, onChanged: (v) => setStateSB(() => isPrivate = v));
-                  }),
-                ],
-              ),
-              if (isPrivate) TextField(controller: membersController, decoration: const InputDecoration(labelText: 'Invite usernames (comma separated)')),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-            ElevatedButton(
-              onPressed: () async {
-                final name = nameController.text.trim();
-                final invited = membersController.text.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-                try {
-                  final id = await ProjectService.instance.createChannel(projectId: widget.projectId, name: name, isPrivate: isPrivate, invitedMembers: invited);
-                  setState(() => _selectedChannelId = id);
-                  await ProjectService.instance.setUserActiveChannel(projectId: widget.projectId, channelId: id);
-                  Navigator.pop(ctx, true);
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
-                }
-              },
-              child: const Text('Create'),
+        return StatefulBuilder(builder: (sctx, setStateSB) {
+          return AlertDialog(
+            title: const Text('Create Channel'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Channel name')),
+                SwitchListTile(
+                  title: const Text('Private channel'),
+                  value: isPrivate,
+                  onChanged: (v) => setStateSB(() => isPrivate = v),
+                ),
+                Row(
+                  children: [
+                    const Text('Invite members'),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () => setStateSB(() {
+                        final all = selected.keys.toList();
+                        for (final k in all) selected[k] = true;
+                      }),
+                      child: const Text('Add All'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 220,
+                  width: double.maxFinite,
+                  child: usersList.isEmpty
+                      ? const Center(child: Text('No collaborators to invite'))
+                      : ListView.builder(
+                          itemCount: usersList.length,
+                          itemBuilder: (ctx2, i) {
+                            final u = usersList[i];
+                            return CheckboxListTile(
+                              value: selected[u.id] ?? false,
+                              title: Text('@${u.username}'),
+                              subtitle: Text(u.name),
+                              onChanged: (v) => setStateSB(() => selected[u.id] = v ?? false),
+                            );
+                          },
+                        ),
+                ),
+              ],
             ),
-          ],
-        );
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+              ElevatedButton(
+                onPressed: () async {
+                  final name = nameController.text.trim();
+                  if (name.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Channel name cannot be empty')));
+                    return;
+                  }
+
+                  final invitedUserIds = selected.entries.where((e) => e.value).map((e) => e.key).toList();
+                  final invitedUsernames = <String>[];
+                  for (final id in invitedUserIds) {
+                    final u = usersById[id];
+                    if (u != null) invitedUsernames.add(u.username);
+                  }
+
+                  try {
+                    final id = await ProjectService.instance.createChannel(projectId: widget.projectId, name: name, isPrivate: isPrivate, invitedMembers: invitedUsernames);
+                    setState(() => _selectedChannelId = id);
+                    await ProjectService.instance.setUserActiveChannel(projectId: widget.projectId, channelId: id);
+                    Navigator.pop(ctx, true);
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+                  }
+                },
+                child: const Text('Create'),
+              ),
+            ],
+          );
+        });
       },
     );
 

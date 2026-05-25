@@ -1,0 +1,52 @@
+name: Deploy Functions and Run E2E Upload Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy-and-test:
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install firebase-tools
+        run: |
+          npm install -g firebase-tools
+
+      - name: Install function deps
+        run: |
+          cd functions
+          npm ci
+
+      - name: Deploy functions
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: |
+          echo "$FIREBASE_SERVICE_ACCOUNT" > $GOOGLE_APPLICATION_CREDENTIALS
+          cd functions
+          npx firebase-tools deploy --only functions --project ${{ secrets.FIREBASE_PROJECT }} --non-interactive
+
+      - name: Run E2E upload test against deployed function
+        run: |
+          REGION="${{ secrets.FIREBASE_REGION }}"
+          if [ -z "$REGION" ]; then REGION="us-central1"; fi
+          PROJECT="${{ secrets.FIREBASE_PROJECT }}"
+          echo "Running Node-based E2E upload test"
+          node --version
+          npm --version
+          npm ci --prefix .
+          FIREBASE_REGION="$REGION" FIREBASE_PROJECT="$PROJECT" node e2e/upload_test.js

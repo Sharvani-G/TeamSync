@@ -1,0 +1,2 @@
+String getLocationFragment() => '';
+void clearOAuthCallbackState() {}

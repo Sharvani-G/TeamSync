@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../screens/home_dashboard_screen.dart';
 import '../screens/discover_screen.dart';
 import '../screens/notifications_screen.dart';
 import '../screens/profile_screen.dart';
 import '../services/project_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
+import '../services/user_service.dart';
 import '../theme/app_theme.dart';
+import '../screens/in_call_screen.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -16,6 +22,11 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
 
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _inviteSub;
+  final Set<String> _seenInvites = {};
+
+  static const _prefKey = 'main_shell_active_index';
+
   static const List<Widget> _screens = [
     HomeDashboardScreen(),
     DiscoverScreen(),
@@ -25,6 +36,14 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    // Listener setup is handled in initState
+    // Restore persisted index asynchronously
+    SharedPreferences.getInstance().then((prefs) {
+      final idx = prefs.getInt(_prefKey) ?? 0;
+      if (idx != _currentIndex) {
+        setState(() => _currentIndex = idx);
+      }
+    }).catchError((_) {});
     return StreamBuilder<int>(
       stream: ProjectService.instance.watchUnreadNotificationCount(),
       builder: (context, snapshot) {
@@ -38,7 +57,13 @@ class _MainShellState extends State<MainShell> {
             ),
             child: BottomNavigationBar(
               currentIndex: _currentIndex,
-              onTap: (i) => setState(() => _currentIndex = i),
+              onTap: (i) async {
+                setState(() => _currentIndex = i);
+                try {
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setInt(_prefKey, _currentIndex);
+                } catch (_) {}
+              },
               items: [
                 const BottomNavigationBarItem(
                   icon: Icon(Icons.folder_outlined),
@@ -84,6 +109,87 @@ class _MainShellState extends State<MainShell> {
               ],
             ),
           ),
+        );
+      },
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Start listening for incoming call invites when user is available
+    FirebaseAuth.instance.authStateChanges().listen((user) {
+      _inviteSub?.cancel();
+      _seenInvites.clear();
+      if (user == null) return;
+
+      _inviteSub = FirebaseFirestore.instance
+          .collection('call_invites')
+          .where('recipientId', isEqualTo: user.uid)
+          .where('status', isEqualTo: 'pending')
+          .snapshots()
+          .listen((snap) {
+        for (final doc in snap.docs) {
+          if (_seenInvites.contains(doc.id)) continue;
+          _seenInvites.add(doc.id);
+          final data = doc.data();
+          _showInviteDialog(doc.id, data);
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _inviteSub?.cancel();
+    super.dispose();
+  }
+
+  void _showInviteDialog(String inviteId, Map<String, dynamic> data) async {
+    final callId = data['callId'] as String? ?? '';
+    final senderId = data['senderId'] as String? ?? 'Someone';
+    String senderDisplay = senderId;
+    try {
+      final user = await UserService.instance.getUserById(senderId);
+      if (user != null) senderDisplay = user.name.isNotEmpty ? user.name : user.username;
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Incoming Call'),
+          content: Text('You have an incoming call from $senderDisplay'),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                // Decline
+                await FirebaseFirestore.instance.collection('call_invites').doc(inviteId).update({'status': 'declined'});
+                Navigator.of(ctx).pop();
+              },
+              child: const Text('Decline'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                // Accept: mark invite accepted and join call
+                await FirebaseFirestore.instance.collection('call_invites').doc(inviteId).update({'status': 'accepted'});
+                // Add to call session participants
+                final callRef = FirebaseFirestore.instance.collection('call_sessions').doc(callId);
+                await callRef.update({
+                  'participants': FieldValue.arrayUnion([FirebaseAuth.instance.currentUser?.uid ?? 'unknown']),
+                  'active': true,
+                });
+                Navigator.of(ctx).pop();
+                // Navigate into in-call UI as answerer
+                if (mounted) {
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => InCallScreen(callId: callId, isInitiator: false)));
+                }
+              },
+              child: const Text('Accept'),
+            ),
+          ],
         );
       },
     );

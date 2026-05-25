@@ -17,10 +17,12 @@ class IdeaBoardDocumentScreen extends StatefulWidget {
   final String projectId;
   final String levelId;
 
-  const IdeaBoardDocumentScreen({super.key, required this.projectId, required this.levelId});
+  const IdeaBoardDocumentScreen(
+      {super.key, required this.projectId, required this.levelId});
 
   @override
-  State<IdeaBoardDocumentScreen> createState() => _IdeaBoardDocumentScreenState();
+  State<IdeaBoardDocumentScreen> createState() =>
+      _IdeaBoardDocumentScreenState();
 }
 
 class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
@@ -29,9 +31,11 @@ class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
   double _uploadProgress = 0;
   String _uploadLabel = '';
 
-  Future<List<picker.PlatformFile>> _pickFiles({bool allowMultiple = true}) async {
+  Future<List<picker.PlatformFile>> _pickFiles(
+      {bool allowMultiple = true}) async {
     try {
-      return await AttachmentService.instance.pickFiles(allowMultiple: allowMultiple);
+      return await AttachmentService.instance
+          .pickFiles(allowMultiple: allowMultiple);
     } catch (e, stackTrace) {
       debugPrint('File picker failed: $e');
       debugPrintStack(stackTrace: stackTrace);
@@ -110,7 +114,8 @@ class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
               } catch (retryError) {
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Retry failed: ${retryError.toString()}')),
+                  SnackBar(
+                      content: Text('Retry failed: ${retryError.toString()}')),
                 );
               }
             },
@@ -120,7 +125,8 @@ class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
     }
   }
 
-  Future<void> _uploadFilesToBlock(IdeaBoardBlock block, List<picker.PlatformFile> files) async {
+  Future<void> _uploadFilesToBlock(
+      IdeaBoardBlock block, List<picker.PlatformFile> files) async {
     if (!mounted) return;
     setState(() {
       _isUploading = true;
@@ -129,7 +135,44 @@ class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
     });
 
     try {
-      await AttachmentService.instance.attachToIdeaBoard(
+      // Create placeholder entries in the block so uploaded files appear
+      // in the correct section immediately and persist even if the user
+      // navigates away while upload completes.
+      final authUser = FirebaseAuth.instance.currentUser;
+      final uploaderId = authUser?.uid ?? '';
+      final tempIds = <String>[];
+      final placeholders = <Map<String, dynamic>>[];
+      for (var i = 0; i < files.length; i++) {
+        final f = files[i];
+        final tempId = 'tmp-${DateTime.now().millisecondsSinceEpoch}-$i';
+        tempIds.add(tempId);
+        placeholders.add({
+          'id': tempId,
+          'name': f.name,
+          'mimeType': '',
+          'size': f.size,
+          'downloadUrl': '',
+          'uploadedBy': uploaderId,
+          'createdAt': DateTime.now().toIso8601String(),
+          'storagePath': '',
+          'fileName': f.name,
+          'fileUrl': '',
+          'fileType': '',
+          'fileSize': f.size,
+          'url': '',
+          'type': '',
+          'sizeBytes': f.size,
+          'uploading': true,
+        });
+      }
+
+      // Append placeholders so UI shows them in the correct block immediately
+      await ProjectService.instance.appendFilesToIdeaBoardBlock(
+        projectId: widget.projectId,
+        blockId: block.id,
+        newFiles: placeholders,
+      );
+      final uploaded = await AttachmentService.instance.attachToIdeaBoard(
         projectId: widget.projectId,
         levelId: widget.levelId,
         blockId: block.id,
@@ -142,7 +185,22 @@ class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
             _uploadProgress = progress;
           });
         },
+        appendToBlock: false,
       );
+
+      // Build replacements mapping from temp ids to the uploaded metadata
+      final replacements = <String, Map<String, dynamic>>{};
+      for (var i = 0; i < tempIds.length && i < uploaded.length; i++) {
+        replacements[tempIds[i]] = uploaded[i].toMap();
+      }
+
+      if (replacements.isNotEmpty) {
+        await ProjectService.instance.replacePlaceholdersInIdeaBoardBlock(
+          projectId: widget.projectId,
+          blockId: block.id,
+          replacements: replacements,
+        );
+      }
     } catch (e, stackTrace) {
       debugPrint('Attachment upload failed: $e');
       debugPrintStack(stackTrace: stackTrace);
@@ -234,7 +292,7 @@ class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
   Future<void> _removeFile(IdeaBoardBlock block, IdeaBoardFile file) async {
     final updated = block.files
         .where((item) => item.id != file.id)
-      .map((item) => item.toMap())
+        .map((item) => item.toMap())
         .toList();
 
     await FileService.instance.deleteIdeaBoardAttachment(file.storagePath);
@@ -309,7 +367,8 @@ class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
         }
 
         final authUser = FirebaseAuth.instance.currentUser;
-        final isCollaborator = authUser != null && project.isCollaborator(authUser.uid);
+        final isCollaborator =
+            authUser != null && project.isCollaborator(authUser.uid);
 
         return Scaffold(
           appBar: SimpleAppBar(title: level.title),
@@ -324,8 +383,11 @@ class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _uploadLabel.isNotEmpty ? 'Uploading $_uploadLabel' : 'Uploading file...',
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                          _uploadLabel.isNotEmpty
+                              ? 'Uploading $_uploadLabel'
+                              : 'Uploading file...',
+                          style: const TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w600),
                         ),
                         const SizedBox(height: 8),
                         LinearProgressIndicator(value: _uploadProgress),
@@ -353,11 +415,13 @@ class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
                     levelId: widget.levelId,
                   ),
                   builder: (context, blockSnapshot) {
-                    if (blockSnapshot.connectionState == ConnectionState.waiting) {
+                    if (blockSnapshot.connectionState ==
+                        ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
                     }
 
-                    final blocks = blockSnapshot.data ?? const <IdeaBoardBlock>[];
+                    final blocks =
+                        blockSnapshot.data ?? const <IdeaBoardBlock>[];
 
                     return ListView(
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
@@ -381,7 +445,8 @@ class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
                             block: block,
                             canEdit: isCollaborator,
                             onDelete: () => _deleteBlock(block.id),
-                            onSaveContent: (value) => _saveContent(block.id, value),
+                            onSaveContent: (value) =>
+                                _saveContent(block.id, value),
                             onAttachFiles: () => _attachFiles(block),
                             onReplaceFile: (file) => _replaceFile(block, file),
                             onPreviewFile: (file) => _previewFile(file),
@@ -511,7 +576,8 @@ class _IdeaBlockCardState extends State<_IdeaBlockCard> {
   @override
   void didUpdateWidget(covariant _IdeaBlockCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.block.content != widget.block.content && _controller.text != widget.block.content) {
+    if (oldWidget.block.content != widget.block.content &&
+        _controller.text != widget.block.content) {
       _controller.text = widget.block.content;
     }
   }
@@ -536,6 +602,7 @@ class _IdeaBlockCardState extends State<_IdeaBlockCard> {
   @override
   Widget build(BuildContext context) {
     final isTitle = widget.block.type == 'title';
+    final isFile = widget.block.type == 'file';
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
@@ -590,20 +657,21 @@ class _IdeaBlockCardState extends State<_IdeaBlockCard> {
               ],
             ],
           ),
-          TextField(
-            controller: _controller,
-            readOnly: !widget.canEdit,
-            minLines: isTitle ? 1 : 3,
-            maxLines: null,
-            style: TextStyle(
-              fontSize: isTitle ? 24 : 15,
-              fontWeight: isTitle ? FontWeight.w700 : FontWeight.w400,
+          if (!isFile)
+            TextField(
+              controller: _controller,
+              readOnly: !widget.canEdit,
+              minLines: isTitle ? 1 : 3,
+              maxLines: null,
+              style: TextStyle(
+                fontSize: isTitle ? 24 : 15,
+                fontWeight: isTitle ? FontWeight.w700 : FontWeight.w400,
+              ),
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                hintText: isTitle ? 'Section title' : 'Write content...',
+              ),
             ),
-            decoration: InputDecoration(
-              border: InputBorder.none,
-              hintText: isTitle ? 'Section title' : 'Write content...',
-            ),
-          ),
           if (widget.block.files.isNotEmpty) ...[
             const SizedBox(height: 8),
             ...widget.block.files.map(

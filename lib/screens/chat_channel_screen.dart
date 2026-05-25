@@ -835,18 +835,23 @@ class _ChatChannelViewState extends State<ChatChannelView> {
                                 builder: (_, value, __) {
                                   final active = value.text.trim().isNotEmpty ||
                                       _pendingAttachments.isNotEmpty;
-                                  return GestureDetector(
-                                    onTap: active ? _sendMessage : null,
-                                    child: Container(
-                                      width: 40,
-                                      height: 40,
-                                      decoration: BoxDecoration(
-                                        color: active
+                                  return SizedBox(
+                                    width: 40,
+                                    height: 40,
+                                    child: IconButton(
+                                      tooltip: 'Send message',
+                                      onPressed: active ? _sendMessage : null,
+                                      style: IconButton.styleFrom(
+                                        backgroundColor: active
                                             ? AppTheme.primary
                                             : const Color(0xFFD1D5DB),
-                                        borderRadius: BorderRadius.circular(12),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                        ),
+                                        padding: EdgeInsets.zero,
                                       ),
-                                      child: const Icon(Icons.send_rounded,
+                                      icon: const Icon(Icons.send_rounded,
                                           color: Colors.white, size: 18),
                                     ),
                                   );

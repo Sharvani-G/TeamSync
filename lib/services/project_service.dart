@@ -952,6 +952,117 @@ class ProjectService {
     });
   }
 
+  /// Append files to an idea board block in a transaction-safe manner.
+  /// This reads the current block files inside the transaction and appends
+  /// any new files that do not already exist (by id). Prevents overwriting
+  /// concurrent updates that may have happened since the UI read the block.
+  Future<void> appendFilesToIdeaBoardBlock({
+    required String projectId,
+    required String blockId,
+    required List<Map<String, dynamic>> newFiles,
+  }) async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) {
+      throw Exception('User must be logged in');
+    }
+
+    await _firestore.runTransaction((transaction) async {
+      final ref = _firestore.collection('projects').doc(projectId);
+      final snapshot = await transaction.get(ref);
+      if (!snapshot.exists) {
+        throw Exception('Project not found');
+      }
+
+      final data = snapshot.data()!;
+      if (!_canEditIdeaBoard(data, authUser.uid)) {
+        throw Exception('Only collaborators can edit idea board');
+      }
+
+      final current = _toMapList(data['ideaBoardBlocks']);
+      final index = current.indexWhere((item) => item['id'] == blockId);
+      if (index == -1) {
+        throw Exception('Block not found');
+      }
+
+      final existingFiles = _toMapList(current[index]['files']);
+
+      // Build map of existing ids for quick lookup
+      final existingIds = <String>{};
+      for (final f in existingFiles) {
+        final id = (f['id'] as String?) ?? '';
+        if (id.isNotEmpty) existingIds.add(id);
+      }
+
+      // Append only files that are not already present
+      final toAppend = <Map<String, dynamic>>[];
+      for (final f in newFiles) {
+        final id = (f['id'] as String?) ?? '';
+        if (id.isEmpty || !existingIds.contains(id)) {
+          toAppend.add(f);
+          existingIds.add(id);
+        }
+      }
+
+      final merged = [...existingFiles, ...toAppend];
+      current[index]['files'] = merged;
+
+      transaction.update(ref, {
+        'ideaBoardBlocks': current,
+        'lastUpdated': Timestamp.now(),
+      });
+    });
+  }
+
+  /// Replace placeholder files in an idea board block using a mapping from
+  /// placeholder id -> real file map. Only placeholders that still exist
+  /// will be replaced. This is transaction-safe.
+  Future<void> replacePlaceholdersInIdeaBoardBlock({
+    required String projectId,
+    required String blockId,
+    required Map<String, Map<String, dynamic>> replacements,
+  }) async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) {
+      throw Exception('User must be logged in');
+    }
+
+    await _firestore.runTransaction((transaction) async {
+      final ref = _firestore.collection('projects').doc(projectId);
+      final snapshot = await transaction.get(ref);
+      if (!snapshot.exists) {
+        throw Exception('Project not found');
+      }
+
+      final data = snapshot.data()!;
+      if (!_canEditIdeaBoard(data, authUser.uid)) {
+        throw Exception('Only collaborators can edit idea board');
+      }
+
+      final current = _toMapList(data['ideaBoardBlocks']);
+      final index = current.indexWhere((item) => item['id'] == blockId);
+      if (index == -1) {
+        throw Exception('Block not found');
+      }
+
+      final existingFiles = _toMapList(current[index]['files']);
+
+      final updated = existingFiles.map<Map<String, dynamic>>((f) {
+        final id = (f['id'] as String?) ?? '';
+        if (replacements.containsKey(id)) {
+          return replacements[id]!;
+        }
+        return f;
+      }).toList();
+
+      current[index]['files'] = updated;
+
+      transaction.update(ref, {
+        'ideaBoardBlocks': current,
+        'lastUpdated': Timestamp.now(),
+      });
+    });
+  }
+
   Future<void> removeIdeaBoardBlock({
     required String projectId,
     required String blockId,
@@ -1648,9 +1759,16 @@ class ProjectService {
       throw Exception('You do not have access to this project');
     }
 
-    // Validate channel name
-    final trimmedName =
-        name.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9-_]'), '-');
+    // Validate and normalize channel name: strip leading '#' and sanitize
+    var normalizedName = name.trim();
+    // Remove leading hash characters if present
+    normalizedName = normalizedName.replaceFirst(RegExp(r'^#+'), '');
+    // Replace invalid characters with hyphen and collapse multiple hyphens
+    var trimmedName = normalizedName
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9-_]'), '-')
+      .replaceAll(RegExp(r'-{2,}'), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
     if (trimmedName.isEmpty) {
       throw Exception('Channel name cannot be empty');
     }
@@ -1827,9 +1945,27 @@ class ProjectService {
       }
     }
 
-    final trimmed =
-        newName.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9-_]'), '-');
+    // Normalize name the same way as createChannel: strip leading hashes,
+    // replace invalid chars, collapse hyphens, and trim edge hyphens.
+    var normalizedName = newName.trim();
+    normalizedName = normalizedName.replaceFirst(RegExp(r'^#+'), '');
+    var trimmed = normalizedName
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9-_]'), '-')
+      .replaceAll(RegExp(r'-{2,}'), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
     if (trimmed.isEmpty) throw Exception('Channel name cannot be empty');
+
+    // Check for duplicate channel name within the project (excluding self)
+    final existing = await _firestore
+      .collection('projects')
+      .doc(projectId)
+      .collection('channels')
+      .where('name', isEqualTo: trimmed)
+      .get();
+    if (existing.docs.any((d) => d.id != channelId)) {
+      throw Exception('Channel "$trimmed" already exists');
+    }
 
     await channelRef.update({'name': trimmed});
   }
@@ -2929,6 +3065,11 @@ class ProjectService {
       }
 
       recipients.removeAll(excludedUserIds);
+      // Ensure sender never receives a notification for their own action
+      final authUser = _auth.currentUser;
+      if (authUser != null) {
+        recipients.remove(authUser.uid);
+      }
 
       final batch = _firestore.batch();
       for (final userId in recipients) {

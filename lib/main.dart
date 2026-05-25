@@ -13,9 +13,11 @@ import 'services/settings_service.dart';
 import 'services/file_picker_web_bootstrap_stub.dart'
     if (dart.library.html) 'services/file_picker_web_bootstrap_web.dart';
 import 'services/boot_logger_stub.dart'
-  if (dart.library.html) 'services/boot_logger_web.dart';
+    if (dart.library.html) 'services/boot_logger_web.dart';
 import 'services/web_location_stub.dart'
     if (dart.library.html) 'services/web_location_web.dart';
+import 'services/web_utils_stub.dart'
+    if (dart.library.html) 'services/web_utils_web.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -71,12 +73,16 @@ class _ProjectSyncAppState extends State<ProjectSyncApp> {
   }
 
   String _initialRoute() {
-    final webHash = getWebLocationHash().trim();
-    if (webHash.isNotEmpty) {
-      final route = webHash.startsWith('#') ? webHash.substring(1) : webHash;
-      if (route.isNotEmpty) {
-        return route.startsWith('/') ? route : '/$route';
+    final fragment = getLocationFragment().trim();
+    if (fragment.isNotEmpty) {
+      // If the fragment looks like an OAuth callback (contains '=' and
+      // does not start with a route '/'), clear it and fall back to '/'.
+      if (!fragment.startsWith('/') && fragment.contains('=')) {
+        clearOAuthCallbackState();
+        return '/';
       }
+      final route = fragment.startsWith('/') ? fragment : '/$fragment';
+      return route;
     }
 
     final path = Uri.base.path.trim();

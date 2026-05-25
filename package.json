@@ -1,5 +1,9 @@
 {
   "dependencies": {
     "firebase": "^12.12.1"
+  },
+  "devDependencies": {
+    "node-fetch": "^2.6.7",
+    "form-data": "^4.0.0"
   }
 }
