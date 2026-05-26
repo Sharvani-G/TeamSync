@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/user_service.dart';
+import '../services/project_service.dart';
 import '../screens/in_call_screen.dart';
-import '../services/call_service.dart';
-import '../services/webrtc_signaling_service.dart';
+import '../models/models.dart';
 
 class CallsScreen extends StatefulWidget {
   final String projectId;
 
-  const CallsScreen({Key? key, required this.projectId}) : super(key: key);
+  const CallsScreen({super.key, required this.projectId});
 
   @override
   State<CallsScreen> createState() => _CallsScreenState();
@@ -16,8 +16,6 @@ class CallsScreen extends StatefulWidget {
 
 class _CallsScreenState extends State<CallsScreen> with SingleTickerProviderStateMixin {
   late final TabController _controller;
-  final _callService = CallService();
-  final _signaling = WebRtcSignalingService();
 
   final _titleCtrl = TextEditingController();
   final _whenCtrl = TextEditingController();
@@ -107,7 +105,9 @@ class _CallsScreenState extends State<CallsScreen> with SingleTickerProviderStat
                       onChanged: (v) {
                         setState(() {
                           _selectAll = v ?? false;
-                          for (final k in _selected.keys) _selected[k] = _selectAll;
+                          for (final k in _selected.keys) {
+                            _selected[k] = _selectAll;
+                          }
                         });
                       },
                     )
@@ -145,10 +145,7 @@ class _CallsScreenState extends State<CallsScreen> with SingleTickerProviderStat
               ),
               ElevatedButton.icon(
                 onPressed: () async {
-                  final sessionRef = await _startCallNow();
-                  if (sessionRef != null) {
-                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => InCallScreen(callId: sessionRef.id, isInitiator: true)));
-                  }
+                  await _startCallNow();
                 },
                 icon: const Icon(Icons.call),
                 label: const Text('Start Call Now'),
@@ -161,24 +158,25 @@ class _CallsScreenState extends State<CallsScreen> with SingleTickerProviderStat
   }
 
   Widget _buildHistoryTab() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('call_sessions').orderBy('createdAt', descending: true).limit(50).snapshots(),
+    return StreamBuilder<List<ProjectCallSession>>(
+      stream: ProjectService.instance.watchProjectCallHistory(widget.projectId),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        final docs = snapshot.data!.docs;
+        final docs = snapshot.data ?? [];
         return ListView.builder(
           itemCount: docs.length,
           itemBuilder: (context, index) {
             final d = docs[index];
-            final startedById = d['startedBy'] as String? ?? '';
+            final startedById = d.startedBy;
             return FutureBuilder(
               future: UserService.instance.getUserById(startedById),
               builder: (context, userSnap) {
-                final startedBy = userSnap.hasData ? (userSnap.data!.name.isNotEmpty ? userSnap.data!.name : userSnap.data!.username) : (startedById);
+                final startedBy = userSnap.hasData
+                    ? (userSnap.data!.name.isNotEmpty ? userSnap.data!.name : userSnap.data!.username)
+                    : startedById;
                 return ListTile(
-                  title: Text(d['roomName'] ?? d['id'] ?? 'Call'),
+                  title: Text(d.type.toUpperCase()),
                   subtitle: Text(startedBy),
-                  trailing: Text(d['active'] ? 'Active' : 'Ended'),
+                  trailing: Text(d.active ? 'Active' : 'Ended'),
                 );
               },
             );
@@ -191,50 +189,33 @@ class _CallsScreenState extends State<CallsScreen> with SingleTickerProviderStat
   Future<void> _scheduleCall() async {
     final title = _titleCtrl.text.trim();
     final when = _whenCtrl.text.trim();
-    await _callService.createCallSession({
-      'roomName': title.isEmpty ? 'Meeting' : title,
-      'startedBy': 'local',
-      'participants': [],
-      'active': false,
-      'type': 'scheduled',
-      'invitedParticipants': [],
-      'startedAt': when.isEmpty ? FieldValue.serverTimestamp() : DateTime.tryParse(when) ?? FieldValue.serverTimestamp(),
-    });
+    final scheduledAt = DateTime.tryParse(when) ?? DateTime.now().add(const Duration(hours: 1));
+    await ProjectService.instance.scheduleProjectCall(
+      projectId: widget.projectId,
+      title: title.isEmpty ? 'Meeting' : title,
+      agenda: '',
+      description: '',
+      scheduledAt: scheduledAt,
+      durationMinutes: 30,
+      invitedParticipants: _selected.entries.where((entry) => entry.value).map((entry) => entry.key).toList(),
+    );
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Call scheduled')));
   }
 
-  Future<DocumentReference?> _startCallNow() async {
+  Future<void> _startCallNow() async {
     final selectedIds = _selected.entries.where((e) => e.value).map((e) => e.key).toList();
 
-    final ref = await _callService.createCallSession({
-      'roomName': 'Instant Call',
-      'startedBy': FirebaseFirestore.instance.app.name,
-      'participants': [],
-      'active': true,
-      'type': 'instant',
-      'invitedParticipants': selectedIds,
-      'projectId': widget.projectId,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-
-    // Create invites for each selected collaborator
-    final batch = FirebaseFirestore.instance.batch();
-    for (final id in selectedIds) {
-      final inviteRef = FirebaseFirestore.instance.collection('call_invites').doc();
-      batch.set(inviteRef, {
-        'callId': ref.id,
-        'recipientId': id,
-        'senderId': FirebaseFirestore.instance.app.name,
-        'status': 'pending',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    }
-    await batch.commit();
-
-    // Create a lightweight signaling channel in Firestore
-    await _signaling.createRoom(ref.id);
-
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Call started and invites sent')));
-    return ref;
+    final callId = await ProjectService.instance.startProjectCall(
+      projectId: widget.projectId,
+      type: 'instant',
+      invitedParticipants: selectedIds,
+    );
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => InCallScreen(projectId: widget.projectId, callId: callId),
+      ),
+    );
   }
 }

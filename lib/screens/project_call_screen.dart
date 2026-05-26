@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../models/models.dart';
 import '../services/project_service.dart';
 import '../services/user_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
+import 'in_call_screen.dart';
 
 class ProjectCallScreen extends StatefulWidget {
   final String projectId;
@@ -196,11 +196,7 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
                       audioEnabled: _audioEnabled,
                       videoEnabled: _videoEnabled,
                       screenSharing: _screenSharing,
-                      onOpenRoom: () => _openRoom(
-                        activeCall.roomUrl.isNotEmpty
-                            ? activeCall.roomUrl
-                            : 'https://meet.jit.si/${activeCall.roomName.isNotEmpty ? activeCall.roomName : 'teamsync-${widget.projectId}-${activeCall.id}'}',
-                      ),
+                      onOpenRoom: () => _openCall(activeCall.id),
                       onToggleAudio: () async {
                         setState(() => _audioEnabled = !_audioEnabled);
                         await ProjectService.instance.updateCallState(
@@ -317,10 +313,12 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
 
   Future<void> _startCall({required String type}) async {
     try {
-      await ProjectService.instance.startProjectCall(
+      final callId = await ProjectService.instance.startProjectCall(
         projectId: widget.projectId,
         type: type,
       );
+      if (!mounted) return;
+      await _openCall(callId);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -384,11 +382,13 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
     }
 
     try {
-      await ProjectService.instance.startProjectCall(
+      final callId = await ProjectService.instance.startProjectCall(
         projectId: widget.projectId,
         type: 'selected',
         invitedParticipants: result.toList(),
       );
+      if (!mounted) return;
+      await _openCall(callId);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -458,11 +458,13 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
                               initialDate: DateTime.now().add(const Duration(days: 1)),
                             );
                             if (date == null) return;
+                            if (!context.mounted) return;
                             final time = await showTimePicker(
                               context: context,
                               initialTime: TimeOfDay.now(),
                             );
                             if (time == null) return;
+                            if (!context.mounted) return;
                             setDialogState(() {
                               scheduledAt = DateTime(
                                 date.year,
@@ -558,8 +560,12 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
     }
   }
 
-  Future<void> _openRoom(String roomUrl) async {
-    await launchUrl(Uri.parse(roomUrl), mode: LaunchMode.externalApplication);
+  Future<void> _openCall(String callId) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => InCallScreen(projectId: widget.projectId, callId: callId),
+      ),
+    );
   }
 
   String _formatDateTime(DateTime value) {

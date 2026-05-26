@@ -463,41 +463,34 @@ class _SignInPaneState extends State<_SignInPane>
         ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(28, 32, 28, 28),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final compact = constraints.maxHeight < 700;
-              final imageHeight = compact ? 120.0 : 180.0;
-
-              return SingleChildScrollView(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  height: 160,
+                  child: Center(
+                    child: AnimatedBuilder(
+                      animation: _fadeAnimation,
+                      builder: (context, child) {
+                        return Transform.scale(
+                          scale: 0.8 + (_fadeAnimation.value * 0.2),
+                          child: child,
+                        );
+                      },
+                      child: Image.asset(
+                        widget.page.imagePath,
+                        fit: BoxFit.contain,
+                        height: 160,
+                      ),
+                    ),
+                  ),
+                ),
+                FadeTransition(
+                  opacity: _fadeAnimation,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      SizedBox(
-                        height: imageHeight,
-                        child: Center(
-                          child: AnimatedBuilder(
-                            animation: _fadeAnimation,
-                            builder: (context, child) {
-                              return Transform.scale(
-                                scale: 0.8 + (_fadeAnimation.value * 0.2),
-                                child: child,
-                              );
-                            },
-                            child: Image.asset(
-                              widget.page.imagePath,
-                              fit: BoxFit.contain,
-                              height: imageHeight,
-                            ),
-                          ),
-                        ),
-                      ),
-                      FadeTransition(
-                        opacity: _fadeAnimation,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
                       Text(
                         widget.page.title,
                         textAlign: TextAlign.center,
@@ -630,8 +623,7 @@ class _SignInPaneState extends State<_SignInPane>
                                     height: 18,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      valueColor:
-                                          AlwaysStoppedAnimation<Color>(
+                                      valueColor: AlwaysStoppedAnimation<Color>(
                                         Colors.white,
                                       ),
                                     ),
@@ -677,8 +669,8 @@ class _SignInPaneState extends State<_SignInPane>
                     ],
                   ),
                 ),
-              );
-            },
+              ],
+            ),
           ),
         ),
       ),
@@ -901,41 +893,34 @@ class _RegisterPaneState extends State<_RegisterPane>
         ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(28, 32, 28, 28),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final compact = constraints.maxHeight < 760;
-              final imageHeight = compact ? 110.0 : 180.0;
-
-              return SingleChildScrollView(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  height: 160,
+                  child: Center(
+                    child: AnimatedBuilder(
+                      animation: widget.floatAnimation,
+                      builder: (context, child) {
+                        return Transform.translate(
+                          offset: Offset(0, widget.floatAnimation.value),
+                          child: child,
+                        );
+                      },
+                      child: Image.asset(
+                        widget.page.imagePath,
+                        fit: BoxFit.contain,
+                        height: 160,
+                      ),
+                    ),
+                  ),
+                ),
+                FadeTransition(
+                  opacity: _fadeAnimation,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      SizedBox(
-                        height: imageHeight,
-                        child: Center(
-                          child: AnimatedBuilder(
-                            animation: widget.floatAnimation,
-                            builder: (context, child) {
-                              return Transform.translate(
-                                offset: Offset(0, widget.floatAnimation.value),
-                                child: child,
-                              );
-                            },
-                            child: Image.asset(
-                              widget.page.imagePath,
-                              fit: BoxFit.contain,
-                              height: imageHeight,
-                            ),
-                          ),
-                        ),
-                      ),
-                      FadeTransition(
-                        opacity: _fadeAnimation,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
                       Text(
                         widget.page.title,
                         textAlign: TextAlign.center,
@@ -1132,8 +1117,8 @@ class _RegisterPaneState extends State<_RegisterPane>
                     ],
                   ),
                 ),
-              );
-            },
+              ],
+            ),
           ),
         ),
       ),

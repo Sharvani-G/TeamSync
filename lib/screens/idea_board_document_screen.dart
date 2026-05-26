@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -688,10 +687,21 @@ class _IdeaBlockCardState extends State<_IdeaBlockCard> {
                     const Icon(Icons.attach_file, size: 16),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        file.name,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            file.name,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _formatFileSize(file.fileSize),
+                            style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary),
+                          ),
+                        ],
                       ),
                     ),
                     IconButton(
@@ -733,5 +743,17 @@ class _IdeaBlockCardState extends State<_IdeaBlockCard> {
         ],
       ),
     );
+  }
+
+  String _formatFileSize(int size) {
+    if (size <= 0) return 'Unknown size';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    var value = size.toDouble();
+    var unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex += 1;
+    }
+    return '${value.toStringAsFixed(unitIndex == 0 ? 0 : 1)} ${units[unitIndex]}';
   }
 }

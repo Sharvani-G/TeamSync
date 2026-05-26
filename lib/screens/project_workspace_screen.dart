@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/models.dart';
 import '../services/project_service.dart';
 import '../theme/app_theme.dart';
@@ -24,6 +25,25 @@ class ProjectWorkspaceScreen extends StatefulWidget {
 
 class _ProjectWorkspaceScreenState extends State<ProjectWorkspaceScreen> {
   late int _currentIndex = widget.initialTabIndex.clamp(0, 2);
+
+  @override
+  void initState() {
+    super.initState();
+    // Try to restore user's last active workspace section for this project
+    final authUser = FirebaseAuth.instance.currentUser;
+    if (authUser != null) {
+      ProjectService.instance.getUserActiveSection(projectId: widget.projectId, userId: authUser.uid).then((val) {
+        if (val != null && mounted) {
+          final idx = switch (val) {
+            'chat' => 1,
+            'calls' => 2,
+            _ => 0,
+          };
+          setState(() => _currentIndex = idx);
+        }
+      }).catchError((_) {});
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -109,7 +129,7 @@ class _ProjectWorkspaceScreenState extends State<ProjectWorkspaceScreen> {
                       ),
                       const SizedBox(height: 14),
                       Row(
-                        children: List.generate(sections.length, (index) {
+                          children: List.generate(sections.length, (index) {
                           final section = sections[index];
                           final selected = _currentIndex == index;
                           return Expanded(
@@ -118,7 +138,12 @@ class _ProjectWorkspaceScreenState extends State<ProjectWorkspaceScreen> {
                                 left: index == 0 ? 0 : 6,
                               ),
                               child: GestureDetector(
-                                    onTap: () => setState(() => _currentIndex = index),
+                                    onTap: () {
+                                      setState(() => _currentIndex = index);
+                                      // persist user's active section
+                                      final key = index == 1 ? 'chat' : (index == 2 ? 'calls' : 'idea-board');
+                                      ProjectService.instance.setUserActiveSection(projectId: widget.projectId, section: key);
+                                    },
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                       decoration: BoxDecoration(

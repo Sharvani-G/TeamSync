@@ -92,7 +92,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
                                           children: [
                                             const Icon(Icons.tag, size: 16, color: Colors.white),
                                             const SizedBox(width: 8),
-                                            Text('#${ch.name.startsWith('#') ? ch.name.substring(1) : ch.name}', style: TextStyle(color: active ? Colors.white : AppTheme.textPrimary, fontWeight: active ? FontWeight.w800 : FontWeight.w600)),
+                                              Text(ch.name.startsWith('#') ? ch.name.substring(1) : ch.name, style: TextStyle(color: active ? Colors.white : AppTheme.textPrimary, fontWeight: active ? FontWeight.w800 : FontWeight.w600)),
                                           ],
                                         ),
                                       ),
@@ -159,7 +159,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
                                       leading: const Icon(Icons.tag),
                                       title: Row(
                                         children: [
-                                          Expanded(child: Text('#$displayName', style: TextStyle(fontWeight: isActive ? FontWeight.w800 : FontWeight.w600))),
+                                          Expanded(child: Text(displayName, style: TextStyle(fontWeight: isActive ? FontWeight.w800 : FontWeight.w600))),
                                           FutureBuilder<int>(
                                             future: _getUnread(ch.id),
                                             builder: (context, unreadSnap) {
@@ -231,7 +231,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
 
   Future<void> _showCreateChannelDialog() async {
     final nameController = TextEditingController();
-    var isPrivate = false;
+    // No private toggle in redesigned flow; channels are created with selected members
     // Prefetch collaborators for the project so we can show a selectable list
     final currentUser = FirebaseAuth.instance.currentUser;
     Map<String, AppUser> usersById = {};
@@ -262,12 +262,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Channel name')),
-                SwitchListTile(
-                  title: const Text('Private channel'),
-                  value: isPrivate,
-                  onChanged: (v) => setStateSB(() => isPrivate = v),
-                ),
+                TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Channel Name')),
                 Row(
                   children: [
                     const Text('Invite members'),
@@ -313,14 +308,8 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
                   }
 
                   final invitedUserIds = selected.entries.where((e) => e.value).map((e) => e.key).toList();
-                  final invitedUsernames = <String>[];
-                  for (final id in invitedUserIds) {
-                    final u = usersById[id];
-                    if (u != null) invitedUsernames.add(u.username);
-                  }
-
                   try {
-                    final id = await ProjectService.instance.createChannel(projectId: widget.projectId, name: name, isPrivate: isPrivate, invitedMembers: invitedUsernames);
+                    final id = await ProjectService.instance.createChannel(projectId: widget.projectId, name: name, invitedMembers: invitedUserIds);
                     setState(() => _selectedChannelId = id);
                     await ProjectService.instance.setUserActiveChannel(projectId: widget.projectId, channelId: id);
                     Navigator.pop(ctx, true);
@@ -328,7 +317,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
                   }
                 },
-                child: const Text('Create'),
+                child: const Text('Create Channel'),
               ),
             ],
           );

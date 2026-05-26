@@ -1,118 +1,377 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import '../services/webrtc_client.dart';
-import '../services/call_service.dart';
+
+import '../services/project_service.dart';
+import '../theme/app_theme.dart';
 
 class InCallScreen extends StatefulWidget {
+  final String projectId;
   final String callId;
-  final bool isInitiator;
 
-  const InCallScreen({Key? key, required this.callId, this.isInitiator = false}) : super(key: key);
+  const InCallScreen({super.key, required this.projectId, required this.callId});
 
   @override
   State<InCallScreen> createState() => _InCallScreenState();
 }
 
 class _InCallScreenState extends State<InCallScreen> {
-  final WebRtcClient _client = WebRtcClient();
-  bool _muted = false;
-  bool _cameraOff = false;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
+  final Map<String, RTCVideoRenderer> _remoteRenderers = {};
+  final Map<String, RTCPeerConnection> _peerConnections = {};
+  final List<StreamSubscription> _subscriptions = [];
+
+  MediaStream? _localStream;
+  String? _myId;
+  bool _ready = false;
 
   @override
   void initState() {
     super.initState();
-    _start();
+    _bootstrap();
   }
 
-  Future<void> _start() async {
-    if (widget.isInitiator) {
-      await _client.initAsCaller(widget.callId);
-    } else {
-      await _client.initAsAnswerer(widget.callId);
+  Future<void> _bootstrap() async {
+    await _localRenderer.initialize();
+    _myId = _auth.currentUser?.uid;
+    await _startCallFlow();
+    if (mounted) {
+      setState(() => _ready = true);
+    }
+  }
+
+  Future<void> _startCallFlow() async {
+    await _initLocalMedia();
+    await ProjectService.instance.joinProjectCall(
+      projectId: widget.projectId,
+      callId: widget.callId,
+    );
+    _watchParticipants();
+  }
+
+  Future<void> _initLocalMedia() async {
+    _localStream = await navigator.mediaDevices.getUserMedia(<String, dynamic>{
+      'audio': true,
+      'video': {'facingMode': 'user'},
+    });
+    _localRenderer.srcObject = _localStream;
+  }
+
+  void _watchParticipants() {
+    final callRef = _firestore
+        .collection('projects')
+        .doc(widget.projectId)
+        .collection('callSessions')
+        .doc(widget.callId);
+
+    _subscriptions.add(callRef.snapshots().listen((snapshot) async {
+      final data = snapshot.data();
+      if (data == null) return;
+      final participants = List<String>.from((data['participants'] as List? ?? []).cast<String>());
+      await _syncPeerConnections(participants);
+    }));
+  }
+
+  Future<void> _syncPeerConnections(List<String> participants) async {
+    final me = _myId;
+    if (me == null) return;
+
+    for (final participantId in participants) {
+      if (participantId == me) continue;
+      if (_peerConnections.containsKey(participantId)) continue;
+      await _createPeerConnection(participantId);
+    }
+  }
+
+  Future<RTCPeerConnection> _createPeerConnection(String remoteId) async {
+    final pc = await createPeerConnection({
+      'iceServers': [
+        {'urls': 'stun:stun.l.google.com:19302'},
+      ],
+    });
+
+    if (_localStream != null) {
+      for (final track in _localStream!.getTracks()) {
+        await pc.addTrack(track, _localStream!);
+      }
     }
 
-    _client.onLocalStream.listen((s) {
-      setState(() {});
-    });
-    _client.onRemoteStream.listen((s) {
-      setState(() {});
-    });
+    final remoteRenderer = RTCVideoRenderer();
+    await remoteRenderer.initialize();
+    _remoteRenderers[remoteId] = remoteRenderer;
+
+    pc.onTrack = (event) {
+      if (event.streams.isNotEmpty) {
+        remoteRenderer.srcObject = event.streams.first;
+        if (mounted) setState(() {});
+      }
+    };
+
+    final signalingDoc = _firestore
+        .collection('projects')
+        .doc(widget.projectId)
+        .collection('callSessions')
+        .doc(widget.callId)
+        .collection('signaling')
+        .doc(_signalDocId(remoteId));
+
+    pc.onIceCandidate = (candidate) async {
+      await signalingDoc.collection('candidates').add({
+        'from': _myId,
+        'candidate': candidate.candidate,
+        'sdpMid': candidate.sdpMid,
+        'sdpMLineIndex': candidate.sdpMLineIndex,
+        'createdAt': Timestamp.now(),
+      });
+    };
+
+    _peerConnections[remoteId] = pc;
+    _wireSignaling(remoteId, pc);
+
+    if ((_myId ?? '').compareTo(remoteId) < 0) {
+      await _sendOffer(remoteId, pc);
+    }
+
+    return pc;
+  }
+
+  void _wireSignaling(String remoteId, RTCPeerConnection pc) {
+    final signalingBase = _firestore
+        .collection('projects')
+        .doc(widget.projectId)
+        .collection('callSessions')
+        .doc(widget.callId)
+        .collection('signaling');
+
+    final localDoc = signalingBase.doc(_signalDocId(remoteId));
+    final remoteDoc = signalingBase.doc(_signalDocId(_myId ?? '', remoteId));
+
+    _subscriptions.add(localDoc.snapshots().listen((snapshot) async {
+      final data = snapshot.data();
+      if (data == null) return;
+      final answer = data['answer'];
+      if (answer is Map<String, dynamic>) {
+        await pc.setRemoteDescription(
+          RTCSessionDescription(answer['sdp'] as String?, answer['type'] as String?),
+        );
+      }
+    }));
+
+    _subscriptions.add(remoteDoc.snapshots().listen((snapshot) async {
+      final data = snapshot.data();
+      if (data == null) return;
+      final offer = data['offer'];
+      if (offer is Map<String, dynamic>) {
+        final description = RTCSessionDescription(
+          offer['sdp'] as String?,
+          offer['type'] as String?,
+        );
+        await pc.setRemoteDescription(description);
+        final answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        await remoteDoc.set({
+          'answer': {'type': answer.type, 'sdp': answer.sdp},
+          'updatedAt': Timestamp.now(),
+        }, SetOptions(merge: true));
+      }
+    }));
+
+    _subscriptions.add(remoteDoc.collection('candidates').snapshots().listen((snapshot) async {
+      for (final change in snapshot.docChanges) {
+        if (change.type != DocumentChangeType.added) continue;
+        final data = change.doc.data();
+        if (data == null || data['from'] == _myId) continue;
+        await pc.addCandidate(
+          RTCIceCandidate(
+            data['candidate'] as String?,
+            data['sdpMid'] as String?,
+            data['sdpMLineIndex'] as int?,
+          ),
+        );
+      }
+    }));
+
+    _subscriptions.add(localDoc.collection('candidates').snapshots().listen((snapshot) async {
+      for (final change in snapshot.docChanges) {
+        if (change.type != DocumentChangeType.added) continue;
+        final data = change.doc.data();
+        if (data == null || data['from'] == _myId) continue;
+        await pc.addCandidate(
+          RTCIceCandidate(
+            data['candidate'] as String?,
+            data['sdpMid'] as String?,
+            data['sdpMLineIndex'] as int?,
+          ),
+        );
+      }
+    }));
+  }
+
+  Future<void> _sendOffer(String remoteId, RTCPeerConnection pc) async {
+    final offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    final localDoc = _firestore
+        .collection('projects')
+        .doc(widget.projectId)
+        .collection('callSessions')
+        .doc(widget.callId)
+        .collection('signaling')
+        .doc(_signalDocId(remoteId));
+
+    await localDoc.set({
+      'from': _myId,
+      'to': remoteId,
+      'offer': {'type': offer.type, 'sdp': offer.sdp},
+      'createdAt': Timestamp.now(),
+      'updatedAt': Timestamp.now(),
+    }, SetOptions(merge: true));
+  }
+
+  String _signalDocId(String remoteId, [String? localId]) {
+    final me = localId ?? _myId ?? '';
+    return me.compareTo(remoteId) < 0 ? '${me}_$remoteId' : '${remoteId}_$me';
+  }
+
+  Future<void> _toggleTrack(bool audio) async {
+    final stream = _localStream;
+    if (stream == null) return;
+
+    final tracks = audio ? stream.getAudioTracks() : stream.getVideoTracks();
+    if (tracks.isEmpty) return;
+    tracks.first.enabled = !tracks.first.enabled;
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _leave() async {
+    await ProjectService.instance.leaveProjectCall(
+      projectId: widget.projectId,
+      callId: widget.callId,
+    );
+    if (mounted) Navigator.of(context).pop();
   }
 
   @override
   void dispose() {
-    _client.dispose();
+    for (final sub in _subscriptions) {
+      sub.cancel();
+    }
+    for (final pc in _peerConnections.values) {
+      pc.close();
+    }
+    for (final renderer in _remoteRenderers.values) {
+      renderer.dispose();
+    }
+    _localStream?.getTracks().forEach((track) => track.stop());
+    _localStream?.dispose();
+    _localRenderer.dispose();
     super.dispose();
-  }
-
-  Widget _videoView(MediaStream? stream, {bool mirror = false}) {
-    if (stream == null) return const SizedBox.shrink();
-    final renderer = RTCVideoRenderer();
-    renderer.initialize().then((_) {
-      renderer.srcObject = stream;
-    });
-    return AspectRatio(
-      aspectRatio: 16 / 9,
-      child: RTCVideoView(renderer, mirror: mirror),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('In Call')),
-      body: Column(
-        children: [
-          Expanded(
-            child: Stack(
+      backgroundColor: const Color(0xFF0F172A),
+      appBar: AppBar(
+        title: const Text('Call'),
+        backgroundColor: AppTheme.primary,
+        actions: [
+          IconButton(
+            onPressed: _leave,
+            icon: const Icon(Icons.call_end),
+          ),
+        ],
+      ),
+      body: _ready
+          ? Column(
               children: [
-                Center(child: _videoView(_client.remoteStream)),
-                Positioned(
-                  right: 12,
-                  bottom: 12,
-                  width: 160,
-                  height: 120,
-                  child: Container(
-                    decoration: BoxDecoration(border: Border.all(color: Colors.black26)),
-                    child: _videoView(_client.localStream, mirror: true),
+                Expanded(
+                  child: GridView.count(
+                    crossAxisCount: _remoteRenderers.isEmpty ? 1 : 2,
+                    padding: const EdgeInsets.all(12),
+                    children: [
+                      _videoTile(
+                        label: 'You',
+                        child: RTCVideoView(_localRenderer, mirror: true),
+                      ),
+                      ..._remoteRenderers.entries.map(
+                        (entry) => _videoTile(
+                          label: entry.key,
+                          child: RTCVideoView(entry.value),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _actionButton(Icons.mic, 'Mute', () => _toggleTrack(true)),
+                        _actionButton(Icons.videocam, 'Video', () => _toggleTrack(false)),
+                        _actionButton(Icons.call_end, 'End', _leave, destructive: true),
+                      ],
+                    ),
                   ),
                 ),
               ],
+            )
+          : const Center(child: CircularProgressIndicator()),
+    );
+  }
+
+  Widget _videoTile({required String label, required Widget child}) {
+    return Container(
+      margin: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.black,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white12),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          Positioned.fill(child: child),
+          Positioned(
+            left: 12,
+            bottom: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 12)),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                IconButton(
-                  icon: Icon(_muted ? Icons.mic_off : Icons.mic),
-                  onPressed: () async {
-                    setState(() => _muted = !_muted);
-                    await _client.mute(_muted);
-                  },
-                ),
-                IconButton(
-                  icon: Icon(_cameraOff ? Icons.videocam_off : Icons.videocam),
-                  onPressed: () async {
-                    setState(() => _cameraOff = !_cameraOff);
-                    await _client.toggleCamera();
-                  },
-                ),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.call_end),
-                  label: const Text('End'),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                  onPressed: () async {
-                    await CallService().endCall(widget.callId);
-                    Navigator.of(context).pop();
-                  },
-                ),
-              ],
-            ),
-          )
         ],
       ),
+    );
+  }
+
+  Widget _actionButton(IconData icon, String label, VoidCallback onPressed, {bool destructive = false}) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CircleAvatar(
+          radius: 26,
+          backgroundColor: destructive ? const Color(0xFFDC2626) : AppTheme.primary,
+          child: IconButton(
+            onPressed: onPressed,
+            icon: Icon(icon, color: Colors.white),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+      ],
     );
   }
 }

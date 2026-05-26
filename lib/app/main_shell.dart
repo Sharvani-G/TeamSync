@@ -6,11 +6,11 @@ import '../screens/notifications_screen.dart';
 import '../screens/profile_screen.dart';
 import '../services/project_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 import '../services/user_service.dart';
 import '../theme/app_theme.dart';
 import '../screens/in_call_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -117,16 +117,18 @@ class _MainShellState extends State<MainShell> {
   @override
   void initState() {
     super.initState();
-    // Start listening for incoming call invites when user is available
+    // Start listening for incoming call notifications when user is available
     FirebaseAuth.instance.authStateChanges().listen((user) {
       _inviteSub?.cancel();
       _seenInvites.clear();
       if (user == null) return;
 
       _inviteSub = FirebaseFirestore.instance
-          .collection('call_invites')
-          .where('recipientId', isEqualTo: user.uid)
-          .where('status', isEqualTo: 'pending')
+          .collection('users')
+          .doc(user.uid)
+          .collection('notifications')
+          .where('read', isEqualTo: false)
+          .where('type', whereIn: ['call_started', 'call_scheduled'])
           .snapshots()
           .listen((snap) {
         for (final doc in snap.docs) {
@@ -146,8 +148,9 @@ class _MainShellState extends State<MainShell> {
   }
 
   void _showInviteDialog(String inviteId, Map<String, dynamic> data) async {
-    final callId = data['callId'] as String? ?? '';
-    final senderId = data['senderId'] as String? ?? 'Someone';
+    final callId = (data['data'] as Map<String, dynamic>?)?['callId'] as String? ?? '';
+    final projectId = data['projectId'] as String? ?? '';
+    final senderId = (data['data'] as Map<String, dynamic>?)?['senderId'] as String? ?? 'Someone';
     String senderDisplay = senderId;
     try {
       final user = await UserService.instance.getUserById(senderId);
@@ -165,26 +168,33 @@ class _MainShellState extends State<MainShell> {
           actions: [
             TextButton(
               onPressed: () async {
-                // Decline
-                await FirebaseFirestore.instance.collection('call_invites').doc(inviteId).update({'status': 'declined'});
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(FirebaseAuth.instance.currentUser?.uid)
+                    .collection('notifications')
+                    .doc(inviteId)
+                    .update({'read': true});
+                if (!context.mounted) return;
                 Navigator.of(ctx).pop();
               },
               child: const Text('Decline'),
             ),
             ElevatedButton(
               onPressed: () async {
-                // Accept: mark invite accepted and join call
-                await FirebaseFirestore.instance.collection('call_invites').doc(inviteId).update({'status': 'accepted'});
-                // Add to call session participants
-                final callRef = FirebaseFirestore.instance.collection('call_sessions').doc(callId);
-                await callRef.update({
-                  'participants': FieldValue.arrayUnion([FirebaseAuth.instance.currentUser?.uid ?? 'unknown']),
-                  'active': true,
-                });
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(FirebaseAuth.instance.currentUser?.uid)
+                    .collection('notifications')
+                    .doc(inviteId)
+                    .update({'read': true});
+                if (!context.mounted) return;
                 Navigator.of(ctx).pop();
-                // Navigate into in-call UI as answerer
-                if (mounted) {
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => InCallScreen(callId: callId, isInitiator: false)));
+                if (mounted && projectId.isNotEmpty && callId.isNotEmpty) {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => InCallScreen(projectId: projectId, callId: callId),
+                    ),
+                  );
                 }
               },
               child: const Text('Accept'),

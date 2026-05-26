@@ -23,6 +23,34 @@ class ProjectService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final UserService _userService = UserService.instance;
 
+  Stream<T> _retryingStream<T>(
+    String label,
+    Stream<T> Function() createStream, {
+    Duration initialDelay = const Duration(milliseconds: 300),
+    Duration maxDelay = const Duration(seconds: 5),
+  }) async* {
+    var attempt = 0;
+
+    while (true) {
+      try {
+        await for (final value in createStream()) {
+          attempt = 0;
+          yield value;
+        }
+        return;
+      } catch (e) {
+        attempt += 1;
+        final delayMs = initialDelay.inMilliseconds * attempt;
+        final clampedDelayMs = delayMs.clamp(
+          initialDelay.inMilliseconds,
+          maxDelay.inMilliseconds,
+        );
+        print('⚠️ $label stream error: $e');
+        await Future.delayed(Duration(milliseconds: clampedDelayMs));
+      }
+    }
+  }
+
   bool _isAdminRole(Map<String, dynamic> data, String userId) {
     final createdBy = data['createdBy'] as String?;
     final collaborators = _parseCollaboratorsMap(
@@ -94,6 +122,10 @@ class ProjectService {
       }
 
       try {
+        if (!controller.isClosed) {
+          controller.add(const <Project>[]);
+        }
+
         // Query 1: projects created by the user
         final createdQuery = _firestore
             .collection('projects')
@@ -117,6 +149,7 @@ class ProjectService {
           emitCombined();
         }, onError: (e, st) {
           print('⚠️ watchMyProjects createdQuery error: $e');
+          emitCombined();
         });
 
         subAdmin = adminQuery.listen((snap) {
@@ -124,6 +157,7 @@ class ProjectService {
           emitCombined();
         }, onError: (e, st) {
           print('⚠️ watchMyProjects adminQuery error: $e');
+          emitCombined();
         });
 
         subCollaborator = collaboratorQuery.listen((snap) {
@@ -131,6 +165,7 @@ class ProjectService {
           emitCombined();
         }, onError: (e, st) {
           print('⚠️ watchMyProjects collaboratorQuery error: $e');
+          emitCombined();
         });
 
         controller.onCancel = () async {
@@ -151,27 +186,31 @@ class ProjectService {
 
   /// Get all public projects for discovery
   Stream<List<Project>> watchPublicProjects() {
-    return _firestore
-        .collection('projects')
-        .where('visibility', isEqualTo: 'public')
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) => _parseProject(doc)).toList();
-    });
+    return _retryingStream<List<Project>>(
+      'watchPublicProjects',
+      () => _firestore
+          .collection('projects')
+          .where('visibility', isEqualTo: 'public')
+          .snapshots()
+          .map((snapshot) {
+        return snapshot.docs.map((doc) => _parseProject(doc)).toList();
+      }),
+    );
   }
 
   /// Get a single project by ID
   Stream<Project?> watchProject(String projectId) {
-    return _firestore
-        .collection('projects')
-        .doc(projectId)
-        .snapshots()
-        .map((doc) {
-      if (!doc.exists) {
-        return null;
-      }
-      return _parseProject(doc);
-    });
+    return _retryingStream<Project?>(
+      'watchProject($projectId)',
+      () => _firestore.collection('projects').doc(projectId).snapshots().map(
+        (doc) {
+          if (!doc.exists) {
+            return null;
+          }
+          return _parseProject(doc);
+        },
+      ),
+    );
   }
 
   // ============ PROJECT CREATION ============
@@ -704,22 +743,24 @@ class ProjectService {
       return Stream.value([]);
     }
 
-    return _firestore
-        .collection('joinRequests')
-        .where('projectId', isEqualTo: projectId)
-        .snapshots()
-        .asyncMap((snapshot) async {
-      // Verify user is admin
-      final projectDoc =
-          await _firestore.collection('projects').doc(projectId).get();
-      final projectData = projectDoc.data();
+    return _retryingStream<List<JoinRequest>>(
+      'watchJoinRequests($projectId)',
+      () => _firestore
+          .collection('joinRequests')
+          .where('projectId', isEqualTo: projectId)
+          .snapshots()
+          .asyncMap((snapshot) async {
+        final projectDoc =
+            await _firestore.collection('projects').doc(projectId).get();
+        final projectData = projectDoc.data();
 
-      if (projectData == null || !_isAdminRole(projectData, authUser.uid)) {
-        return []; // Non-admin gets empty list
-      }
+        if (projectData == null || !_isAdminRole(projectData, authUser.uid)) {
+          return []; // Non-admin gets empty list
+        }
 
-      return snapshot.docs.map((doc) => _parseJoinRequest(doc)).toList();
-    });
+        return snapshot.docs.map((doc) => _parseJoinRequest(doc)).toList();
+      }),
+    );
   }
 
   /// Get pending join requests for current user (to track own requests)
@@ -729,14 +770,17 @@ class ProjectService {
       return Stream.value([]);
     }
 
-    return _firestore
-        .collection('joinRequests')
-        .where('requestedBy', isEqualTo: authUser.uid)
-        .where('status', isEqualTo: 'pending')
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) => _parseJoinRequest(doc)).toList();
-    });
+    return _retryingStream<List<JoinRequest>>(
+      'watchMyJoinRequests(${authUser.uid})',
+      () => _firestore
+          .collection('joinRequests')
+          .where('requestedBy', isEqualTo: authUser.uid)
+          .where('status', isEqualTo: 'pending')
+          .snapshots()
+          .map((snapshot) {
+        return snapshot.docs.map((doc) => _parseJoinRequest(doc)).toList();
+      }),
+    );
   }
 
   /// Accept a join request (admin only)
@@ -1602,30 +1646,33 @@ class ProjectService {
         return Stream.value(0);
       }
 
-      return _firestore
-          .collection('projects')
-          .doc(projectId)
-          .collection('members')
-          .doc(authUser.uid)
-          .snapshots()
-          .asyncExpand((memberDoc) {
-        final lastReadAt = _parseDateTime(memberDoc.data()?['lastReadAt']) ??
-            DateTime.fromMillisecondsSinceEpoch(0);
-        return _firestore
+      return _retryingStream<int>(
+        'watchProjectUnreadCount($projectId/${authUser.uid})',
+        () => _firestore
             .collection('projects')
             .doc(projectId)
-            .collection('messages')
+            .collection('members')
+            .doc(authUser.uid)
             .snapshots()
-            .map((snapshot) {
-          return snapshot.docs.where((doc) {
-            final data = doc.data();
-            final createdAt = _parseDateTime(data['createdAt']) ??
-                DateTime.fromMillisecondsSinceEpoch(0);
-            return createdAt.isAfter(lastReadAt) &&
-                data['senderId'] != authUser.uid;
-          }).length;
-        });
-      });
+            .asyncExpand((memberDoc) {
+          final lastReadAt = _parseDateTime(memberDoc.data()?['lastReadAt']) ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+          return _firestore
+              .collection('projects')
+              .doc(projectId)
+              .collection('messages')
+              .snapshots()
+              .map((snapshot) {
+            return snapshot.docs.where((doc) {
+              final data = doc.data();
+              final createdAt = _parseDateTime(data['createdAt']) ??
+                  DateTime.fromMillisecondsSinceEpoch(0);
+              return createdAt.isAfter(lastReadAt) &&
+                  data['senderId'] != authUser.uid;
+            }).length;
+          });
+        }),
+      );
     });
   }
 
@@ -1719,20 +1766,23 @@ class ProjectService {
 
   /// Watch all channels in a project
   Stream<List<ProjectChannel>> watchProjectChannels(String projectId) {
-    return _firestore
-        .collection('projects')
-        .doc(projectId)
-        .collection('channels')
-        .orderBy('createdAt', descending: false)
-        .snapshots()
-        .map((snapshot) {
-      try {
-        return snapshot.docs.map((doc) => _parseProjectChannel(doc)).toList();
-      } catch (e) {
-        print('❌ Error parsing channels: $e');
-        return [];
-      }
-    });
+    return _retryingStream<List<ProjectChannel>>(
+      'watchProjectChannels($projectId)',
+      () => _firestore
+          .collection('projects')
+          .doc(projectId)
+          .collection('channels')
+          .orderBy('createdAt', descending: false)
+          .snapshots()
+          .map((snapshot) {
+        try {
+          return snapshot.docs.map((doc) => _parseProjectChannel(doc)).toList();
+        } catch (e) {
+          print('❌ Error parsing channels: $e');
+          return [];
+        }
+      }),
+    );
   }
 
   /// Create a new channel in a project
@@ -1765,10 +1815,10 @@ class ProjectService {
     normalizedName = normalizedName.replaceFirst(RegExp(r'^#+'), '');
     // Replace invalid characters with hyphen and collapse multiple hyphens
     var trimmedName = normalizedName
-      .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9-_]'), '-')
-      .replaceAll(RegExp(r'-{2,}'), '-')
-      .replaceAll(RegExp(r'^-+|-+$'), '');
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9-_]'), '-')
+        .replaceAll(RegExp(r'-{2,}'), '-')
+        .replaceAll(RegExp(r'^-+|-+$'), '');
     if (trimmedName.isEmpty) {
       throw Exception('Channel name cannot be empty');
     }
@@ -1796,7 +1846,8 @@ class ProjectService {
       'projectId': projectId,
       'name': trimmedName,
       'createdBy': authUser.uid,
-      'members': isPrivate ? invitedMembers : <String>[],
+      // Store invited members explicitly so UI can create a channel with specific members
+      'members': invitedMembers,
       'isPrivate': isPrivate,
       'createdAt': Timestamp.now(),
       'lastMessageAt': null,
@@ -1950,19 +2001,19 @@ class ProjectService {
     var normalizedName = newName.trim();
     normalizedName = normalizedName.replaceFirst(RegExp(r'^#+'), '');
     var trimmed = normalizedName
-      .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9-_]'), '-')
-      .replaceAll(RegExp(r'-{2,}'), '-')
-      .replaceAll(RegExp(r'^-+|-+$'), '');
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9-_]'), '-')
+        .replaceAll(RegExp(r'-{2,}'), '-')
+        .replaceAll(RegExp(r'^-+|-+$'), '');
     if (trimmed.isEmpty) throw Exception('Channel name cannot be empty');
 
     // Check for duplicate channel name within the project (excluding self)
     final existing = await _firestore
-      .collection('projects')
-      .doc(projectId)
-      .collection('channels')
-      .where('name', isEqualTo: trimmed)
-      .get();
+        .collection('projects')
+        .doc(projectId)
+        .collection('channels')
+        .where('name', isEqualTo: trimmed)
+        .get();
     if (existing.docs.any((d) => d.id != channelId)) {
       throw Exception('Channel "$trimmed" already exists');
     }
@@ -2008,27 +2059,30 @@ class ProjectService {
         return Stream.value([]);
       }
 
-      return _firestore
-          .collection('projects')
-          .doc(projectId)
-          .collection('channels')
-          .doc(channelId)
-          .collection('messages')
-          .orderBy('createdAt', descending: true)
-          .limit(limit)
-          .snapshots()
-          .map((snapshot) {
-        try {
-          return snapshot.docs
-              .map((doc) => _parseProjectChatMessage(doc))
-              .toList()
-              .reversed
-              .toList();
-        } catch (e) {
-          print('❌ Error parsing channel messages: $e');
-          return [];
-        }
-      });
+      return _retryingStream<List<ProjectChatMessage>>(
+        'watchChannelMessages($projectId/$channelId)',
+        () => _firestore
+            .collection('projects')
+            .doc(projectId)
+            .collection('channels')
+            .doc(channelId)
+            .collection('messages')
+            .orderBy('createdAt', descending: true)
+            .limit(limit)
+            .snapshots()
+            .map((snapshot) {
+          try {
+            return snapshot.docs
+                .map((doc) => _parseProjectChatMessage(doc))
+                .toList()
+                .reversed
+                .toList();
+          } catch (e) {
+            print('❌ Error parsing channel messages: $e');
+            return [];
+          }
+        }),
+      );
     });
   }
 
@@ -2152,6 +2206,17 @@ class ProjectService {
         .doc(channelId)
         .collection('messages')
         .doc(messageId);
+    // Normalize attachments to a compact production-friendly shape
+    final normalizedAttachments = attachments.map((a) {
+      final map = Map<String, dynamic>.from(a as Map);
+      return {
+        'downloadUrl': map['downloadUrl'] ?? map['fileUrl'] ?? map['url'] ?? '',
+        'fileName': map['name'] ?? map['fileName'] ?? '',
+        'fileType': map['mimeType'] ?? map['fileType'] ?? map['type'] ?? '',
+        'senderId': authUser.uid,
+        'timestamp': Timestamp.now(),
+      };
+    }).toList();
 
     final messageData = {
       'id': messageRef.id,
@@ -2167,7 +2232,7 @@ class ProjectService {
       'createdAt': Timestamp.now(),
       'updatedAt': Timestamp.now(),
       'reactions': <String, List<String>>{},
-      'attachments': attachments,
+      'attachments': normalizedAttachments,
     };
 
     try {
@@ -2605,46 +2670,88 @@ class ProjectService {
     }
   }
 
+  /// Persist the user's last active workspace section (e.g. 'idea-board', 'chat', 'calls')
+  Future<void> setUserActiveSection(
+      {required String projectId, required String section}) async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) return;
+
+    try {
+      await _firestore
+          .collection('projects')
+          .doc(projectId)
+          .collection('members')
+          .doc(authUser.uid)
+          .set({'lastSelectedSection': section}, SetOptions(merge: true));
+    } catch (e) {
+      print('⚠️ Error setting active section: $e');
+    }
+  }
+
+  /// Read the user's last selected workspace section if present
+  Future<String?> getUserActiveSection(
+      {required String projectId, required String userId}) async {
+    try {
+      final doc = await _firestore
+          .collection('projects')
+          .doc(projectId)
+          .collection('members')
+          .doc(userId)
+          .get();
+      final val = doc.data()?['lastSelectedSection'] as String?;
+      return val;
+    } catch (e) {
+      print('⚠️ Error getting active section: $e');
+      return null;
+    }
+  }
+
   // ============ CALL SYSTEM ============
 
   Stream<ProjectCallSession?> watchActiveProjectCall(String projectId) {
-    return _firestore
-        .collection('projects')
-        .doc(projectId)
-        .collection('callSessions')
-        .where('active', isEqualTo: true)
-        .snapshots()
-        .map((snapshot) {
-      try {
-        if (snapshot.docs.isEmpty) {
+    return _retryingStream<ProjectCallSession?>(
+      'watchActiveProjectCall($projectId)',
+      () => _firestore
+          .collection('projects')
+          .doc(projectId)
+          .collection('callSessions')
+          .where('active', isEqualTo: true)
+          .snapshots()
+          .map((snapshot) {
+        try {
+          if (snapshot.docs.isEmpty) {
+            return null;
+          }
+          return _parseProjectCallSession(snapshot.docs.first);
+        } catch (e) {
+          print('❌ Error parsing active call: $e');
           return null;
         }
-        return _parseProjectCallSession(snapshot.docs.first);
-      } catch (e) {
-        print('❌ Error parsing active call: $e');
-        return null;
-      }
-    });
+      }),
+    );
   }
 
   Stream<List<ProjectCallSession>> watchProjectCallHistory(String projectId) {
-    return _firestore
-        .collection('projects')
-        .doc(projectId)
-        .collection('callSessions')
-        .orderBy('startedAt', descending: true)
-        .limit(50)
-        .snapshots()
-        .map((snapshot) {
-      try {
-        return snapshot.docs
-            .map((doc) => _parseProjectCallSession(doc))
-            .toList();
-      } catch (e) {
-        print('❌ Error parsing call history: $e');
-        return [];
-      }
-    });
+    return _retryingStream<List<ProjectCallSession>>(
+      'watchProjectCallHistory($projectId)',
+      () => _firestore
+          .collection('projects')
+          .doc(projectId)
+          .collection('callSessions')
+          .orderBy('startedAt', descending: true)
+          .limit(50)
+          .snapshots()
+          .map((snapshot) {
+        try {
+          return snapshot.docs
+              .map((doc) => _parseProjectCallSession(doc))
+              .toList();
+        } catch (e) {
+          print('❌ Error parsing call history: $e');
+          return [];
+        }
+      }),
+    );
   }
 
   Future<String> startProjectCall({
@@ -2717,7 +2824,7 @@ class ProjectService {
             ? invitedParticipants.toSet()
             : teamMembers,
         excludedUserIds: {authUser.uid},
-        data: {'callId': callRef.id},
+        data: {'callId': callRef.id, 'senderId': authUser.uid},
       );
 
       return callRef.id;
@@ -2794,7 +2901,7 @@ class ProjectService {
         body: '$title at ${scheduledAt.toLocal()}',
         onlyUserIds: targets,
         excludedUserIds: {authUser.uid},
-        data: {'scheduleId': scheduleRef.id},
+        data: {'scheduleId': scheduleRef.id, 'senderId': authUser.uid},
         deliverAt: DateTime.now(),
       );
 
@@ -2806,7 +2913,7 @@ class ProjectService {
           body: '$title starts in 15 minutes',
           onlyUserIds: targets,
           excludedUserIds: {authUser.uid},
-          data: {'scheduleId': scheduleRef.id},
+          data: {'scheduleId': scheduleRef.id, 'senderId': authUser.uid},
           deliverAt: reminderAt,
         );
       }
@@ -2937,25 +3044,28 @@ class ProjectService {
       return Stream.value([]);
     }
 
-    return _firestore
-        .collection('users')
-        .doc(authUser.uid)
-        .collection('notifications')
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) {
-      try {
-        return snapshot.docs
-            .map((doc) => _parseNotificationItem(doc))
-            .where((item) =>
-                item.deliverAt == null ||
-                !item.deliverAt!.isAfter(DateTime.now()))
-            .toList();
-      } catch (e) {
-        print('❌ Error parsing notifications: $e');
-        return [];
-      }
-    });
+    return _retryingStream<List<ProjectNotificationItem>>(
+      'watchMyNotifications(${authUser.uid})',
+      () => _firestore
+          .collection('users')
+          .doc(authUser.uid)
+          .collection('notifications')
+          .orderBy('createdAt', descending: true)
+          .snapshots()
+          .map((snapshot) {
+        try {
+          return snapshot.docs
+              .map((doc) => _parseNotificationItem(doc))
+              .where((item) =>
+                  item.deliverAt == null ||
+                  !item.deliverAt!.isAfter(DateTime.now()))
+              .toList();
+        } catch (e) {
+          print('❌ Error parsing notifications: $e');
+          return [];
+        }
+      }),
+    );
   }
 
   Future<void> markNotificationRead(String notificationId) async {
@@ -3006,29 +3116,35 @@ class ProjectService {
       return Stream.value(0);
     }
 
-    return watchMyNotifications().map((notifications) {
-      return notifications.where((notification) => !notification.read).length;
-    });
+    return _retryingStream<int>(
+      'watchUnreadNotificationCount(${authUser.uid})',
+      () => watchMyNotifications().map((notifications) {
+        return notifications.where((notification) => !notification.read).length;
+      }),
+    );
   }
 
   Stream<List<ProjectCallSchedule>> watchProjectCallSchedules(
       String projectId) {
-    return _firestore
-        .collection('projects')
-        .doc(projectId)
-        .collection('callSchedules')
-        .orderBy('scheduledAt', descending: true)
-        .snapshots()
-        .map((snapshot) {
-      try {
-        return snapshot.docs
-            .map((doc) => _parseProjectCallSchedule(doc))
-            .toList();
-      } catch (e) {
-        print('❌ Error parsing call schedules: $e');
-        return [];
-      }
-    });
+    return _retryingStream<List<ProjectCallSchedule>>(
+      'watchProjectCallSchedules($projectId)',
+      () => _firestore
+          .collection('projects')
+          .doc(projectId)
+          .collection('callSchedules')
+          .orderBy('scheduledAt', descending: true)
+          .snapshots()
+          .map((snapshot) {
+        try {
+          return snapshot.docs
+              .map((doc) => _parseProjectCallSchedule(doc))
+              .toList();
+        } catch (e) {
+          print('❌ Error parsing call schedules: $e');
+          return [];
+        }
+      }),
+    );
   }
 
   Future<void> _fanOutProjectNotification({

@@ -10,7 +10,7 @@ import '../models/models.dart';
 import '../services/user_profile_service.dart';
 import '../services/user_service.dart';
 import 'chat_channel_screen.dart';
-import 'entry_screen.dart';
+import 'chat_home_screen.dart';
 import 'username_repair_screen.dart';
 import '../services/web_utils_stub.dart'
     if (dart.library.html) '../services/web_utils_web.dart';
@@ -87,6 +87,16 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
     print(
         '${DateTime.now().toIso8601String()} [AUTH] starting explicit web hydration polling');
 
+    // If the browser was redirected with an OAuth fragment (e.g. code=...)
+    // clear it early so the app doesn't remain stuck on an auth callback.
+    try {
+      final frag = getLocationFragment().trim();
+      if (frag.isNotEmpty && !frag.startsWith('/') && frag.contains('=')) {
+        appendBootLog('[AUTH] detected OAuth fragment; clearing it');
+        clearOAuthCallbackState();
+      }
+    } catch (_) {}
+
     final end = DateTime.now().add(_authHydrationTimeout);
     try {
       while (DateTime.now().isBefore(end)) {
@@ -156,6 +166,31 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
     return null;
   }
 
+  Widget? _buildStartupRoute() {
+    final path = _startupPath();
+
+    final chatChannelMatch =
+        RegExp(r'^/project/(\w+)/chat/([\w-]+)$').firstMatch(path);
+    if (chatChannelMatch != null) {
+      return ChatChannelScreen(
+        projectId: chatChannelMatch.group(1)!,
+        channelId: chatChannelMatch.group(2)!,
+      );
+    }
+
+    final chatMatch = RegExp(r'^/project/(\w+)/chat$').firstMatch(path);
+    if (chatMatch != null) {
+      return ChatHomeScreen(projectId: chatMatch.group(1)!);
+    }
+
+    final projectMatch = RegExp(r'^/project/(\w+)$').firstMatch(path);
+    if (projectMatch != null) {
+      return const MainShell();
+    }
+
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_authBootstrapComplete) {
@@ -172,13 +207,6 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
           return StreamBuilder<AppUser?>(
             stream: UserProfileService.instance.watchCurrentUser(),
             builder: (context, userSnapshot) {
-              if (userSnapshot.connectionState == ConnectionState.waiting) {
-                return const Scaffold(
-                  body: Center(child: CircularProgressIndicator()),
-                );
-              }
-
-              final user = userSnapshot.data;
               final authUser = FirebaseAuth.instance.currentUser;
 
               if (authUser == null) {
@@ -191,6 +219,8 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
               if (startupRoute != null) {
                 return startupRoute;
               }
+
+              final user = userSnapshot.data;
 
               final needsRepair = user == null ||
                   UserService.needsUsernameRepair(
@@ -213,10 +243,13 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
         }
 
         // Log and return EntryScreen (only once)
-        appendBootLog('[ROUTE] navigating to EntryScreen');
+        appendBootLog('[ROUTE] navigating to MainShell');
         print(
-            '${DateTime.now().toIso8601String()} [ROUTE] navigating to EntryScreen');
-        return const EntryScreen();
+            '${DateTime.now().toIso8601String()} [ROUTE] navigating to MainShell');
+        try {
+          clearOAuthCallbackState();
+        } catch (_) {}
+        return const MainShell();
       },
     );
   }

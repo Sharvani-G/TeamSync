@@ -581,25 +581,39 @@ class _ChatChannelViewState extends State<ChatChannelView> {
                                         ),
                                       ],
                                       const SizedBox(height: 10),
-                                      Text(
-                                        message.deleted
-                                            ? 'This message was deleted'
-                                            : message.text,
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          height: 1.45,
-                                          fontStyle: message.deleted
-                                              ? FontStyle.italic
-                                              : FontStyle.normal,
-                                          color: message.deleted
-                                              ? (isMe
-                                                  ? Colors.white70
-                                                  : AppTheme.textMuted)
-                                              : (isMe
-                                                  ? Colors.white
-                                                  : AppTheme.textSecondary),
+                                      // If there are attachments, show them as file tiles/thumbnails
+                                      if (message.attachments.isEmpty) ...[
+                                        Text(
+                                          message.deleted
+                                              ? 'This message was deleted'
+                                              : message.text,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            height: 1.45,
+                                            fontStyle: message.deleted
+                                                ? FontStyle.italic
+                                                : FontStyle.normal,
+                                            color: message.deleted
+                                                ? (isMe
+                                                    ? Colors.white70
+                                                    : AppTheme.textMuted)
+                                                : (isMe
+                                                    ? Colors.white
+                                                    : AppTheme.textSecondary),
+                                          ),
                                         ),
-                                      ),
+                                      ] else ...[
+                                        if (message.text.isNotEmpty)
+                                          Text(
+                                            message.text,
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              color: isMe
+                                                  ? Colors.white70
+                                                  : AppTheme.textSecondary,
+                                            ),
+                                          ),
+                                      ],
                                       if (message.attachments.isNotEmpty) ...[
                                         const SizedBox(height: 10),
                                         Wrap(
@@ -607,11 +621,11 @@ class _ChatChannelViewState extends State<ChatChannelView> {
                                           runSpacing: 8,
                                           children: message.attachments
                                               .map((attachment) {
+                                            final sizeLabel = _formatFileSize(attachment.fileSize);
                                             return InkWell(
                                               onTap: () => launchUrl(
                                                 Uri.parse(attachment.fileUrl),
-                                                mode: LaunchMode
-                                                    .externalApplication,
+                                                mode: LaunchMode.externalApplication,
                                               ),
                                               child: Container(
                                                 padding:
@@ -645,17 +659,45 @@ class _ChatChannelViewState extends State<ChatChannelView> {
                                                           : AppTheme.primary,
                                                     ),
                                                     const SizedBox(width: 8),
-                                                    Text(
-                                                      attachment.fileName,
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                        color: isMe
-                                                            ? Colors.white
-                                                            : AppTheme
-                                                                .textPrimary,
+                                                    Flexible(
+                                                      child: Column(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                        children: [
+                                                          Text(
+                                                            attachment.fileName,
+                                                            overflow: TextOverflow.ellipsis,
+                                                            style: TextStyle(
+                                                              fontSize: 12,
+                                                              fontWeight: FontWeight.w600,
+                                                              color: isMe ? Colors.white : AppTheme.textPrimary,
+                                                            ),
+                                                          ),
+                                                          const SizedBox(height: 2),
+                                                          Text(
+                                                            sizeLabel,
+                                                            style: TextStyle(
+                                                              fontSize: 10,
+                                                              color: isMe ? Colors.white70 : AppTheme.textMuted,
+                                                            ),
+                                                          ),
+                                                        ],
                                                       ),
+                                                    ),
+                                                    IconButton(
+                                                      visualDensity: VisualDensity.compact,
+                                                      padding: EdgeInsets.zero,
+                                                      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                                      onPressed: () => launchUrl(
+                                                        Uri.parse(attachment.fileUrl),
+                                                        mode: LaunchMode.externalApplication,
+                                                      ),
+                                                      icon: Icon(
+                                                        Icons.download_outlined,
+                                                        size: 16,
+                                                        color: isMe ? Colors.white : AppTheme.primary,
+                                                      ),
+                                                      tooltip: 'Download',
                                                     ),
                                                   ],
                                                 ),
@@ -894,5 +936,17 @@ class _ChatChannelViewState extends State<ChatChannelView> {
       default:
         return Icons.attach_file;
     }
+  }
+
+  String _formatFileSize(int size) {
+    if (size <= 0) return 'Unknown size';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    var value = size.toDouble();
+    var unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex += 1;
+    }
+    return '${value.toStringAsFixed(unitIndex == 0 ? 0 : 1)} ${units[unitIndex]}';
   }
 }
