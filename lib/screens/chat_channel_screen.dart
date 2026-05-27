@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -74,6 +76,8 @@ class _ChatChannelViewState extends State<ChatChannelView> {
   final ScrollController _scrollController = ScrollController();
   final List<ProjectChatMessage> _olderMessages = [];
   final List<picker.PlatformFile> _pendingAttachments = [];
+  final Set<String> _notifiedMessageIds = <String>{};
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _messageSubscription;
 
   ProjectChatMessage? _replyTarget;
   ProjectChatMessage? _editingTarget;
@@ -88,6 +92,34 @@ class _ChatChannelViewState extends State<ChatChannelView> {
   void initState() {
     super.initState();
     _scrollController.addListener(_handleScroll);
+    _messageSubscription = ProjectService.instance
+        .watchChannelSnapshot(
+          widget.projectId,
+          widget.channelId,
+          limit: _pageSize,
+        )
+        .listen((snapshot) {
+      if (snapshot.metadata.hasPendingWrites) {
+        return;
+      }
+
+      final messages = _parseMessagesFromSnapshot(snapshot);
+      if (messages.isEmpty) {
+        return;
+      }
+
+      final latestMessage = messages.first;
+      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+
+      if (currentUserId == null ||
+          latestMessage.senderId.isEmpty ||
+          latestMessage.senderId == currentUserId ||
+          !_notifiedMessageIds.add(latestMessage.id)) {
+        return;
+      }
+
+      _triggerIncomingNotificationUi(latestMessage);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ProjectService.instance.markChannelRead(
           projectId: widget.projectId, channelId: widget.channelId);
@@ -97,6 +129,7 @@ class _ChatChannelViewState extends State<ChatChannelView> {
   @override
   void dispose() {
     _controller.dispose();
+    _messageSubscription?.cancel();
     _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
     super.dispose();
@@ -235,6 +268,7 @@ class _ChatChannelViewState extends State<ChatChannelView> {
       if (!mounted) return;
       setState(() {
         _isUploadingAttachments = false;
+        _uploadProgress = 0.0;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -293,6 +327,33 @@ class _ChatChannelViewState extends State<ChatChannelView> {
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOut,
     );
+  }
+
+    List<ProjectChatMessage> _parseMessagesFromSnapshot(
+      QuerySnapshot<Map<String, dynamic>> snapshot,
+    ) {
+      return ProjectService.instance.parseChannelMessagesSnapshot(snapshot);
+    }
+
+  void _triggerIncomingNotificationUi(ProjectChatMessage latestMessage) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      if (messenger == null) {
+        return;
+      }
+
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('New message from ${latestMessage.senderUsername}'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    });
   }
 
   ProjectChatMessage? _findReplyTarget(String messageId) {
@@ -581,131 +642,7 @@ class _ChatChannelViewState extends State<ChatChannelView> {
                                         ),
                                       ],
                                       const SizedBox(height: 10),
-                                      // If there are attachments, show them as file tiles/thumbnails
-                                      if (message.attachments.isEmpty) ...[
-                                        Text(
-                                          message.deleted
-                                              ? 'This message was deleted'
-                                              : message.text,
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            height: 1.45,
-                                            fontStyle: message.deleted
-                                                ? FontStyle.italic
-                                                : FontStyle.normal,
-                                            color: message.deleted
-                                                ? (isMe
-                                                    ? Colors.white70
-                                                    : AppTheme.textMuted)
-                                                : (isMe
-                                                    ? Colors.white
-                                                    : AppTheme.textSecondary),
-                                          ),
-                                        ),
-                                      ] else ...[
-                                        if (message.text.isNotEmpty)
-                                          Text(
-                                            message.text,
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              color: isMe
-                                                  ? Colors.white70
-                                                  : AppTheme.textSecondary,
-                                            ),
-                                          ),
-                                      ],
-                                      if (message.attachments.isNotEmpty) ...[
-                                        const SizedBox(height: 10),
-                                        Wrap(
-                                          spacing: 8,
-                                          runSpacing: 8,
-                                          children: message.attachments
-                                              .map((attachment) {
-                                            final sizeLabel = _formatFileSize(attachment.fileSize);
-                                            return InkWell(
-                                              onTap: () => launchUrl(
-                                                Uri.parse(attachment.fileUrl),
-                                                mode: LaunchMode.externalApplication,
-                                              ),
-                                              child: Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        horizontal: 10,
-                                                        vertical: 8),
-                                                decoration: BoxDecoration(
-                                                  color: isMe
-                                                      ? Colors.white
-                                                          .withOpacity(0.12)
-                                                      : const Color(0xFFF8FAFC),
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
-                                                  border: Border.all(
-                                                    color: isMe
-                                                        ? Colors.white
-                                                            .withOpacity(0.18)
-                                                        : AppTheme.border,
-                                                  ),
-                                                ),
-                                                child: Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    Icon(
-                                                      _iconForAttachmentType(
-                                                          attachment.fileType),
-                                                      size: 16,
-                                                      color: isMe
-                                                          ? Colors.white
-                                                          : AppTheme.primary,
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    Flexible(
-                                                      child: Column(
-                                                        mainAxisSize: MainAxisSize.min,
-                                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                                        children: [
-                                                          Text(
-                                                            attachment.fileName,
-                                                            overflow: TextOverflow.ellipsis,
-                                                            style: TextStyle(
-                                                              fontSize: 12,
-                                                              fontWeight: FontWeight.w600,
-                                                              color: isMe ? Colors.white : AppTheme.textPrimary,
-                                                            ),
-                                                          ),
-                                                          const SizedBox(height: 2),
-                                                          Text(
-                                                            sizeLabel,
-                                                            style: TextStyle(
-                                                              fontSize: 10,
-                                                              color: isMe ? Colors.white70 : AppTheme.textMuted,
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                    IconButton(
-                                                      visualDensity: VisualDensity.compact,
-                                                      padding: EdgeInsets.zero,
-                                                      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                                                      onPressed: () => launchUrl(
-                                                        Uri.parse(attachment.fileUrl),
-                                                        mode: LaunchMode.externalApplication,
-                                                      ),
-                                                      icon: Icon(
-                                                        Icons.download_outlined,
-                                                        size: 16,
-                                                        color: isMe ? Colors.white : AppTheme.primary,
-                                                      ),
-                                                      tooltip: 'Download',
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            );
-                                          }).toList(),
-                                        ),
-                                      ],
+                                      _buildMessageBody(message, isMe),
                                     ],
                                   ),
                                 ),
@@ -926,16 +863,171 @@ class _ChatChannelViewState extends State<ChatChannelView> {
   IconData _iconForAttachmentType(String fileType) {
     switch (fileType.toLowerCase()) {
       case 'image':
+      case 'image/jpeg':
+      case 'image/png':
+      case 'image/gif':
         return Icons.image_outlined;
       case 'pdf':
+      case 'application/pdf':
         return Icons.picture_as_pdf_outlined;
       case 'doc':
+      case 'application/msword':
+      case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
         return Icons.description_outlined;
       case 'zip':
+      case 'application/zip':
         return Icons.archive_outlined;
       default:
         return Icons.attach_file;
     }
+  }
+
+  Widget _buildMessageBody(ProjectChatMessage message, bool isMe) {
+    final displayAttachments = message.attachments.isNotEmpty
+        ? message.attachments
+        : message.hasFileLink
+            ? [ProjectAttachment(
+                id: message.id,
+                name: message.fileName.isNotEmpty ? message.fileName : 'Attachment',
+                mimeType: message.fileType.isNotEmpty
+                    ? message.fileType
+                    : 'application/octet-stream',
+                size: message.fileSize,
+                downloadUrl: message.downloadUrl.isNotEmpty
+                    ? message.downloadUrl
+                    : message.fileUrl,
+                uploadedBy: message.senderId,
+                createdAt: message.createdAt,
+                storagePath: '',
+              )]
+            : const [];
+
+    if (displayAttachments.isEmpty) {
+      return Text(
+        message.deleted ? 'This message was deleted' : message.text,
+        style: TextStyle(
+          fontSize: 14,
+          height: 1.45,
+          fontStyle: message.deleted ? FontStyle.italic : FontStyle.normal,
+          color: message.deleted
+              ? (isMe ? Colors.white70 : AppTheme.textMuted)
+              : (isMe ? Colors.white : AppTheme.textSecondary),
+        ),
+      );
+    }
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: displayAttachments
+          .map((attachment) => _buildAttachmentCard(
+                attachment: attachment,
+                isMe: isMe,
+              ))
+          .toList(),
+    );
+  }
+
+  Widget _buildAttachmentCard({
+    required ProjectAttachment attachment,
+    required bool isMe,
+  }) {
+    final downloadUrl = attachment.downloadUrl.trim();
+    final isImage = attachment.mimeType.toLowerCase().startsWith('image/');
+    final backgroundColor = isMe
+        ? Colors.white.withOpacity(0.12)
+        : const Color(0xFFF8FAFC);
+    final borderColor = isMe
+        ? Colors.white.withOpacity(0.18)
+        : AppTheme.border;
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 360),
+      child: InkWell(
+        onTap: downloadUrl.isNotEmpty
+            ? () => launchUrl(
+                  Uri.parse(downloadUrl),
+                  mode: LaunchMode.externalApplication,
+                )
+            : null,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: borderColor),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: isMe
+                      ? Colors.white.withOpacity(0.14)
+                      : AppTheme.primary.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  isImage ? Icons.image_outlined : _iconForAttachmentType(attachment.fileType),
+                  color: isMe ? Colors.white : AppTheme.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      attachment.fileName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: isMe ? Colors.white : AppTheme.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      attachment.mimeType.isNotEmpty
+                          ? attachment.mimeType
+                          : _formatFileSize(attachment.fileSize),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isMe ? Colors.white70 : AppTheme.textMuted,
+                      ),
+                    ),
+                    if (downloadUrl.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.download_outlined,
+                            size: 15,
+                            color: isMe ? Colors.white : AppTheme.primary,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Click to download',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: isMe ? Colors.white : AppTheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   String _formatFileSize(int size) {

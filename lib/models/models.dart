@@ -456,6 +456,11 @@ class ProjectChatMessage {
   final String senderUsername;
   final String senderPhoto;
   final String text;
+  final String fileUrl;
+  final String downloadUrl;
+  final String fileName;
+  final String fileType;
+  final int fileSize;
   final String replyToMessageId;
   final bool edited;
   final bool deleted;
@@ -472,6 +477,11 @@ class ProjectChatMessage {
     required this.senderUsername,
     required this.senderPhoto,
     required this.text,
+    this.fileUrl = '',
+    this.downloadUrl = '',
+    this.fileName = '',
+    this.fileType = '',
+    this.fileSize = 0,
     required this.replyToMessageId,
     required this.edited,
     required this.deleted,
@@ -482,6 +492,7 @@ class ProjectChatMessage {
   });
 
   bool get hasReply => replyToMessageId.trim().isNotEmpty;
+  bool get hasFileLink => fileUrl.trim().isNotEmpty || downloadUrl.trim().isNotEmpty;
 }
 
 class ProjectCallSession {

@@ -6,10 +6,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:file_picker/file_picker.dart' as picker;
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart';
-import 'dart:convert';
-import '../config.dart';
 
 import '../models/models.dart';
 import 'file_picker_web_bootstrap_stub.dart'
@@ -22,7 +18,6 @@ class AttachmentService {
   static final AttachmentService instance = AttachmentService._();
 
   static const int defaultMaxFileSizeBytes = 25 * 1024 * 1024;
-  static const String _localUploadProxyUrl = 'http://127.0.0.1:5001/upload';
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -97,7 +92,6 @@ class AttachmentService {
     }
 
     final uploaded = <ProjectAttachment>[];
-    final uploadUrl = _resolveUploadUrl();
     for (final file in files) {
       if (file.size > maxFileSizeBytes) {
         throw Exception('File too large: ${file.name} exceeds ${maxFileSizeBytes ~/ (1024 * 1024)} MB');
@@ -105,155 +99,84 @@ class AttachmentService {
 
       final bytes = await _resolveBytes(file);
       final fileId = _firestore.collection('attachments').doc().id;
-      final storagePath = '$storagePathPrefix/$fileId';
+      final storagePath = '$storagePathPrefix/${_sanitizeFileName(file.name)}';
       final mimeType = _mimeTypeForFileName(file.name);
-      // If a server-side upload URL is configured, POST the file to the server
-      // which will upload to Firebase Storage using the Admin SDK. This avoids
-      // browser CORS issues when the storage bucket isn't configured.
-      if (uploadUrl != null && kIsWeb) {
-        try {
-          final uri = Uri.parse(uploadUrl);
-          final request = http.MultipartRequest('POST', uri);
-          request.headers['x-user-id'] = authUser.uid;
-          request.fields['projectId'] = customMetadata?['projectId'] ?? '';
-          request.fields['channelId'] = customMetadata?['channelId'] ?? '';
-          request.fields['blockId'] = customMetadata?['blockId'] ?? '';
-          request.fields['levelId'] = customMetadata?['levelId'] ?? '';
-          request.fields['messageId'] = customMetadata?['messageId'] ?? '';
-          request.fields['storagePathPrefix'] = storagePath;
+      final ref = _storage.ref(storagePath);
+      final metadata = SettableMetadata(
+        contentType: mimeType,
+        customMetadata: {
+          'uploadedBy': authUser.uid,
+          'fileName': file.name,
+          'mimeType': mimeType,
+          'size': file.size.toString(),
+          ...?customMetadata,
+        },
+      );
 
-          final multipartFile = http.MultipartFile.fromBytes('files', bytes, filename: file.name, contentType: mimeType.isNotEmpty ? MediaType.parse(mimeType) : null);
-          request.files.add(multipartFile);
+      debugPrint('Uploading ${file.name} to $storagePath');
 
-          final streamedResp = await request.send();
-          final respBody = await streamedResp.stream.bytesToString();
-          if (streamedResp.statusCode != 200) {
-            throw Exception('Server upload failed: ${streamedResp.statusCode} ${respBody}');
-          }
-          final jsonResp = json.decode(respBody) as Map<String, dynamic>;
-          final filesResp = (jsonResp['files'] as List<dynamic>?) ?? [];
-          if (filesResp.isEmpty) throw Exception('Server returned no file metadata');
-          final meta = Map<String, dynamic>.from(filesResp[0] as Map);
-          final uploadedMeta = generateMetadata(
-            id: meta['id'] ?? fileId,
-            name: meta['name'] ?? file.name,
-            mimeType: meta['mimeType'] ?? mimeType,
-            size: meta['size'] ?? file.size,
-            downloadUrl: meta['downloadUrl'] ?? '',
-            uploadedBy: meta['uploadedBy'] ?? authUser.uid,
-            createdAt: DateTime.tryParse(meta['createdAt'] ?? '') ?? DateTime.now(),
-            storagePath: meta['storagePath'] ?? storagePath,
-          );
-
-          // Persist attachment metadata to Firestore attachments collection
-          try {
-            await _firestore.collection('attachments').doc(uploadedMeta.id).set({
-              'id': uploadedMeta.id,
-              'name': uploadedMeta.name,
-              'mimeType': uploadedMeta.mimeType,
-              'size': uploadedMeta.size,
-              'downloadUrl': uploadedMeta.downloadUrl,
-              'uploadedBy': uploadedMeta.uploadedBy,
-              'createdAt': FieldValue.serverTimestamp(),
-              'storagePath': uploadedMeta.storagePath,
-              ...?customMetadata,
-            });
-          } catch (e, st) {
-            debugPrint('Failed to persist attachment metadata for ${uploadedMeta.id}: $e');
-            debugPrintStack(stackTrace: st);
-          }
-
-          uploaded.add(uploadedMeta);
-        } catch (e, st) {
-          debugPrint('Server-side upload failed for ${file.name}: $e');
-          debugPrintStack(stackTrace: st);
-          rethrow;
-        }
-      } else {
-        final ref = _storage.ref(storagePath);
-        final metadata = SettableMetadata(
-          contentType: mimeType,
-          customMetadata: {
-            'uploadedBy': authUser.uid,
-            'fileName': file.name,
-            'mimeType': mimeType,
-            'size': file.size.toString(),
-            ...?customMetadata,
-          },
-        );
-
-        debugPrint('Uploading ${file.name} to $storagePath');
+      try {
         final task = ref.putData(bytes, metadata);
         task.snapshotEvents.listen((snapshot) {
           if (snapshot.totalBytes <= 0) {
             return;
           }
-          onProgress?.call(snapshot.bytesTransferred / snapshot.totalBytes, file.name);
+          onProgress?.call(
+              snapshot.bytesTransferred / snapshot.totalBytes, file.name);
         }, onError: (error) {
           debugPrint('Upload progress stream failed for ${file.name}: $error');
         });
 
+        await task;
+        final downloadUrl = await ref.getDownloadURL();
+        final uploadedMeta = generateMetadata(
+          id: fileId,
+          name: file.name,
+          mimeType: mimeType,
+          size: file.size,
+          downloadUrl: downloadUrl,
+          uploadedBy: authUser.uid,
+          createdAt: DateTime.now(),
+          storagePath: ref.fullPath,
+        );
+
+        // Persist attachment metadata to Firestore attachments collection
         try {
-          await task;
-          final downloadUrl = await ref.getDownloadURL();
-          final uploadedMeta = generateMetadata(
-            id: fileId,
-            name: file.name,
-            mimeType: mimeType,
-            size: file.size,
-            downloadUrl: downloadUrl,
-            uploadedBy: authUser.uid,
-            createdAt: DateTime.now(),
-            storagePath: ref.fullPath,
-          );
-
-          // Persist attachment metadata to Firestore attachments collection
-          try {
-            await _firestore.collection('attachments').doc(uploadedMeta.id).set({
-              'id': uploadedMeta.id,
-              'name': uploadedMeta.name,
-              'mimeType': uploadedMeta.mimeType,
-              'size': uploadedMeta.size,
-              'downloadUrl': uploadedMeta.downloadUrl,
-              'uploadedBy': uploadedMeta.uploadedBy,
-              'createdAt': FieldValue.serverTimestamp(),
-              'storagePath': uploadedMeta.storagePath,
-              ...?customMetadata,
-            });
-          } catch (e, st) {
-            debugPrint('Failed to persist attachment metadata for ${uploadedMeta.id}: $e');
-            debugPrintStack(stackTrace: st);
-          }
-
-          uploaded.add(uploadedMeta);
-        } on FirebaseException catch (error, stackTrace) {
-          debugPrint('Storage upload failed for ${file.name}: ${error.code} ${error.message}');
-          debugPrintStack(stackTrace: stackTrace);
-          rethrow;
-        } catch (error, stackTrace) {
-          debugPrint('Unexpected upload failure for ${file.name}: $error');
-          debugPrintStack(stackTrace: stackTrace);
-          rethrow;
+          await _firestore.collection('attachments').doc(uploadedMeta.id).set({
+            'id': uploadedMeta.id,
+            'name': uploadedMeta.name,
+            'mimeType': uploadedMeta.mimeType,
+            'size': uploadedMeta.size,
+            'downloadUrl': uploadedMeta.downloadUrl,
+            'fileUrl': uploadedMeta.downloadUrl,
+            'uploadedBy': uploadedMeta.uploadedBy,
+            'createdAt': FieldValue.serverTimestamp(),
+            'storagePath': uploadedMeta.storagePath,
+            ...?customMetadata,
+          });
+        } catch (e, st) {
+          debugPrint('Failed to persist attachment metadata for ${uploadedMeta.id}: $e');
+          debugPrintStack(stackTrace: st);
         }
+
+        uploaded.add(uploadedMeta);
+      } on FirebaseException catch (error, stackTrace) {
+        debugPrint('Storage upload failed for ${file.name}: ${error.code} ${error.message}');
+        debugPrintStack(stackTrace: stackTrace);
+        if (error.code == 'permission-denied' || error.code == 'unauthorized') {
+          throw Exception(
+            'Upload blocked by storage permissions for ${file.name}. Please refresh and try again after allowing web access to the bucket.',
+          );
+        }
+        rethrow;
+      } catch (error, stackTrace) {
+        debugPrint('Unexpected upload failure for ${file.name}: $error');
+        debugPrintStack(stackTrace: stackTrace);
+        rethrow;
       }
     }
 
     return uploaded;
-  }
-
-  String? _resolveUploadUrl() {
-    if (serverUploadUrl.isNotEmpty) {
-      return serverUploadUrl;
-    }
-
-    if (kIsWeb) {
-      final host = Uri.base.host.toLowerCase();
-      if (host == 'localhost' || host == '127.0.0.1') {
-        return _localUploadProxyUrl;
-      }
-    }
-
-    return null;
   }
 
   /// Attach files to a chat channel message
@@ -268,12 +191,13 @@ class AttachmentService {
   }) async {
     final messageIdValue = messageId ?? _firestore.collection('projects').doc().id;
     final attachments = await uploadFiles(
-      storagePathPrefix: 'project_chat_files/$projectId/$channelId/$messageIdValue',
+      storagePathPrefix: 'project_chats/$projectId',
       files: files,
       onProgress: onProgress,
       customMetadata: {
         'projectId': projectId,
         'channelId': channelId,
+        'messageId': messageIdValue,
       },
     );
 
@@ -356,6 +280,10 @@ class AttachmentService {
     }
 
     throw Exception('Selected file has no readable content');
+  }
+
+  String _sanitizeFileName(String fileName) {
+    return fileName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
   }
 
   String _mimeTypeForFileName(String fileName) {

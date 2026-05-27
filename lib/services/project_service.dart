@@ -1568,27 +1568,6 @@ class ProjectService {
     return ordered;
   }
 
-  Future<void> _ensureDefaultLevelsIfMissing(String projectId) async {
-    await _firestore.runTransaction((transaction) async {
-      final ref = _firestore.collection('projects').doc(projectId);
-      final snapshot = await transaction.get(ref);
-      if (!snapshot.exists) {
-        return;
-      }
-
-      final data = snapshot.data()!;
-      final existingLevels = data['levels'] as List<dynamic>? ?? [];
-      if (existingLevels.isNotEmpty) {
-        return;
-      }
-
-      transaction.update(ref, {
-        'levels': _normalizeLevelEntries(null),
-        'lastUpdated': Timestamp.now(),
-      });
-    });
-  }
-
   Future<void> updateProjectLevelProgress({
     required String projectId,
     required String levelId,
@@ -2086,6 +2065,46 @@ class ProjectService {
     });
   }
 
+  Stream<QuerySnapshot<Map<String, dynamic>>> watchChannelSnapshot(
+    String projectId,
+    String channelId, {
+    int limit = 30,
+  }) {
+    return _auth.authStateChanges().asyncExpand((authUser) {
+      if (authUser == null) {
+        return Stream.empty();
+      }
+
+      return _retryingStream<QuerySnapshot<Map<String, dynamic>>>(
+        'watchChannelSnapshot($projectId/$channelId)',
+        () => _firestore
+            .collection('projects')
+            .doc(projectId)
+            .collection('channels')
+            .doc(channelId)
+            .collection('messages')
+            .orderBy('createdAt', descending: true)
+            .limit(limit)
+            .snapshots(includeMetadataChanges: true),
+      );
+    });
+  }
+
+  List<ProjectChatMessage> parseChannelMessagesSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    try {
+      return snapshot.docs
+          .map((doc) => _parseProjectChatMessage(doc))
+          .toList()
+          .reversed
+          .toList();
+    } catch (e) {
+      print('❌ Error parsing channel messages snapshot: $e');
+      return [];
+    }
+  }
+
   /// Load older messages in a channel for pagination
   Future<List<ProjectChatMessage>> loadOlderChannelMessages(
     String projectId,
@@ -2234,6 +2253,15 @@ class ProjectService {
       'reactions': <String, List<String>>{},
       'attachments': normalizedAttachments,
     };
+
+    if (normalizedAttachments.isNotEmpty) {
+      final primaryAttachment = normalizedAttachments.first;
+      messageData['downloadUrl'] = primaryAttachment['downloadUrl'] ?? '';
+      messageData['fileUrl'] = primaryAttachment['downloadUrl'] ?? '';
+      messageData['fileName'] = primaryAttachment['fileName'] ?? '';
+      messageData['fileType'] = primaryAttachment['fileType'] ?? '';
+      messageData['fileSize'] = primaryAttachment['fileSize'] ?? 0;
+    }
 
     try {
       await messageRef.set(messageData);
@@ -3183,12 +3211,17 @@ class ProjectService {
       recipients.removeAll(excludedUserIds);
       // Ensure sender never receives a notification for their own action
       final authUser = _auth.currentUser;
+      final currentUserId = authUser?.uid ?? '';
       if (authUser != null) {
         recipients.remove(authUser.uid);
       }
 
       final batch = _firestore.batch();
       for (final userId in recipients) {
+        if (userId == currentUserId) {
+          continue;
+        }
+
         final notificationRef = _firestore
             .collection('users')
             .doc(userId)
@@ -3230,6 +3263,15 @@ class ProjectService {
       senderUsername: data['senderUsername'] as String? ?? 'Unknown',
       senderPhoto: data['senderPhoto'] as String? ?? '',
       text: data['text'] as String? ?? '',
+        fileUrl: data['fileUrl'] as String? ??
+          data['downloadUrl'] as String? ??
+          '',
+        downloadUrl: data['downloadUrl'] as String? ??
+          data['fileUrl'] as String? ??
+          '',
+        fileName: data['fileName'] as String? ?? '',
+        fileType: data['fileType'] as String? ?? '',
+        fileSize: data['fileSize'] as int? ?? 0,
       replyToMessageId: data['replyToMessageId'] as String? ?? '',
       edited: data['edited'] as bool? ?? false,
       deleted: data['deleted'] as bool? ?? false,

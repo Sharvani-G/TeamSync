@@ -48,7 +48,7 @@ class _EntryScreenState extends State<EntryScreen>
       cardBorder: Color(0xFFE5E7EB),
     ),
     _OnboardingData(
-      imagePath: 'assets/images/onboarding_third.jpg',
+      imagePath: 'assets/images/onboarding_third_release.jpg',
       title: 'Collaborate.\nOrganize.\nBuild Together.',
       subtitle: 'Sync your ideas',
       bgStart: Color(0xFFF4F4F5),
@@ -74,7 +74,7 @@ class _EntryScreenState extends State<EntryScreen>
       cardBorder: Color(0xFFD1D5DB),
     ),
     _OnboardingData(
-      imagePath: 'assets/images/onboarding_third.jpg',
+      imagePath: 'assets/images/onboarding_fifth.png',
       title: 'Get Started',
       subtitle: 'by creating a free account.',
       bgStart: Color(0xFFFFFFFF),

@@ -5,8 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'firebase_options.dart';
 // models referenced in other files; keep import minimal at top-level
 import 'app/router.dart';
@@ -16,8 +14,6 @@ import 'services/file_picker_web_bootstrap_stub.dart'
     if (dart.library.html) 'services/file_picker_web_bootstrap_web.dart';
 import 'services/boot_logger_stub.dart'
     if (dart.library.html) 'services/boot_logger_web.dart';
-import 'services/web_location_stub.dart'
-    if (dart.library.html) 'services/web_location_web.dart';
 import 'services/web_utils_stub.dart'
     if (dart.library.html) 'services/web_utils_web.dart';
 
@@ -29,8 +25,7 @@ Future<void> main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
   if (kIsWeb) {
-    FirebaseFirestore.instance.useFirestoreEmulator('127.0.0.1', 8083);
-    FirebaseStorage.instance.useStorageEmulator('127.0.0.1', 9199);
+    appendBootLog('[BOOT] using production Firebase (no emulator)');
   }
   appendBootLog('[BOOT] firebase initialized');
   print('${DateTime.now().toIso8601String()} [BOOT] firebase initialized');

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../app/main_shell.dart';
 import '../models/models.dart';
+import 'entry_screen.dart';
 import '../services/user_profile_service.dart';
 import '../services/user_service.dart';
 import 'chat_channel_screen.dart';
@@ -242,14 +243,13 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
           );
         }
 
-        // Log and return EntryScreen (only once)
-        appendBootLog('[ROUTE] navigating to MainShell');
+        appendBootLog('[ROUTE] navigating to EntryScreen');
         print(
-            '${DateTime.now().toIso8601String()} [ROUTE] navigating to MainShell');
+            '${DateTime.now().toIso8601String()} [ROUTE] navigating to EntryScreen');
         try {
           clearOAuthCallbackState();
         } catch (_) {}
-        return const MainShell();
+        return const EntryScreen();
       },
     );
   }

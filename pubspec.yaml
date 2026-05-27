@@ -20,9 +20,12 @@ dependencies:
   url_launcher: ^6.3.1
   flutter_webrtc: ^1.4.1
   shared_preferences: ^2.1.1
+  intl: ^0.18.1
 
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+  integration_test:
     sdk: flutter
   flutter_lints: ^4.0.0
 
@@ -31,5 +34,5 @@ flutter:
   assets:
     - assets/images/entry_logo.png
     - assets/images/onboarding_second.jpg
-    - assets/images/onboarding_third.jpg
+    - assets/images/onboarding_third_release.jpg
     - assets/images/onboarding_fourth.jpg

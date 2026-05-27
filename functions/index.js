@@ -215,9 +215,15 @@ exports.sendNotificationOnUserNotification = functions.firestore
       const tokens = Array.isArray(tokensRaw) ? tokensRaw.filter(Boolean) : [];
 
       // Optionally the notification may carry the sender's device token; exclude it
-      const senderToken = notification?.senderToken || null;
+      const senderToken = notification?.senderToken || notification?.data?.senderToken || null;
+      const senderUid = notification?.senderUid || notification?.data?.senderUid || notification?.data?.senderId || null;
 
-      const filteredTokens = tokens.filter((t) => t && t !== senderToken);
+      const filteredTokens = tokens.filter((t) => {
+        if (!t) return false;
+        if (t === senderToken) return false;
+        if (t === senderUid) return false;
+        return true;
+      });
       if (!filteredTokens.length) {
         console.log('No device tokens to send to for user', recipientId);
         return null;

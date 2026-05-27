@@ -14,6 +14,7 @@ import '../screens/chat_channel_screen.dart';
 import '../screens/project_call_screen.dart';
 import '../screens/notifications_screen.dart';
 import '../screens/profile_screen.dart';
+import '../screens/learning_app_ui_screen.dart';
 // entry_screen is referenced indirectly by the auth gate route
 import '../screens/forgot_password_screen.dart';
 import '../screens/check_email_screen.dart';
@@ -122,6 +123,8 @@ Route<dynamic> generateRoute(RouteSettings settings) {
       return _slide(const NotificationsScreen(), settings);
     case '/profile':
       return _slide(const ProfileScreen(), settings);
+    case '/learning-ui':
+      return _fade(const LearningAppUiScreen(), settings);
     default:
       return _fade(const MainShell(), settings);
   }
