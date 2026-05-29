@@ -9,7 +9,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/models.dart';
 import 'file_picker_web_bootstrap_stub.dart'
-  if (dart.library.html) 'file_picker_web_bootstrap_web.dart';
+    if (dart.library.html) 'file_picker_web_bootstrap_web.dart';
 import 'project_service.dart';
 
 class AttachmentService {
@@ -23,7 +23,8 @@ class AttachmentService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
 
-  Future<List<picker.PlatformFile>> pickFiles({bool allowMultiple = true}) async {
+  Future<List<picker.PlatformFile>> pickFiles(
+      {bool allowMultiple = true}) async {
     try {
       ensureFilePickerWebInitialized();
       final result = await picker.FilePicker.pickFiles(
@@ -94,7 +95,8 @@ class AttachmentService {
     final uploaded = <ProjectAttachment>[];
     for (final file in files) {
       if (file.size > maxFileSizeBytes) {
-        throw Exception('File too large: ${file.name} exceeds ${maxFileSizeBytes ~/ (1024 * 1024)} MB');
+        throw Exception(
+            'File too large: ${file.name} exceeds ${maxFileSizeBytes ~/ (1024 * 1024)} MB');
       }
 
       final bytes = await _resolveBytes(file);
@@ -155,14 +157,17 @@ class AttachmentService {
             ...?customMetadata,
           });
         } catch (e, st) {
-          debugPrint('Failed to persist attachment metadata for ${uploadedMeta.id}: $e');
+          debugPrint(
+              'Failed to persist attachment metadata for ${uploadedMeta.id}: $e');
           debugPrintStack(stackTrace: st);
         }
 
         uploaded.add(uploadedMeta);
       } on FirebaseException catch (error, stackTrace) {
-        debugPrint('Storage upload failed for ${file.name}: ${error.code} ${error.message}');
+        debugPrint(
+            'Storage upload failed for ${file.name}: ${error.code} ${error.message}');
         debugPrintStack(stackTrace: stackTrace);
+        onProgress?.call(0.0, file.name);
         if (error.code == 'permission-denied' || error.code == 'unauthorized') {
           throw Exception(
             'Upload blocked by storage permissions for ${file.name}. Please refresh and try again after allowing web access to the bucket.',
@@ -172,6 +177,7 @@ class AttachmentService {
       } catch (error, stackTrace) {
         debugPrint('Unexpected upload failure for ${file.name}: $error');
         debugPrintStack(stackTrace: stackTrace);
+        onProgress?.call(0.0, file.name);
         rethrow;
       }
     }
@@ -189,7 +195,8 @@ class AttachmentService {
     String? messageId,
     void Function(double progress, String fileName)? onProgress,
   }) async {
-    final messageIdValue = messageId ?? _firestore.collection('projects').doc().id;
+    final messageIdValue =
+        messageId ?? _firestore.collection('projects').doc().id;
     final attachments = await uploadFiles(
       storagePathPrefix: 'project_chats/$projectId',
       files: files,

@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:intl/intl.dart';
 import '../models/models.dart';
 import '../services/project_service.dart';
 import '../services/user_service.dart';
@@ -22,6 +26,7 @@ class ProjectAdminScreen extends StatefulWidget {
 
 class _ProjectAdminScreenState extends State<ProjectAdminScreen> {
   late PageController _pageController;
+  int _selectedIndex = 0;
 
   @override
   void initState() {
@@ -37,69 +42,131 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isOwner = FirebaseAuth.instance.currentUser?.uid == widget.project.createdBy;
+    final tabs = <_AdminTabEntry>[
+      if (isOwner)
+        _AdminTabEntry(
+          label: 'Join Requests',
+          icon: Icons.mail,
+          page: _JoinRequestsTab(projectId: widget.projectId, project: widget.project),
+        ),
+      _AdminTabEntry(
+        label: 'Collaborators',
+        icon: Icons.people,
+        page: _CollaboratorsTab(projectId: widget.projectId, project: widget.project),
+      ),
+      _AdminTabEntry(
+        label: 'Levels',
+        icon: Icons.view_list,
+        page: _LevelsTab(projectId: widget.projectId),
+      ),
+      _AdminTabEntry(
+        label: 'Settings',
+        icon: Icons.settings,
+        page: _SettingsTab(projectId: widget.projectId, project: widget.project),
+      ),
+    ];
+
     return Scaffold(
       appBar: SimpleAppBar(title: 'Manage ${widget.project.title}'),
       body: PageView(
         controller: _pageController,
-        children: [
-          _JoinRequestsTab(projectId: widget.projectId),
-          _CollaboratorsTab(projectId: widget.projectId, project: widget.project),
-          _LevelsTab(projectId: widget.projectId),
-          _SettingsTab(projectId: widget.projectId, project: widget.project),
-        ],
+        onPageChanged: (index) => setState(() => _selectedIndex = index),
+        children: tabs.map((tab) => tab.page).toList(),
       ),
       bottomNavigationBar: BottomNavigationBar(
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.mail),
-            label: 'Join Requests',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.people),
-            label: 'Collaborators',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.view_list),
-            label: 'Levels',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: 'Settings',
-          ),
-        ],
-        currentIndex: 0,
-        onTap: (index) => _pageController.animateToPage(
+        items: tabs
+            .map(
+              (tab) => BottomNavigationBarItem(
+                icon: Icon(tab.icon),
+                label: tab.label,
+              ),
+            )
+            .toList(),
+        currentIndex: _selectedIndex.clamp(0, tabs.length - 1),
+        onTap: (index) {
+          setState(() => _selectedIndex = index);
+          _pageController.animateToPage(
           index,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
-        ),
+        );
+        },
       ),
     );
   }
 }
 
-class _JoinRequestsTab extends StatelessWidget {
-  final String projectId;
+class _AdminTabEntry {
+  final String label;
+  final IconData icon;
+  final Widget page;
 
-  const _JoinRequestsTab({required this.projectId});
+  const _AdminTabEntry({
+    required this.label,
+    required this.icon,
+    required this.page,
+  });
+}
+
+class _JoinRequestsTab extends StatefulWidget {
+  final String projectId;
+  final Project project;
+
+  const _JoinRequestsTab({
+    required this.projectId,
+    required this.project,
+  });
+
+  @override
+  State<_JoinRequestsTab> createState() => _JoinRequestsTabState();
+}
+
+class _JoinRequestsTabState extends State<_JoinRequestsTab> {
+  String? _expandedRequestId;
+  String? _pendingApprovalRequestId;
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUserId != widget.project.createdBy) {
+      return const SizedBox.shrink();
+    }
+
     return StreamBuilder<List<JoinRequest>>(
-      stream: ProjectService.instance.watchJoinRequests(projectId),
+      stream: ProjectService.instance.watchPendingJoinRequests(widget.projectId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
 
         if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
+          return Center(
+            child: Text(
+              'Error: ${snapshot.error}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          );
         }
 
         final requests = snapshot.data ?? [];
-        final pendingRequests = requests.where((r) => r.status == 'pending').toList();
-
-        if (pendingRequests.isEmpty) {
+        if (requests.isEmpty) {
           return const Center(
             child: EmptyState(
               icon: Icons.mail_outline,
@@ -111,23 +178,22 @@ class _JoinRequestsTab extends StatelessWidget {
 
         return ListView.separated(
           padding: const EdgeInsets.all(16),
-          itemCount: pendingRequests.length,
+          itemCount: requests.length,
           separatorBuilder: (_, __) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
-            final request = pendingRequests[index];
-            final githubLink = request.githubLink ?? '';
-            final linkedinLink = request.linkedinLink ?? '';
+            final request = requests[index];
             return FutureBuilder<AppUser?>(
               future: UserService.instance.getUserById(request.requestedBy),
               builder: (context, userSnapshot) {
                 final user = userSnapshot.data;
-                final avatarName = user != null && user.name.isNotEmpty
-                  ? user.name
-                  : request.requestedByUsername;
-                final avatarUsername = user != null && user.username.isNotEmpty
-                  ? user.username
-                  : request.requestedByUsername;
-                final photoUrl = user?.photoUrl ?? '';
+                final displayName = user?.name.isNotEmpty == true ? user!.name : request.requestedByName;
+                final username = user?.username.isNotEmpty == true ? user!.username : request.requestedByUsername;
+                final initials = _initials(displayName.isNotEmpty ? displayName : username);
+                final isExpanded = _expandedRequestId == request.id;
+                final snippet = request.message.trim().isEmpty
+                    ? 'No message provided.'
+                    : request.message.trim();
+                final relativeTime = _relativeTime(request.createdAt);
 
                 return Card(
                   child: Padding(
@@ -138,11 +204,19 @@ class _JoinRequestsTab extends StatelessWidget {
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            UserAvatar(
-                              name: avatarName,
-                              username: avatarUsername,
-                              size: 42,
-                              imageUrl: photoUrl,
+                            CircleAvatar(
+                              radius: 21,
+                              backgroundColor: AppTheme.primary.withOpacity(0.12),
+                              child: Text(
+                                initials,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.primary,
+                                ),
+                              ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -150,126 +224,174 @@ class _JoinRequestsTab extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    user != null && user.name.isNotEmpty ? user.name : request.requestedByName,
+                                    displayName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
-                                      fontSize: 14,
+                                      fontSize: 15,
                                       fontWeight: FontWeight.w600,
                                       color: AppTheme.textPrimary,
                                     ),
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    '@${user != null && user.username.isNotEmpty ? user.username : request.requestedByUsername}',
+                                    '@$username',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
-                                      fontSize: 12,
+                                      fontSize: 13,
                                       color: AppTheme.textMuted,
                                     ),
                                   ),
                                   const SizedBox(height: 6),
-                                  Text(
-                                    request.message,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AppTheme.textSecondary,
-                                    ),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          snippet.length > 80 ? '${snippet.substring(0, 80)}...' : snippet,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: AppTheme.textSecondary,
+                                          ),
+                                        ),
+                                      ),
+                                      TextButton(
+                                        onPressed: () => setState(() {
+                                          _expandedRequestId = isExpanded ? null : request.id;
+                                        }),
+                                        style: TextButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                                          minimumSize: const Size(0, 30),
+                                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        ),
+                                        child: const Text(
+                                          'Read more',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
                                   ),
+                                  if (isExpanded) ...[
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      request.message.trim(),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: AppTheme.textSecondary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Sent ${DateFormat('MMM d, h:mm a').format(request.createdAt)}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: AppTheme.textMuted,
+                                      ),
+                                    ),
+                                  ],
                                 ],
-                              ),
-                            ),
-                            Text(
-                              _formatDate(request.createdAt),
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: AppTheme.textMuted,
                               ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Request is ready for admin review.',
+                          relativeTime,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
                         ),
                         const SizedBox(height: 10),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: request.skills
-                              .map((skill) => Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF8FAFC),
-                                      borderRadius: BorderRadius.circular(999),
-                                      border: Border.all(color: AppTheme.border),
-                                    ),
-                                    child: Text(
-                                      skill,
-                                      style: const TextStyle(fontSize: 11, color: AppTheme.textPrimary),
-                                    ),
-                                  ))
-                              .toList(),
-                        ),
-                        if (githubLink.isNotEmpty || linkedinLink.isNotEmpty) ...[
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 10,
-                            runSpacing: 8,
-                            children: [
-                              if (githubLink.isNotEmpty)
-                                _LinkChip(label: 'GitHub', url: githubLink),
-                              if (linkedinLink.isNotEmpty)
-                                _LinkChip(label: 'LinkedIn', url: linkedinLink),
-                            ],
-                          ),
-                        ],
-                        if (request.fileUrls.isNotEmpty) ...[
-                          const SizedBox(height: 10),
+                        const Divider(height: 20),
+                        if (_pendingApprovalRequestId == request.id) ...[
                           Text(
-                            'Uploaded files',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                            'Approve $displayName as collaborator?',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textPrimary,
+                            ),
                           ),
-                          const SizedBox(height: 6),
-                          ...request.fileUrls.map(
-                            (url) => InkWell(
-                              onTap: () {},
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 4),
-                                child: Text(
-                                  url,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: AppTheme.primary,
-                                    decoration: TextDecoration.underline,
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: () => setState(() => _pendingApprovalRequestId = null),
+                                  style: OutlinedButton.styleFrom(
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  child: const Text(
+                                    'Cancel',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                               ),
-                            ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: () => _approveRequest(request.id),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF16A34A),
+                                    foregroundColor: Colors.white,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  child: const Text(
+                                    'Confirm',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ] else ...[
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: () => _confirmReject(context, request.id),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFFB91C1C),
+                                    side: const BorderSide(color: Color(0xFFB91C1C)),
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  child: const Text(
+                                    'Reject',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: () => setState(() => _pendingApprovalRequestId = request.id),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF16A34A),
+                                    foregroundColor: Colors.white,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  child: const Text(
+                                    'Approve',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
-                        const Divider(height: 20),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () => _confirmReject(context, request.id),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: AppTheme.textMuted,
-                                  side: const BorderSide(color: AppTheme.border),
-                                ),
-                                child: const Text('Deny'),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: () => _confirmAccept(context, request.id),
-                                child: const Text('Approve'),
-                              ),
-                            ),
-                          ],
-                        ),
                       ],
                     ),
                   ),
@@ -282,41 +404,58 @@ class _JoinRequestsTab extends StatelessWidget {
     );
   }
 
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}';
+  String _relativeTime(DateTime createdAt) {
+    final diff = DateTime.now().difference(createdAt);
+    if (diff.inMinutes < 1) {
+      return 'Requested just now';
+    }
+    if (diff.inHours < 1) {
+      return 'Requested ${diff.inMinutes} minutes ago';
+    }
+    if (diff.inDays < 1) {
+      return 'Requested ${diff.inHours} hours ago';
+    }
+    return 'Requested ${diff.inDays} days ago';
   }
 
-  Future<void> _confirmAccept(BuildContext context, String requestId) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Approve request?'),
-        content: const Text('This will add the user to collaborators and remove the pending request.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Approve'),
-          ),
-        ],
-      ),
-    );
+  String _initials(String source) {
+    final clean = source.trim();
+    if (clean.isEmpty) return '?';
+    final parts = clean.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.length == 1) {
+      return parts.first.substring(0, 1).toUpperCase();
+    }
+    final first = parts.first.substring(0, 1).toUpperCase();
+    final last = parts.last.substring(0, 1).toUpperCase();
+    return '$first$last';
+  }
 
-    if (confirmed != true) return;
-
+  Future<void> _approveRequest(String requestId) async {
+    setState(() => _pendingApprovalRequestId = null);
     try {
-      await ProjectService.instance.acceptJoinRequest(requestId);
+      await ProjectService.instance.acceptJoinRequest(requestId, projectId: widget.projectId);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Request approved'), behavior: SnackBarBehavior.floating),
+        const SnackBar(
+          content: Text(
+            'Request approved',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}'), behavior: SnackBarBehavior.floating),
+        SnackBar(
+          content: Text(
+            'Error: ${e.toString()}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     }
   }
@@ -326,7 +465,11 @@ class _JoinRequestsTab extends StatelessWidget {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Deny request?'),
-        content: const Text('This will reject the join request immediately.'),
+        content: const Text(
+          'This will reject the join request immediately.',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -346,39 +489,28 @@ class _JoinRequestsTab extends StatelessWidget {
       await ProjectService.instance.rejectJoinRequest(requestId);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Request denied'), behavior: SnackBarBehavior.floating),
+        const SnackBar(
+          content: Text(
+            'Request denied',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}'), behavior: SnackBarBehavior.floating),
+        SnackBar(
+          content: Text(
+            'Error: ${e.toString()}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     }
-  }
-}
-
-class _LinkChip extends StatelessWidget {
-  final String label;
-  final String url;
-
-  const _LinkChip({required this.label, required this.url});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () => launchUrl(Uri.parse(url), webOnlyWindowName: '_blank'),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: const Color(0xFFEFF6FF),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          label,
-          style: const TextStyle(fontSize: 11, color: AppTheme.primary),
-        ),
-      ),
-    );
   }
 }
 
@@ -408,6 +540,8 @@ class _CollaboratorsTab extends StatelessWidget {
                 const Expanded(
                   child: Text(
                     'Collaborators',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -461,6 +595,8 @@ class _CollaboratorsTab extends StatelessWidget {
                         children: [
                           Text(
                             user?.name ?? user?.username ?? 'Unknown',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
@@ -470,6 +606,8 @@ class _CollaboratorsTab extends StatelessWidget {
                           const SizedBox(height: 2),
                           Text(
                                           '@${user?.username.isNotEmpty == true ? user!.username : '?'}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 12,
                               color: AppTheme.textMuted,
@@ -487,6 +625,8 @@ class _CollaboratorsTab extends StatelessWidget {
                       ),
                       child: Text(
                         roleLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
@@ -683,6 +823,8 @@ class _LevelsTabState extends State<_LevelsTab> {
           children: [
             const Text(
               'Project Levels',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -692,6 +834,8 @@ class _LevelsTabState extends State<_LevelsTab> {
             const SizedBox(height: 8),
             const Text(
               'Only the project admin can modify levels. Changes sync instantly for everyone.',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 12,
                 color: AppTheme.textSecondary,
@@ -745,9 +889,15 @@ class _LevelsTabState extends State<_LevelsTab> {
                       foregroundColor: AppTheme.primary,
                       child: Text('${level.order}'),
                     ),
-                    title: Text(level.title),
+                    title: Text(
+                      level.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     subtitle: Text(
                       '${level.percentage}% complete · ${level.completed ? 'Completed' : 'In progress'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,

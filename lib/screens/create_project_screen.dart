@@ -581,7 +581,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     );
   }
 
-  Widget _label(String text, {bool required = false}) => Text(
+  Widget _label(String text) => Text(
     text,
     style: TextStyle(
       fontSize: 13,

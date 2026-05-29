@@ -1,215 +1,308 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
-import 'package:flutter_webrtc/flutter_webrtc.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
+
+import 'webrtc_environment.dart';
 import 'webrtc_signaling_service.dart';
+import 'webrtc_socket_service.dart';
 
 class WebRtcClient {
+  // Mesh sessions are intentionally capped at 6 participants to keep
+  // browser CPU and memory usage predictable during group calls.
+  static const int maxGroupParticipants = 6;
+
+  WebRtcClient({WebRtcSignalingService? signalingService})
+      : _signal = signalingService ?? WebRtcSignalingService();
+
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-  final WebRtcSignalingService _signal = WebRtcSignalingService();
+  final WebRtcSignalingService _signal;
+  final WebRtcSocketService _socket = WebRtcSocketService.instance;
+
   RTCPeerConnection? _pc;
   MediaStream? localStream;
   MediaStream? remoteStream;
+  String? _roomId;
+  String? _role;
+
   final _localStreamController = StreamController<MediaStream?>.broadcast();
   final _remoteStreamController = StreamController<MediaStream?>.broadcast();
+
+  StreamSubscription<Map<String, dynamic>>? _signalSub;
+  final Set<String> _processedCandidates = {};
+  bool _remoteDescriptionSet = false;
 
   Stream<MediaStream?> get onLocalStream => _localStreamController.stream;
   Stream<MediaStream?> get onRemoteStream => _remoteStreamController.stream;
 
-  final Map<String, dynamic> _processedOffers = {};
-  final Map<String, dynamic> _processedAnswers = {};
-  final Set<String> _processedCandidates = {};
-
-  String? _roomId;
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _roomSub;
-
-  Future<void> _ensureLocalStream({bool audio = true, bool video = true}) async {
+  Future<void> _ensureLocalStream(
+      {required bool audio, required bool video}) async {
     if (localStream != null) return;
-    final Map<String, dynamic> mediaConstraints = {
+    final constraints = <String, dynamic>{
       'audio': audio,
       'video': video
-          ? {
-              'facingMode': 'user'
+          ? <String, dynamic>{
+              'facingMode': 'user',
             }
           : false,
     };
-    try {
-      localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-      _localStreamController.add(localStream);
-    } catch (e) {
-      debugPrint('Failed to getUserMedia: $e');
-      rethrow;
-    }
+    localStream = await navigator.mediaDevices.getUserMedia(constraints);
+    _localStreamController.add(localStream);
   }
 
   Future<RTCPeerConnection> _createPeerConnection() async {
-    final config = {
-      'iceServers': [
-        {'urls': 'stun:stun.l.google.com:19302'}
-      ]
-    };
-    final pc = await createPeerConnection(config, {
-      'mandatory': {},
-      'optional': [
-        {'DtlsSrtpKeyAgreement': true},
-      ]
-    });
+    final pc =
+        await createPeerConnection(WebRtcEnvironment.peerConnectionConfig);
 
-    pc.onIceCandidate = (RTCIceCandidate? candidate) {
-      if (candidate == null) return;
-      try {
-        _signal.addCandidate(_roomId ?? '', {
-          'candidate': candidate.candidate,
-          'sdpMid': candidate.sdpMid,
-          'sdpMLineIndex': candidate.sdpMLineIndex,
-          'senderId': FirebaseAuth.instance.currentUser?.uid ?? ''
-        });
-      } catch (e) {
-        debugPrint('Failed to post ICE candidate: $e');
-      }
+    pc.onIceCandidate = (candidate) {
+      final roomId = _roomId;
+      if (roomId == null || candidate.candidate == null) return;
+      final payload = {
+        'candidate': candidate.candidate,
+        'sdpMid': candidate.sdpMid,
+        'sdpMLineIndex': candidate.sdpMLineIndex,
+        'senderId': FirebaseAuth.instance.currentUser?.uid ?? '',
+        'createdAt': FieldValue.serverTimestamp(),
+      };
+      _signal.addCandidate(roomId, payload);
+      _socket.emitIceCandidate(roomId, payload);
     };
 
-    pc.onTrack = (RTCTrackEvent event) {
-      if (event.streams.isNotEmpty) {
-        remoteStream = event.streams.first;
-        _remoteStreamController.add(remoteStream);
-      }
+    pc.onTrack = (event) {
+      if (event.streams.isEmpty) return;
+      remoteStream = event.streams.first;
+      _remoteStreamController.add(remoteStream);
     };
 
     return pc;
   }
 
-  Future<void> initAsCaller(String roomId) async {
+  void _bindSignals() {
+    _signalSub?.cancel();
+    _signalSub = _socket.signals.listen((payload) async {
+      final roomId = _roomId;
+      if (roomId == null || payload['roomId']?.toString() != roomId) return;
+
+      final senderId = payload['senderId']?.toString() ??
+          payload['fromUserId']?.toString() ??
+          '';
+      if (senderId.isNotEmpty &&
+          senderId == FirebaseAuth.instance.currentUser?.uid) {
+        return;
+      }
+
+      switch (payload['type']?.toString()) {
+        case 'offer':
+          await _handleOffer(payload);
+          break;
+        case 'answer':
+          await _handleAnswer(payload);
+          break;
+        case 'ice-candidate':
+          await _handleCandidate(payload);
+          break;
+        case 'hangup':
+          await dispose();
+          break;
+      }
+    });
+  }
+
+  Future<void> _primeRoomState(String roomId) async {
+    final doc = await _db.collection('webrtc_rooms').doc(roomId).get();
+    if (!doc.exists) return;
+    final data = doc.data() ?? <String, dynamic>{};
+    for (final offerEntry
+        in List<dynamic>.from(data['offers'] as List? ?? const [])) {
+      await _handleOffer(Map<String, dynamic>.from(offerEntry as Map));
+    }
+    for (final answerEntry
+        in List<dynamic>.from(data['answers'] as List? ?? const [])) {
+      await _handleAnswer(Map<String, dynamic>.from(answerEntry as Map));
+    }
+    for (final candidateEntry
+        in List<dynamic>.from(data['candidates'] as List? ?? const [])) {
+      await _handleCandidate(Map<String, dynamic>.from(candidateEntry as Map));
+    }
+  }
+
+  Future<void> _handleOffer(Map<String, dynamic> offer) async {
+    final senderId =
+        offer['senderId']?.toString() ?? offer['fromUserId']?.toString() ?? '';
+    if (senderId.isNotEmpty &&
+        senderId == FirebaseAuth.instance.currentUser?.uid) {
+      return;
+    }
+    if (_pc == null || _remoteDescriptionSet) return;
+
+    final description = RTCSessionDescription(
+      offer['sdp'] as String?,
+      offer['type'] as String? ?? 'offer',
+    );
+    await _pc!.setRemoteDescription(description);
+    _remoteDescriptionSet = true;
+
+    final answer = await _pc!
+        .createAnswer({'offerToReceiveAudio': 1, 'offerToReceiveVideo': 0});
+    await _pc!.setLocalDescription(answer);
+    final roomId = _roomId;
+    if (roomId == null) return;
+    final payload = {
+      'sdp': answer.sdp,
+      'type': answer.type,
+      'senderId': FirebaseAuth.instance.currentUser?.uid ?? '',
+      'createdAt': FieldValue.serverTimestamp(),
+    };
+    await _signal.postAnswer(roomId, payload);
+    await _socket.emitAnswer(roomId, payload);
+  }
+
+  Future<void> _handleAnswer(Map<String, dynamic> answer) async {
+    final senderId = answer['senderId']?.toString() ??
+        answer['fromUserId']?.toString() ??
+        '';
+    if (senderId.isNotEmpty &&
+        senderId == FirebaseAuth.instance.currentUser?.uid) {
+      return;
+    }
+    if (_pc == null || _remoteDescriptionSet) return;
+
+    final description = RTCSessionDescription(
+      answer['sdp'] as String?,
+      answer['type'] as String? ?? 'answer',
+    );
+    await _pc!.setRemoteDescription(description);
+    _remoteDescriptionSet = true;
+  }
+
+  Future<void> _handleCandidate(Map<String, dynamic> candidate) async {
+    final key =
+        '${candidate['candidate'] ?? ''}_${candidate['senderId'] ?? candidate['fromUserId'] ?? ''}';
+    if (_processedCandidates.contains(key)) return;
+    _processedCandidates.add(key);
+
+    final senderId = candidate['senderId']?.toString() ??
+        candidate['fromUserId']?.toString() ??
+        '';
+    if (senderId.isNotEmpty &&
+        senderId == FirebaseAuth.instance.currentUser?.uid) {
+      return;
+    }
+    if (_pc == null) return;
+
+    try {
+      await _pc!.addCandidate(
+        RTCIceCandidate(
+          candidate['candidate'] as String?,
+          candidate['sdpMid'] as String?,
+          candidate['sdpMLineIndex'] as int?,
+        ),
+      );
+    } catch (error) {
+      debugPrint('Failed to add remote candidate: $error');
+    }
+  }
+
+  Future<void> initAsCaller(
+    String roomId, {
+    bool audio = true,
+    bool video = false,
+  }) async {
     _roomId = roomId;
-    await _ensureLocalStream();
+    _role = 'caller';
+    await _signal.createRoom(roomId, {
+      'active': true,
+      'role': 'caller',
+      'callerId': FirebaseAuth.instance.currentUser?.uid ?? '',
+    });
+    await _socket.bindUser(FirebaseAuth.instance.currentUser?.uid ?? '');
+    await _socket.joinRoom(roomId);
+    _bindSignals();
+    await _ensureLocalStream(audio: audio, video: video);
     _pc = await _createPeerConnection();
 
-    // Add local tracks
     if (localStream != null) {
       for (final track in localStream!.getTracks()) {
         await _pc!.addTrack(track, localStream!);
       }
     }
 
-    // Listen to room changes for answers and candidates
-    _subscribeRoom(roomId);
-
-    // Create offer
-    final offer = await _pc!.createOffer({'offerToReceiveAudio': 1, 'offerToReceiveVideo': 1});
+    final offer = await _pc!.createOffer(
+        {'offerToReceiveAudio': 1, 'offerToReceiveVideo': video ? 1 : 0});
     await _pc!.setLocalDescription(offer);
-
-    await _signal.postOffer(roomId, {
+    final payload = {
       'sdp': offer.sdp,
       'type': offer.type,
       'senderId': FirebaseAuth.instance.currentUser?.uid ?? '',
       'createdAt': FieldValue.serverTimestamp(),
-    });
+    };
+    await _signal.postOffer(roomId, payload);
+    await _socket.emitOffer(roomId, payload);
   }
 
-  Future<void> initAsAnswerer(String roomId) async {
+  Future<void> initAsAnswerer(
+    String roomId, {
+    bool audio = true,
+    bool video = false,
+  }) async {
     _roomId = roomId;
-    await _ensureLocalStream();
+    _role = 'answerer';
+    await _signal.createRoom(roomId, {
+      'active': false,
+      'role': 'answerer',
+      'answererId': FirebaseAuth.instance.currentUser?.uid ?? '',
+    });
+    await _socket.bindUser(FirebaseAuth.instance.currentUser?.uid ?? '');
+    await _socket.joinRoom(roomId);
+    _bindSignals();
+    await _ensureLocalStream(audio: audio, video: video);
     _pc = await _createPeerConnection();
+
     if (localStream != null) {
       for (final track in localStream!.getTracks()) {
         await _pc!.addTrack(track, localStream!);
       }
     }
 
-    _subscribeRoom(roomId);
-
-    // Wait for offers to arrive; will react in _processRoomSnapshot
-n  }
-
-  void _subscribeRoom(String roomId) {
-    final ref = _db.collection('webrtc_rooms').doc(roomId);
-    _roomSub = ref.snapshots().listen((snap) async {
-      if (!snap.exists) return;
-      final data = snap.data() ?? {};
-      await _processOffers(data['offers'] as List<dynamic>? ?? []);
-      await _processAnswers(data['answers'] as List<dynamic>? ?? []);
-      await _processCandidates(data['candidates'] as List<dynamic>? ?? []);
-    });
-  }
-
-  Future<void> _processOffers(List<dynamic> offers) async {
-    for (final o in offers) {
-      final map = Map<String, dynamic>.from(o as Map);
-      final key = map['senderId'] ?? map['sdp'] ?? '';
-      if (_processedOffers.containsKey(key)) continue;
-      // skip offers from self
-      if ((map['senderId'] ?? '') == FirebaseAuth.instance.currentUser?.uid) continue;
-      _processedOffers[key] = map;
-
-      // If we are answerer, set remote desc and create answer
-      if (_pc != null) {
-        final desc = RTCSessionDescription(map['sdp'] as String?, map['type'] as String? ?? 'offer');
-        await _pc!.setRemoteDescription(desc);
-        final answer = await _pc!.createAnswer({'offerToReceiveAudio': 1, 'offerToReceiveVideo': 1});
-        await _pc!.setLocalDescription(answer);
-        await _signal.postAnswer(_roomId ?? '', {
-          'sdp': answer.sdp,
-          'type': answer.type,
-          'senderId': FirebaseAuth.instance.currentUser?.uid ?? '',
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      }
-    }
-  }
-
-  Future<void> _processAnswers(List<dynamic> answers) async {
-    for (final a in answers) {
-      final map = Map<String, dynamic>.from(a as Map);
-      final key = map['senderId'] ?? map['sdp'] ?? '';
-      if (_processedAnswers.containsKey(key)) continue;
-      // skip answers from self
-      if ((map['senderId'] ?? '') == FirebaseAuth.instance.currentUser?.uid) continue;
-      _processedAnswers[key] = map;
-
-      if (_pc != null) {
-        final desc = RTCSessionDescription(map['sdp'] as String?, map['type'] as String? ?? 'answer');
-        await _pc!.setRemoteDescription(desc);
-      }
-    }
-  }
-
-  Future<void> _processCandidates(List<dynamic> candidates) async {
-    for (final c in candidates) {
-      final map = Map<String, dynamic>.from(c as Map);
-      final id = (map['candidate'] ?? '') + (map['senderId'] ?? '');
-      if (_processedCandidates.contains(id)) continue;
-      _processedCandidates.add(id);
-      if (map['senderId'] == FirebaseAuth.instance.currentUser?.uid) continue;
-
-      final candidate = RTCIceCandidate(map['candidate'] as String?, map['sdpMid'] as String?, map['sdpMLineIndex'] as int?);
-      try {
-        await _pc?.addCandidate(candidate);
-      } catch (e) {
-        debugPrint('Failed to add remote candidate: $e');
-      }
-    }
+    await _primeRoomState(roomId);
   }
 
   Future<void> mute(bool on) async {
-    if (localStream == null) return;
-    for (final t in localStream!.getAudioTracks()) {
-      t.enabled = !on;
+    final stream = localStream;
+    if (stream == null) return;
+    for (final track in stream.getAudioTracks()) {
+      track.enabled = !on;
     }
   }
 
   Future<void> toggleCamera() async {
-    if (localStream == null) return;
-    final videoTracks = localStream!.getVideoTracks();
-    if (videoTracks.isEmpty) return;
-    final track = videoTracks.first;
-    track.enabled = !track.enabled;
+    final stream = localStream;
+    if (stream == null) return;
+    for (final track in stream.getVideoTracks()) {
+      track.enabled = !track.enabled;
+    }
+  }
+
+  Future<void> hangup() async {
+    final roomId = _roomId;
+    if (roomId != null) {
+      await _socket.hangup(roomId);
+      await _socket.leaveRoom(roomId);
+      await _signal.leaveRoom(roomId).catchError((_) {});
+    }
   }
 
   Future<void> dispose() async {
-    await _roomSub?.cancel();
+    await _signalSub?.cancel();
+    _signalSub = null;
+    await hangup();
     await _pc?.close();
     _pc = null;
+    _roomId = null;
+    _role = null;
+    _remoteDescriptionSet = false;
     try {
       await localStream?.dispose();
     } catch (_) {}
@@ -218,9 +311,11 @@ n  }
     } catch (_) {}
     localStream = null;
     remoteStream = null;
-    _localStreamController.add(null);
-    _remoteStreamController.add(null);
-    await _localStreamController.close();
-    await _remoteStreamController.close();
+    if (!_localStreamController.isClosed) {
+      await _localStreamController.close();
+    }
+    if (!_remoteStreamController.isClosed) {
+      await _remoteStreamController.close();
+    }
   }
 }

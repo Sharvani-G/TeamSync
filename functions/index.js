@@ -115,13 +115,120 @@ function attachSocketServer(httpServer) {
   });
 
   io.on('connection', (socket) => {
+    socket.on('webrtc:register-user', (payload = {}) => {
+      const userId = payload.userId || payload.uid || '';
+      if (!userId) return;
+      socket.data.userId = userId;
+      socket.join(`user:${userId}`);
+    });
+
+    socket.on('webrtc:unregister-user', (payload = {}) => {
+      const userId = payload.userId || payload.uid || socket.data.userId || '';
+      if (!userId) return;
+      socket.leave(`user:${userId}`);
+    });
+
+    socket.on('webrtc:join-room', (payload = {}) => {
+      const roomId = payload.roomId || payload.callId || payload.projectId || '';
+      if (!roomId) return;
+      socket.data.roomId = roomId;
+      socket.data.userId = payload.userId || '';
+      socket.join(roomId);
+      socket.to(roomId).emit('webrtc:peer-joined', {
+        peerSocketId: socket.id,
+        userId: socket.data.userId,
+        roomId,
+      });
+    });
+
+    socket.on('webrtc:leave-room', (payload = {}) => {
+      const roomId = payload.roomId || socket.data.roomId;
+      if (!roomId) return;
+      socket.leave(roomId);
+      socket.to(roomId).emit('webrtc:peer-left', {
+        peerSocketId: socket.id,
+        userId: socket.data.userId || '',
+        roomId,
+      });
+    });
+
+    socket.on('webrtc:offer', (payload = {}) => {
+      const roomId = payload.roomId || socket.data.roomId;
+      if (!roomId) return;
+
+      const envelope = {
+        ...payload,
+        fromSocketId: socket.id,
+        fromUserId: socket.data.userId || '',
+        roomId,
+        createdAt: Date.now(),
+      };
+
+      socket.to(roomId).emit('webrtc:offer', envelope);
+      socket.to(roomId).emit('signal', { type: 'offer', ...envelope });
+    });
+
+    socket.on('webrtc:answer', (payload = {}) => {
+      const roomId = payload.roomId || socket.data.roomId;
+      if (!roomId) return;
+
+      const envelope = {
+        ...payload,
+        fromSocketId: socket.id,
+        fromUserId: socket.data.userId || '',
+        roomId,
+        createdAt: Date.now(),
+      };
+
+      socket.to(roomId).emit('webrtc:answer', envelope);
+      socket.to(roomId).emit('signal', { type: 'answer', ...envelope });
+    });
+
+    socket.on('webrtc:ice-candidate', (payload = {}) => {
+      const roomId = payload.roomId || socket.data.roomId;
+      if (!roomId) return;
+
+      const envelope = {
+        ...payload,
+        fromSocketId: socket.id,
+        fromUserId: socket.data.userId || '',
+        roomId,
+        createdAt: Date.now(),
+      };
+
+      socket.to(roomId).emit('webrtc:ice-candidate', envelope);
+      socket.to(roomId).emit('signal', { type: 'ice-candidate', ...envelope });
+    });
+
+    socket.on('webrtc:incoming-call', (payload = {}) => {
+      const targetUserId = payload.targetUserId || '';
+      if (!targetUserId) return;
+      io.to(`user:${targetUserId}`).emit('webrtc:incoming-call', {
+        ...payload,
+        fromSocketId: socket.id,
+        fromUserId: socket.data.userId || '',
+        createdAt: Date.now(),
+      });
+    });
+
+    socket.on('webrtc:hangup', (payload = {}) => {
+      const roomId = payload.roomId || socket.data.roomId;
+      if (!roomId) return;
+      socket.to(roomId).emit('webrtc:hangup', {
+        ...payload,
+        fromSocketId: socket.id,
+        fromUserId: socket.data.userId || '',
+        createdAt: Date.now(),
+      });
+    });
+
     socket.on('join-room', (payload = {}) => {
       const roomId = payload.roomId || payload.callId || payload.projectId || '';
       if (!roomId) return;
       socket.data.roomId = roomId;
       socket.data.userId = payload.userId || '';
       socket.join(roomId);
-      socket.to(roomId).emit('peer-joined', {
+      socket.to(roomId).emit('webrtc:peer-joined', {
         peerSocketId: socket.id,
         userId: socket.data.userId,
         roomId,
@@ -153,7 +260,7 @@ function attachSocketServer(httpServer) {
       const roomId = payload.roomId || socket.data.roomId;
       if (!roomId) return;
       socket.leave(roomId);
-      socket.to(roomId).emit('peer-left', {
+      socket.to(roomId).emit('webrtc:peer-left', {
         peerSocketId: socket.id,
         userId: socket.data.userId || '',
         roomId,
@@ -163,7 +270,7 @@ function attachSocketServer(httpServer) {
     socket.on('disconnect', () => {
       const roomId = socket.data.roomId;
       if (!roomId) return;
-      socket.to(roomId).emit('peer-left', {
+      socket.to(roomId).emit('webrtc:peer-left', {
         peerSocketId: socket.id,
         userId: socket.data.userId || '',
         roomId,

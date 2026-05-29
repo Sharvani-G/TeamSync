@@ -3,95 +3,301 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models/models.dart';
-import '../theme/app_theme.dart';
 import '../services/project_service.dart';
-import '../services/user_service.dart';
 
 class HomeDashboardScreen extends StatelessWidget {
   const HomeDashboardScreen({super.key});
 
+  static const _canvasColor = Color(0xFF0F172A);
+  static const _cardColor = Color(0xFF1E293B);
+  // high-contrast body / subtitle per spec
+  static const _subtitleColor = Color(0xFFE2E8F0);
+
+  static const _headerStyle = TextStyle(
+    color: Colors.white,
+    fontSize: 18,
+    fontWeight: FontWeight.bold,
+  );
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.surface,
-      appBar: AppBar(backgroundColor: AppTheme.surface, elevation: 0, title: const Text('Dashboard')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: StreamBuilder<List<Project>>(
-          stream: ProjectService.instance.watchMyProjects(),
-          builder: (context, snapshot) {
-            if (snapshot.hasError) return Center(child: Text('Error: \\${snapshot.error}'));
-            if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+      backgroundColor: _canvasColor,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Project Buckets', style: _headerStyle),
+                    TextButton.icon(
+                      onPressed: () async {
+                        // create project
+                        if (!context.mounted) return;
+                        Navigator.pushNamed(context, '/create_project');
+                      },
+                      icon: const Icon(Icons.add, color: Colors.white),
+                      label: const Text('New', style: TextStyle(color: Colors.white)),
+                      style: TextButton.styleFrom(foregroundColor: Colors.white),
+                    )
+                  ],
+                ),
+                const SizedBox(height: 6),
+                const Text('Your active workspaces', style: TextStyle(color: _subtitleColor)),
+                const SizedBox(height: 12),
 
-            final projects = snapshot.data ?? <Project>[];
-            if (projects.isEmpty) return Center(child: Text('No projects yet', style: TextStyle(color: AppTheme.textMuted)));
+                // Projects grid
+                StreamBuilder<List<Project>>(
+                  stream: ProjectService.instance.watchMyProjects(),
+                  builder: (context, snap) {
+                    final projects = snap.data ?? <Project>[];
+                    if (snap.hasError) return _errorBox('Error loading projects');
+                    if (snap.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+                    if (projects.isEmpty) return _emptyBox('No projects yet');
 
-            return LayoutBuilder(builder: (context, constraints) {
-              final isWide = constraints.maxWidth > 1100;
-              return isWide ? _horizontal(projects, constraints) : _vertical(projects, constraints);
-            });
-          },
+                    // Responsive grid - 1..3 columns depending on width
+                    return LayoutBuilder(builder: (context, constraints) {
+                      final maxWidth = constraints.maxWidth;
+                      final crossAxisCount = maxWidth > 1100 ? 3 : (maxWidth > 700 ? 2 : 1);
+                      final itemWidth = (maxWidth - 16 * (crossAxisCount - 1)) / crossAxisCount;
+
+                      return GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: crossAxisCount,
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 16,
+                          childAspectRatio: (itemWidth / 140),
+                        ),
+                        itemCount: projects.length,
+                        itemBuilder: (c, i) {
+                          final p = projects[i];
+                          return _ProjectCard(project: p);
+                        },
+                      );
+                    });
+                  },
+                ),
+
+                const SizedBox(height: 24),
+                const Text('Scheduled Meetings to Attend', style: _headerStyle),
+                const SizedBox(height: 6),
+                const Text('Upcoming calls and invites', style: TextStyle(color: _subtitleColor)),
+                const SizedBox(height: 12),
+
+                // Scheduled meetings horizontal rail (simplified & balanced)
+                SizedBox(
+                  height: 140,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: 3,
+                    separatorBuilder: (_, __) => const SizedBox(width: 12),
+                    itemBuilder: (c, i) {
+                      return SizedBox(
+                        width: 360,
+                        child: Container(
+                          decoration: BoxDecoration(color: _cardColor, borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            children: [
+                              CircleAvatar(backgroundColor: Colors.blue.shade700, child: const Icon(Icons.video_call, color: Colors.white)),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Text(
+                                      'Project Sync',
+                                      style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      'Today • 3:00 PM',
+                                      style: TextStyle(color: _subtitleColor),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(width: 10, height: 10, decoration: BoxDecoration(color: Colors.amber, shape: BoxShape.circle)),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+                const Text('Global Notifications', style: _headerStyle),
+                const SizedBox(height: 6),
+                const Text('Recent updates and alerts', style: TextStyle(color: _subtitleColor)),
+                const SizedBox(height: 12),
+
+                // Notifications constrained box
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 280),
+                  child: StreamBuilder<List<ProjectNotificationItem>>(
+                    stream: ProjectService.instance.watchMyNotifications(),
+                    builder: (context, snap) {
+                      if (snap.hasError) return _errorBox('Error loading notifications');
+                      if (snap.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+
+                      final items = snap.data ?? <ProjectNotificationItem>[];
+                      if (items.isEmpty) return _emptyBox('No notifications');
+
+                      return ListView.separated(
+                        itemCount: items.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (c, i) {
+                          final n = items[i];
+                          return _NotificationCard(item: n);
+                        },
+                      );
+                    },
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _horizontal(List<Project> projects, BoxConstraints constraints) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(children: projects.map((p) {
-        final color = _palette[projects.indexOf(p) % _palette.length];
-        return Container(width: math.min(380, constraints.maxWidth * 0.36), margin: const EdgeInsets.symmetric(horizontal: 8), child: _Tile(p, color));
-      }).toList()),
-    );
-  }
+  Widget _emptyBox(String message) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: Colors.transparent, borderRadius: BorderRadius.circular(12)),
+        child: Text(message, style: const TextStyle(color: _subtitleColor)),
+      );
 
-  Widget _vertical(List<Project> projects, BoxConstraints constraints) {
-    return ListView.builder(itemCount: projects.length, itemBuilder: (c, i) {final p = projects[i]; final color = _palette[i % _palette.length]; return Padding(padding: const EdgeInsets.only(bottom:12), child: SizedBox(height:140, child: _Tile(p, color)));});
-  }
-
-  static const _palette = [Color(0xFF979DBF), Color(0xFFE29497), Color(0xFFDBDBA5)];
+  Widget _errorBox(String message) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: Colors.red.shade900, borderRadius: BorderRadius.circular(12)),
+        child: Text(message, style: const TextStyle(color: Colors.white)),
+      );
 }
 
-class _Tile extends StatelessWidget {
+class _ProjectCard extends StatelessWidget {
   final Project project;
-  final Color color;
-  const _Tile(this.project, this.color, {super.key});
+  const _ProjectCard({required this.project, super.key});
 
   @override
   Widget build(BuildContext context) {
+    const cardColor = HomeDashboardScreen._cardColor;
     final created = DateFormat.yMMMd().format(project.createdAt);
-    final collab = project.safeCollaboratorCount;
     final progress = (project.progressValue).clamp(0.0, 1.0);
 
     return GestureDetector(
-      onTap: () => Navigator.pushNamed(context, '/project/${project.id}'),
-      child: CustomPaint(
-        painter: _BucketPainter(color: color),
-        child: Container(padding: const EdgeInsets.all(12), child: Row(children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(project.displayTitle, style: const TextStyle(fontSize:16, fontWeight: FontWeight.w700)),
-            const SizedBox(height:6),
-            Text(created, style: TextStyle(color: AppTheme.textMuted, fontSize:12)),
-            const Spacer(),
-            FutureBuilder<AppUser?>(future: UserService.instance.getUserById(project.createdBy), builder: (c,s)=> Text('Admin: ${s.data?.name ?? s.data?.username ?? 'Admin'}', style: TextStyle(color: AppTheme.textSecondary))),
-          ])),
-          const SizedBox(width:12),
-          SizedBox(width:68, height:68, child: CustomPaint(painter: _ProgressPainter(progress: progress), child: Center(child: Text('${(progress*100).round()}%')))),
-        ])),
+      onTap: () {
+        if (!context.mounted) return;
+        Navigator.pushNamed(context, '/project/${project.id}');
+      },
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(12)),
+        child: Stack(
+          children: [
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(project.displayTitle, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 6),
+              Text(project.description, style: TextStyle(color: HomeDashboardScreen._subtitleColor), maxLines: 2, overflow: TextOverflow.ellipsis),
+              const Spacer(),
+              Text('Created • $created', style: TextStyle(color: HomeDashboardScreen._subtitleColor, fontSize: 12)),
+            ]),
+
+            // top-right progress ring
+            Positioned(
+              right: 0,
+              top: 0,
+              child: SizedBox(
+                width: 64,
+                height: 64,
+                child: CustomPaint(
+                  painter: _RingPainter(progress: progress),
+                  child: Center(child: Text('${(progress * 100).round()}%', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700))),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _BucketPainter extends CustomPainter {
-  final Color color; const _BucketPainter({required this.color});
-  @override void paint(Canvas canvas, Size size) {final p=Paint()..color=color; final path=Path(); path.moveTo(0,size.height); path.lineTo(0,28); path.quadraticBezierTo(size.width*0.25,0,size.width*0.5,26); path.quadraticBezierTo(size.width*0.75,0,size.width,28); path.lineTo(size.width,size.height); path.close(); canvas.drawPath(path,p); final inner=RRect.fromRectAndRadius(Rect.fromLTWH(8,34,size.width-16,size.height-42), const Radius.circular(12)); canvas.drawRRect(inner, Paint()..color=Colors.white.withOpacity(0.92));}
-  @override bool shouldRepaint(covariant CustomPainter old)=>false;
+class _RingPainter extends CustomPainter {
+  final double progress;
+  const _RingPainter({required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = Offset(size.width / 2, size.height / 2);
+    final r = math.min(size.width, size.height) / 2 - 6;
+    final bg = Paint()..color = Colors.white12..style = PaintingStyle.stroke..strokeWidth = 6;
+    final fg = Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 6..strokeCap = StrokeCap.round;
+    canvas.drawCircle(c, r, bg);
+    canvas.drawArc(Rect.fromCircle(center: c, radius: r), -math.pi / 2, 2 * math.pi * progress, false, fg);
+  }
+
+  @override
+  bool shouldRepaint(covariant _RingPainter old) => old.progress != progress;
 }
 
-class _ProgressPainter extends CustomPainter {
-  final double progress; const _ProgressPainter({required this.progress});
-  @override void paint(Canvas canvas, Size size){final c=Offset(size.width/2,size.height/2); final r=math.min(size.width,size.height)/2-6; final bg=Paint()..color=Colors.white70..style=PaintingStyle.stroke..strokeWidth=6; final fg=Paint()..color=Colors.white..style=PaintingStyle.stroke..strokeWidth=6..strokeCap=StrokeCap.round; canvas.drawCircle(c,r,bg); canvas.drawArc(Rect.fromCircle(center:c,radius:r), -math.pi/2, 2*math.pi*progress, false, fg);} 
-  @override bool shouldRepaint(covariant _ProgressPainter old)=>old.progress!=progress;
+class _NotificationCard extends StatelessWidget {
+  final ProjectNotificationItem item;
+  const _NotificationCard({required this.item, super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    const cardColor = HomeDashboardScreen._cardColor;
+
+    return GestureDetector(
+        onTap: () async {
+        if (!context.mounted) return;
+        // navigate to relevant route if available (look for link in data map)
+        final dynamic maybeLink = item.data['link'];
+        if (maybeLink is String && maybeLink.isNotEmpty) {
+          Navigator.pushNamed(context, maybeLink);
+        }
+        // mark read
+        await ProjectService.instance.markNotificationRead(item.id);
+      },
+      child: Container(
+        decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(children: [
+          // left icon
+          CircleAvatar(backgroundColor: Colors.blue.shade700, child: const Icon(Icons.notifications, color: Colors.white)),
+          const SizedBox(width: 12),
+          // center text
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+              Text(item.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 6),
+              Text(item.body, style: TextStyle(color: HomeDashboardScreen._subtitleColor), maxLines: 1, overflow: TextOverflow.ellipsis),
+            ]),
+          ),
+          const SizedBox(width: 8),
+          // unread indicator
+          if (item.read != true) Container(width: 12, height: 12, decoration: const BoxDecoration(color: Colors.blue, shape: BoxShape.circle)),
+        ]),
+      ),
+    );
+  }
 }

@@ -4,10 +4,12 @@ import '../screens/home_dashboard_screen.dart';
 import '../screens/discover_screen.dart';
 import '../screens/notifications_screen.dart';
 import '../screens/profile_screen.dart';
+import '../screens/incoming_call_overlay_screen.dart';
 import '../services/project_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
 import '../services/user_service.dart';
+import '../services/webrtc_socket_service.dart';
 import '../theme/app_theme.dart';
 import '../screens/in_call_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -23,6 +25,7 @@ class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
 
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _inviteSub;
+  StreamSubscription<Map<String, dynamic>>? _incomingCallSub;
   final Set<String> _seenInvites = {};
 
   static const _prefKey = 'main_shell_active_index';
@@ -120,8 +123,49 @@ class _MainShellState extends State<MainShell> {
     // Start listening for incoming call notifications when user is available
     FirebaseAuth.instance.authStateChanges().listen((user) {
       _inviteSub?.cancel();
+      _incomingCallSub?.cancel();
       _seenInvites.clear();
+      WebRtcSocketService.instance.unbindUser();
       if (user == null) return;
+
+      WebRtcSocketService.instance.bindUser(user.uid);
+
+      _incomingCallSub = WebRtcSocketService.instance.incomingCalls.listen((payload) {
+        final targetUserId = payload['targetUserId']?.toString() ?? '';
+        if (targetUserId.isNotEmpty && targetUserId != user.uid) {
+          return;
+        }
+        final callId = payload['callId']?.toString() ?? '';
+        final projectId = payload['projectId']?.toString() ?? '';
+        final callerName = payload['callerName']?.toString() ?? 'Someone';
+        final projectTitle = payload['projectTitle']?.toString() ?? 'Incoming call';
+
+        if (!mounted) return;
+
+        Navigator.of(context, rootNavigator: true).push(
+          MaterialPageRoute(
+            fullscreenDialog: true,
+            builder: (_) => IncomingCallOverlayScreen(
+              callerName: callerName,
+              projectTitle: projectTitle,
+              onDecline: () {
+                Navigator.of(context, rootNavigator: true).maybePop();
+              },
+              onAccept: () {
+                Navigator.of(context, rootNavigator: true).maybePop();
+                if (!context.mounted || projectId.isEmpty || callId.isEmpty) {
+                  return;
+                }
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => InCallScreen(projectId: projectId, callId: callId),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      });
 
       _inviteSub = FirebaseFirestore.instance
           .collection('users')
@@ -134,8 +178,7 @@ class _MainShellState extends State<MainShell> {
         for (final doc in snap.docs) {
           if (_seenInvites.contains(doc.id)) continue;
           _seenInvites.add(doc.id);
-          final data = doc.data();
-          _showInviteDialog(doc.id, data);
+          // Call overlays are driven by the Socket.io stream to avoid duplicate prompts.
         }
       });
     });
@@ -144,6 +187,8 @@ class _MainShellState extends State<MainShell> {
   @override
   void dispose() {
     _inviteSub?.cancel();
+    _incomingCallSub?.cancel();
+    WebRtcSocketService.instance.unbindUser();
     super.dispose();
   }
 
@@ -159,49 +204,44 @@ class _MainShellState extends State<MainShell> {
 
     if (!mounted) return;
 
-    showDialog<void>(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Incoming Call'),
-          content: Text('You have an incoming call from $senderDisplay'),
-          actions: [
-            TextButton(
-              onPressed: () async {
-                await FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(FirebaseAuth.instance.currentUser?.uid)
-                    .collection('notifications')
-                    .doc(inviteId)
-                    .update({'read': true});
-                if (!context.mounted) return;
-                Navigator.of(ctx).pop();
-              },
-              child: const Text('Decline'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                await FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(FirebaseAuth.instance.currentUser?.uid)
-                    .collection('notifications')
-                    .doc(inviteId)
-                    .update({'read': true});
-                if (!context.mounted) return;
-                Navigator.of(ctx).pop();
-                if (mounted && projectId.isNotEmpty && callId.isNotEmpty) {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => InCallScreen(projectId: projectId, callId: callId),
-                    ),
-                  );
-                }
-              },
-              child: const Text('Accept'),
-            ),
-          ],
-        );
-      },
+    Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => IncomingCallOverlayScreen(
+          callerName: senderDisplay,
+          projectTitle: data['title'] as String? ?? 'Incoming call',
+          onDecline: () async {
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(FirebaseAuth.instance.currentUser?.uid)
+                .collection('notifications')
+                .doc(inviteId)
+                .update({'read': true});
+            if (context.mounted) {
+              Navigator.of(context, rootNavigator: true).maybePop();
+            }
+          },
+          onAccept: () async {
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(FirebaseAuth.instance.currentUser?.uid)
+                .collection('notifications')
+                .doc(inviteId)
+                .update({'read': true});
+            if (context.mounted) {
+              Navigator.of(context, rootNavigator: true).maybePop();
+            }
+            if (!context.mounted || projectId.isEmpty || callId.isEmpty) {
+              return;
+            }
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => InCallScreen(projectId: projectId, callId: callId),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }

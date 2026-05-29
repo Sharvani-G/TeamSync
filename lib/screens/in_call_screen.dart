@@ -6,13 +6,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../services/project_service.dart';
+import '../services/webrtc_environment.dart';
 import '../theme/app_theme.dart';
 
 class InCallScreen extends StatefulWidget {
   final String projectId;
   final String callId;
 
-  const InCallScreen({super.key, required this.projectId, required this.callId});
+  const InCallScreen(
+      {super.key, required this.projectId, required this.callId});
 
   @override
   State<InCallScreen> createState() => _InCallScreenState();
@@ -29,6 +31,8 @@ class _InCallScreenState extends State<InCallScreen> {
   MediaStream? _localStream;
   String? _myId;
   bool _ready = false;
+  bool _audioEnabled = true;
+  bool _videoEnabled = false;
 
   @override
   void initState() {
@@ -39,10 +43,24 @@ class _InCallScreenState extends State<InCallScreen> {
   Future<void> _bootstrap() async {
     await _localRenderer.initialize();
     _myId = _auth.currentUser?.uid;
+    await _loadCallPreferences();
     await _startCallFlow();
     if (mounted) {
       setState(() => _ready = true);
     }
+  }
+
+  Future<void> _loadCallPreferences() async {
+    final callDoc = await _firestore
+        .collection('projects')
+        .doc(widget.projectId)
+        .collection('callSessions')
+        .doc(widget.callId)
+        .get();
+    final data = callDoc.data();
+    if (data == null) return;
+    _audioEnabled = data['audioEnabled'] as bool? ?? true;
+    _videoEnabled = data['videoEnabled'] as bool? ?? false;
   }
 
   Future<void> _startCallFlow() async {
@@ -56,8 +74,8 @@ class _InCallScreenState extends State<InCallScreen> {
 
   Future<void> _initLocalMedia() async {
     _localStream = await navigator.mediaDevices.getUserMedia(<String, dynamic>{
-      'audio': true,
-      'video': {'facingMode': 'user'},
+      'audio': _audioEnabled,
+      'video': _videoEnabled ? <String, dynamic>{'facingMode': 'user'} : false,
     });
     _localRenderer.srcObject = _localStream;
   }
@@ -72,7 +90,8 @@ class _InCallScreenState extends State<InCallScreen> {
     _subscriptions.add(callRef.snapshots().listen((snapshot) async {
       final data = snapshot.data();
       if (data == null) return;
-      final participants = List<String>.from((data['participants'] as List? ?? []).cast<String>());
+      final participants = List<String>.from(
+          (data['participants'] as List? ?? []).cast<String>());
       await _syncPeerConnections(participants);
     }));
   }
@@ -81,19 +100,22 @@ class _InCallScreenState extends State<InCallScreen> {
     final me = _myId;
     if (me == null) return;
 
-    for (final participantId in participants) {
-      if (participantId == me) continue;
+    // Mesh topology for group calls. Cap the browser mesh at 6 participants
+    // so the call stays responsive in real-world web sessions.
+    final visibleParticipants = participants
+        .where((participantId) => participantId != me)
+        .take(6)
+        .toList();
+
+    for (final participantId in visibleParticipants) {
       if (_peerConnections.containsKey(participantId)) continue;
       await _createPeerConnection(participantId);
     }
   }
 
   Future<RTCPeerConnection> _createPeerConnection(String remoteId) async {
-    final pc = await createPeerConnection({
-      'iceServers': [
-        {'urls': 'stun:stun.l.google.com:19302'},
-      ],
-    });
+    final pc =
+        await createPeerConnection(WebRtcEnvironment.peerConnectionConfig);
 
     if (_localStream != null) {
       for (final track in _localStream!.getTracks()) {
@@ -157,7 +179,8 @@ class _InCallScreenState extends State<InCallScreen> {
       final answer = data['answer'];
       if (answer is Map<String, dynamic>) {
         await pc.setRemoteDescription(
-          RTCSessionDescription(answer['sdp'] as String?, answer['type'] as String?),
+          RTCSessionDescription(
+              answer['sdp'] as String?, answer['type'] as String?),
         );
       }
     }));
@@ -181,7 +204,8 @@ class _InCallScreenState extends State<InCallScreen> {
       }
     }));
 
-    _subscriptions.add(remoteDoc.collection('candidates').snapshots().listen((snapshot) async {
+    _subscriptions.add(
+        remoteDoc.collection('candidates').snapshots().listen((snapshot) async {
       for (final change in snapshot.docChanges) {
         if (change.type != DocumentChangeType.added) continue;
         final data = change.doc.data();
@@ -196,7 +220,8 @@ class _InCallScreenState extends State<InCallScreen> {
       }
     }));
 
-    _subscriptions.add(localDoc.collection('candidates').snapshots().listen((snapshot) async {
+    _subscriptions.add(
+        localDoc.collection('candidates').snapshots().listen((snapshot) async {
       for (final change in snapshot.docChanges) {
         if (change.type != DocumentChangeType.added) continue;
         final data = change.doc.data();
@@ -315,9 +340,12 @@ class _InCallScreenState extends State<InCallScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        _actionButton(Icons.mic, 'Mute', () => _toggleTrack(true)),
-                        _actionButton(Icons.videocam, 'Video', () => _toggleTrack(false)),
-                        _actionButton(Icons.call_end, 'End', _leave, destructive: true),
+                        _actionButton(
+                            Icons.mic, 'Mute', () => _toggleTrack(true)),
+                        _actionButton(
+                            Icons.videocam, 'Video', () => _toggleTrack(false)),
+                        _actionButton(Icons.call_end, 'End', _leave,
+                            destructive: true),
                       ],
                     ),
                   ),
@@ -349,7 +377,8 @@ class _InCallScreenState extends State<InCallScreen> {
                 color: Colors.black54,
                 borderRadius: BorderRadius.circular(999),
               ),
-              child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 12)),
+              child: Text(label,
+                  style: const TextStyle(color: Colors.white, fontSize: 12)),
             ),
           ),
         ],
@@ -357,20 +386,23 @@ class _InCallScreenState extends State<InCallScreen> {
     );
   }
 
-  Widget _actionButton(IconData icon, String label, VoidCallback onPressed, {bool destructive = false}) {
+  Widget _actionButton(IconData icon, String label, VoidCallback onPressed,
+      {bool destructive = false}) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         CircleAvatar(
           radius: 26,
-          backgroundColor: destructive ? const Color(0xFFDC2626) : AppTheme.primary,
+          backgroundColor:
+              destructive ? const Color(0xFFDC2626) : AppTheme.primary,
           child: IconButton(
             onPressed: onPressed,
             icon: Icon(icon, color: Colors.white),
           ),
         ),
         const SizedBox(height: 6),
-        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+        Text(label,
+            style: const TextStyle(color: Colors.white70, fontSize: 12)),
       ],
     );
   }

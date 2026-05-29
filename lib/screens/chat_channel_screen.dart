@@ -77,7 +77,7 @@ class _ChatChannelViewState extends State<ChatChannelView> {
   final List<ProjectChatMessage> _olderMessages = [];
   final List<picker.PlatformFile> _pendingAttachments = [];
   final Set<String> _notifiedMessageIds = <String>{};
-  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _messageSubscription;
+  StreamSubscription<List<ProjectChatMessage>>? _messageSubscription;
 
   ProjectChatMessage? _replyTarget;
   ProjectChatMessage? _editingTarget;
@@ -93,17 +93,12 @@ class _ChatChannelViewState extends State<ChatChannelView> {
     super.initState();
     _scrollController.addListener(_handleScroll);
     _messageSubscription = ProjectService.instance
-        .watchChannelSnapshot(
-          widget.projectId,
-          widget.channelId,
-          limit: _pageSize,
-        )
-        .listen((snapshot) {
-      if (snapshot.metadata.hasPendingWrites) {
-        return;
-      }
-
-      final messages = _parseMessagesFromSnapshot(snapshot);
+        .watchChannelMessages(
+      widget.projectId,
+      widget.channelId,
+      limit: _pageSize,
+    )
+        .listen((messages) {
       if (messages.isEmpty) {
         return;
       }
@@ -328,12 +323,6 @@ class _ChatChannelViewState extends State<ChatChannelView> {
       curve: Curves.easeOut,
     );
   }
-
-    List<ProjectChatMessage> _parseMessagesFromSnapshot(
-      QuerySnapshot<Map<String, dynamic>> snapshot,
-    ) {
-      return ProjectService.instance.parseChannelMessagesSnapshot(snapshot);
-    }
 
   void _triggerIncomingNotificationUi(ProjectChatMessage latestMessage) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -886,20 +875,24 @@ class _ChatChannelViewState extends State<ChatChannelView> {
     final displayAttachments = message.attachments.isNotEmpty
         ? message.attachments
         : message.hasFileLink
-            ? [ProjectAttachment(
-                id: message.id,
-                name: message.fileName.isNotEmpty ? message.fileName : 'Attachment',
-                mimeType: message.fileType.isNotEmpty
-                    ? message.fileType
-                    : 'application/octet-stream',
-                size: message.fileSize,
-                downloadUrl: message.downloadUrl.isNotEmpty
-                    ? message.downloadUrl
-                    : message.fileUrl,
-                uploadedBy: message.senderId,
-                createdAt: message.createdAt,
-                storagePath: '',
-              )]
+            ? [
+                ProjectAttachment(
+                  id: message.id,
+                  name: message.fileName.isNotEmpty
+                      ? message.fileName
+                      : 'Attachment',
+                  mimeType: message.fileType.isNotEmpty
+                      ? message.fileType
+                      : 'application/octet-stream',
+                  size: message.fileSize,
+                  downloadUrl: message.downloadUrl.isNotEmpty
+                      ? message.downloadUrl
+                      : message.fileUrl,
+                  uploadedBy: message.senderId,
+                  createdAt: message.createdAt,
+                  storagePath: '',
+                )
+              ]
             : const [];
 
     if (displayAttachments.isEmpty) {
@@ -934,12 +927,9 @@ class _ChatChannelViewState extends State<ChatChannelView> {
   }) {
     final downloadUrl = attachment.downloadUrl.trim();
     final isImage = attachment.mimeType.toLowerCase().startsWith('image/');
-    final backgroundColor = isMe
-        ? Colors.white.withOpacity(0.12)
-        : const Color(0xFFF8FAFC);
-    final borderColor = isMe
-        ? Colors.white.withOpacity(0.18)
-        : AppTheme.border;
+    final backgroundColor =
+        isMe ? Colors.white.withOpacity(0.12) : const Color(0xFFF8FAFC);
+    final borderColor = isMe ? Colors.white.withOpacity(0.18) : AppTheme.border;
 
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 360),
@@ -970,7 +960,9 @@ class _ChatChannelViewState extends State<ChatChannelView> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  isImage ? Icons.image_outlined : _iconForAttachmentType(attachment.fileType),
+                  isImage
+                      ? Icons.image_outlined
+                      : _iconForAttachmentType(attachment.fileType),
                   color: isMe ? Colors.white : AppTheme.primary,
                 ),
               ),

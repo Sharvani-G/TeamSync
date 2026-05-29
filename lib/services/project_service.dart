@@ -1,9 +1,14 @@
+import 'dart:math';
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
 import '../models/models.dart';
+import 'browser_timezone.dart';
 import 'file_service.dart';
 import 'user_service.dart';
+import 'webrtc_socket_service.dart';
+import 'webrtc_signaling_service.dart';
 
 class ProjectService {
   ProjectService._();
@@ -22,6 +27,24 @@ class ProjectService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final UserService _userService = UserService.instance;
+  final WebRtcSignalingService _webrtcSignalingService =
+      WebRtcSignalingService();
+  final Map<String, Stream<List<ProjectNotificationItem>>>
+      _notificationStreams = {};
+  final Map<String, Stream<int>> _unreadNotificationStreams = {};
+
+  String _generateRoomToken() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(24, (_) => random.nextInt(256));
+    return bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  String _displayNameForUser(AppUser? user, String fallback) {
+    if (user == null) return fallback;
+    if (user.name.trim().isNotEmpty) return user.name.trim();
+    if (user.username.trim().isNotEmpty) return user.username.trim();
+    return fallback;
+  }
 
   Stream<T> _retryingStream<T>(
     String label,
@@ -644,6 +667,101 @@ class ProjectService {
 
   // ============ JOIN REQUEST MANAGEMENT ============
 
+  Future<String> createJoinRequest({
+    required String projectId,
+    required String message,
+  }) async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) {
+      throw Exception('User must be logged in');
+    }
+
+    final projectRef = _firestore.collection('projects').doc(projectId);
+    final requestRef = _firestore
+        .collection('joinRequests')
+        .doc('${projectId}_${authUser.uid}');
+
+    await _firestore.runTransaction((transaction) async {
+      final projectSnap = await transaction.get(projectRef);
+      if (!projectSnap.exists) {
+        throw Exception('Project not found');
+      }
+
+      final projectData = projectSnap.data()!;
+      final visibility = projectData['visibility'] as String? ?? 'private';
+      final isOpenForRequests =
+          projectData['isOpenForRequests'] as bool? ?? false;
+
+      if (visibility != 'public') {
+        throw Exception('Cannot request to join private projects');
+      }
+      if (!isOpenForRequests) {
+        throw Exception('This project is not accepting join requests');
+      }
+
+      final createdBy = projectData['createdBy'] as String? ?? '';
+      final collaborators = _parseCollaboratorsMap(
+        projectData['collaborators'],
+        docId: projectId,
+      );
+
+      if (createdBy == authUser.uid ||
+          collaborators.containsKey(authUser.uid)) {
+        throw Exception('You are already a collaborator on this project');
+      }
+
+      final existingSnap = await transaction.get(requestRef);
+      if (existingSnap.exists) {
+        final existingData = existingSnap.data() ?? <String, dynamic>{};
+        final existingStatus = existingData['status'] as String? ?? 'pending';
+        if (existingStatus == 'pending') {
+          throw Exception(
+              'You already have a pending join request for this project');
+        }
+      }
+
+      final userDoc = await transaction
+          .get(_firestore.collection('users').doc(authUser.uid));
+      final userData = userDoc.data() ?? <String, dynamic>{};
+
+      transaction.set(requestRef, {
+        'id': requestRef.id,
+        'projectId': projectId,
+        'requestedBy': authUser.uid,
+        'requestedByEmail':
+            authUser.email ?? userData['email'] as String? ?? '',
+        'requestedByName':
+            userData['name'] as String? ?? authUser.displayName ?? 'Unknown',
+        'requestedByUsername': userData['username'] as String? ?? '',
+        'requestedByPhoto': userData['photoUrl'] as String? ?? '',
+        'message': message.trim(),
+        'status': 'pending',
+        'createdAt': Timestamp.now(),
+        'respondedAt': null,
+      });
+    });
+
+    return requestRef.id;
+  }
+
+  Future<String?> getJoinRequestStatus(String projectId) async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) {
+      return null;
+    }
+
+    final doc = await _firestore
+        .collection('joinRequests')
+        .doc('${projectId}_${authUser.uid}')
+        .get();
+
+    if (!doc.exists) {
+      return null;
+    }
+
+    return doc.data()?['status'] as String?;
+  }
+
   /// Submit a comprehensive join request with portfolio
   /// STEP 1: Submit request (before file uploads if needed)
   Future<String> submitJoinRequest({
@@ -763,7 +881,21 @@ class ProjectService {
     );
   }
 
-  /// Get pending join requests for current user (to track own requests)
+  Stream<List<JoinRequest>> watchPendingJoinRequests(String projectId) {
+    return _retryingStream<List<JoinRequest>>(
+      'watchPendingJoinRequests($projectId)',
+      () => _firestore
+          .collection('joinRequests')
+          .where('projectId', isEqualTo: projectId)
+          .where('status', isEqualTo: 'pending')
+          .orderBy('createdAt', descending: true)
+          .snapshots()
+          .map((snapshot) =>
+              snapshot.docs.map((doc) => _parseJoinRequest(doc)).toList()),
+    );
+  }
+
+  /// Get join requests for current user across all statuses.
   Stream<List<JoinRequest>> watchMyJoinRequests() {
     final authUser = _auth.currentUser;
     if (authUser == null) {
@@ -775,111 +907,222 @@ class ProjectService {
       () => _firestore
           .collection('joinRequests')
           .where('requestedBy', isEqualTo: authUser.uid)
-          .where('status', isEqualTo: 'pending')
           .snapshots()
           .map((snapshot) {
-        return snapshot.docs.map((doc) => _parseJoinRequest(doc)).toList();
+        final requests =
+            snapshot.docs.map((doc) => _parseJoinRequest(doc)).toList();
+        requests.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return requests;
       }),
     );
   }
 
   /// Accept a join request (admin only)
-  /// Atomically adds user to collaborators and updates request status
-  Future<void> acceptJoinRequest(String requestId) async {
+  /// Performs an atomic transaction to add the user as a collaborator,
+  /// ensure capacity guards, close other pending requests and persist
+  /// notification records. Signature kept compatible with existing callers:
+  /// `acceptJoinRequest(requestId)` and optional named `projectId`.
+  Future<void> acceptJoinRequest(String requestId, {String? projectId}) async {
     final authUser = _auth.currentUser;
     if (authUser == null) {
       throw Exception('User must be logged in');
     }
 
-    final requestDoc =
-        await _firestore.collection('joinRequests').doc(requestId).get();
-    if (!requestDoc.exists) {
+    final requestRef = _firestore.collection('joinRequests').doc(requestId);
+    final requestSnap = await requestRef.get();
+    if (!requestSnap.exists) {
       throw Exception('Join request not found');
     }
 
-    final requestData = requestDoc.data()!;
-    final projectId = requestData['projectId'] as String;
-    final requestedBy = requestData['requestedBy'] as String;
-
-    // Verify user is admin
-    final projectDoc =
-        await _firestore.collection('projects').doc(projectId).get();
-    final projectData = projectDoc.data()!;
-    if (!_isAdminRole(projectData, authUser.uid)) {
-      throw Exception('Only project admin can accept join requests');
+    final requestData = requestSnap.data()!;
+    final resolvedProjectId =
+        projectId ?? (requestData['projectId'] as String?);
+    if (resolvedProjectId == null || resolvedProjectId.isEmpty) {
+      throw Exception('Join request does not reference a project');
     }
 
-    // Add user as collaborator and update request atomically
-    final batch = _firestore.batch();
+    final requestedBy = requestData['requestedBy'] as String? ?? '';
 
-    // Update project collaborators
-    final collaborators = Map<String, dynamic>.from(
-      projectData['collaborators'] as Map<String, dynamic>? ?? {},
-    );
-    collaborators[requestedBy] = 'collaborator';
+    final projectRef = _firestore.collection('projects').doc(resolvedProjectId);
 
-    batch.update(
-      _firestore.collection('projects').doc(projectId),
-      {
-        'collaborators': collaborators,
-        'lastUpdated': Timestamp.now(),
-      },
-    );
+    // Pre-query pending requests so we can include them in the transaction
+    final pendingQuery = await _firestore
+        .collection('joinRequests')
+        .where('projectId', isEqualTo: resolvedProjectId)
+        .where('status', isEqualTo: 'pending')
+        .get();
 
-    // Update request status
-    batch.update(
-      _firestore.collection('joinRequests').doc(requestId),
-      {
-        'status': 'accepted',
-        'respondedAt': DateTime.now().toIso8601String(),
-      },
-    );
+    final otherPendingDocs =
+        pendingQuery.docs.where((d) => d.id != requestId).toList();
 
+    // Also fetch project name for notification body (non-authoritative; used only for message text)
+    final projectSnapshotForMessage = await projectRef.get();
+    final projectNameForMessage =
+        projectSnapshotForMessage.data()?['title'] as String? ?? 'the project';
+
+    // Run the atomic transaction
     try {
-      await batch.commit();
+      await _firestore.runTransaction((transaction) async {
+        final projSnap = await transaction.get(projectRef);
+        if (!projSnap.exists) {
+          throw Exception('Project not found');
+        }
+
+        final projData = projSnap.data()!;
+
+        // Verify caller is admin
+        if (!_isAdminRole(projData, authUser.uid)) {
+          throw Exception('Only project admin can accept join requests');
+        }
+
+        // Calculate verified collaborator count from the live project snapshot
+        final rawCollaborators =
+            projData['collaborators'] as Map<String, dynamic>? ??
+                <String, dynamic>{};
+        final collaborators = Map<String, dynamic>.from(rawCollaborators);
+        final currentCount = collaborators.keys.length;
+
+        // Determine required collaborator cap
+        final requiredCollaborators =
+            (projData['requiredCollaborators'] as int?) ??
+                (projData['collaboratorsRequired'] as int?) ??
+                0;
+
+        if (requiredCollaborators > 0 &&
+            currentCount >= requiredCollaborators) {
+          // Abort transaction with explicit message for the frontend
+          throw Exception(
+              'Project just reached capacity. Request could not be approved.');
+        }
+
+        // Append the new collaborator
+        collaborators[requestedBy] = 'collaborator';
+        final newCount = collaborators.keys.length;
+
+        // Prepare project update
+        final projectUpdate = <String, dynamic>{
+          'collaborators': collaborators,
+          'lastUpdated': Timestamp.now(),
+        };
+
+        // If we've reached capacity, close requests intake
+        if (requiredCollaborators > 0 && newCount >= requiredCollaborators) {
+          projectUpdate['isOpenForRequests'] = false;
+        }
+
+        transaction.update(projectRef, projectUpdate);
+
+        // Update accepted request status
+        transaction.update(requestRef, {
+          'status': 'approved',
+          'respondedAt': Timestamp.now(),
+        });
+
+        // Close other pending join requests for this project
+        for (final doc in otherPendingDocs) {
+          final otherRef = _firestore.collection('joinRequests').doc(doc.id);
+          transaction.update(otherRef, {
+            'status': 'closed',
+            'respondedAt': Timestamp.now(),
+          });
+        }
+      });
+    } catch (e) {
+      // Surface capacity-specific message unchanged so frontend can detect and show toast
+      if (e.toString().contains('Project just reached capacity')) {
+        throw Exception(
+            'Project just reached capacity. Request could not be approved.');
+      }
+      throw Exception('Failed to accept join request: ${e.toString()}');
+    }
+
+    // Send notification to the approved requester
+    try {
       await _fanOutProjectNotification(
-        projectId: projectId,
-        type: 'join_request_accepted',
-        title: 'Join request accepted',
-        body: 'Your request to join the project was accepted.',
+        projectId: resolvedProjectId,
+        type: 'request_approved',
+        title: 'Request approved',
+        body:
+            'Your request to join $projectNameForMessage was approved. You are now a collaborator.',
         onlyUserIds: {requestedBy},
         excludedUserIds: {authUser.uid},
         data: {'requestId': requestId},
       );
+
+      // If we auto-closed other pending requests, notify those candidates
+      if (otherPendingDocs.isNotEmpty) {
+        final otherUserIds = <String>{};
+        for (final d in otherPendingDocs) {
+          final uid = d.data()['requestedBy'] as String?;
+          if (uid != null && uid.isNotEmpty) otherUserIds.add(uid);
+        }
+
+        if (otherUserIds.isNotEmpty) {
+          await _fanOutProjectNotification(
+            projectId: resolvedProjectId,
+            type: 'request_closed',
+            title: 'Request closed',
+            body:
+                'Your join request for $projectNameForMessage was closed because the project filled its spots.',
+            onlyUserIds: otherUserIds,
+            excludedUserIds: {authUser.uid},
+            data: {'reason': 'capacity_filled'},
+          );
+        }
+      }
     } catch (e) {
-      throw Exception('Failed to accept join request: ${e.toString()}');
+      print('⚠️ Error sending notifications after acceptJoinRequest: $e');
     }
   }
 
   /// Reject a join request (admin only)
+  /// Updates the request to 'rejected' and notifies the candidate.
   Future<void> rejectJoinRequest(String requestId) async {
     final authUser = _auth.currentUser;
     if (authUser == null) {
       throw Exception('User must be logged in');
     }
 
-    final requestDoc =
-        await _firestore.collection('joinRequests').doc(requestId).get();
-    if (!requestDoc.exists) {
+    final requestRef = _firestore.collection('joinRequests').doc(requestId);
+    final requestSnap = await requestRef.get();
+    if (!requestSnap.exists) {
       throw Exception('Join request not found');
     }
 
-    final requestData = requestDoc.data()!;
-    final projectId = requestData['projectId'] as String;
+    final requestData = requestSnap.data()!;
+    final projectId = requestData['projectId'] as String? ?? '';
+    final requestedBy = requestData['requestedBy'] as String? ?? '';
 
-    // Verify user is admin
-    final projectDoc =
+    if (projectId.isEmpty) {
+      throw Exception('Join request does not reference a project');
+    }
+
+    // Verify admin
+    final projectSnap =
         await _firestore.collection('projects').doc(projectId).get();
-    final projectData = projectDoc.data()!;
-    if (!_isAdminRole(projectData, authUser.uid)) {
+    final projectData = projectSnap.data();
+    if (projectData == null || !_isAdminRole(projectData, authUser.uid)) {
       throw Exception('Only project admin can reject join requests');
     }
 
     try {
-      await _firestore.collection('joinRequests').doc(requestId).update({
-        'status': 'rejected',
-        'respondedAt': DateTime.now().toIso8601String(),
+      await _firestore.runTransaction((transaction) async {
+        transaction.update(requestRef, {
+          'status': 'rejected',
+          'respondedAt': Timestamp.now(),
+        });
       });
+
+      // Notify the candidate about the rejection
+      await _fanOutProjectNotification(
+        projectId: projectId,
+        type: 'request_rejected',
+        title: 'Request rejected',
+        body: 'Your request to join the project was rejected by the admin.',
+        onlyUserIds: {requestedBy},
+        excludedUserIds: {authUser.uid},
+        data: {'requestId': requestId},
+      );
     } catch (e) {
       throw Exception('Failed to reject join request: ${e.toString()}');
     }
@@ -2773,6 +3016,10 @@ class ProjectService {
         try {
           return snapshot.docs
               .map((doc) => _parseProjectCallSession(doc))
+              .where((session) =>
+                  session.historyVisible &&
+                  session.callMode == 'scheduled' &&
+                  session.endedAt != null)
               .toList();
         } catch (e) {
           print('❌ Error parsing call history: $e');
@@ -2786,6 +3033,12 @@ class ProjectService {
     required String projectId,
     required String type,
     List<String> invitedParticipants = const [],
+    String callMode = 'instant',
+    String scheduleId = '',
+    String meetingTitle = '',
+    String agenda = '',
+    int durationMinutes = 0,
+    String timeZone = '',
   }) async {
     final authUser = _auth.currentUser;
     if (authUser == null) {
@@ -2811,7 +3064,10 @@ class ProjectService {
         .doc();
     final roomName =
         'teamsync-${projectId.toLowerCase()}-${callRef.id.toLowerCase()}';
-    final roomUrl = 'https://meet.jit.si/$roomName';
+    final roomToken = _generateRoomToken();
+    final hostProfile = await _userService.getUserById(authUser.uid);
+    final hostDisplayName =
+        _displayNameForUser(hostProfile, authUser.displayName ?? 'Host');
 
     final callData = {
       'id': callRef.id,
@@ -2821,17 +3077,37 @@ class ProjectService {
       'active': true,
       'type': type,
       'invitedParticipants': invitedParticipants,
+      'callMode': callMode,
+      'historyVisible': callMode == 'scheduled',
+      'sessionToken': roomToken,
+      'scheduleId': scheduleId,
+      'meetingTitle': meetingTitle,
+      'agenda': agenda,
+      'durationMinutes': durationMinutes,
+      'timeZone': timeZone,
+      'hostDisplayName': hostDisplayName,
       'roomName': roomName,
-      'roomUrl': roomUrl,
+      'roomUrl': '',
       'startedAt': Timestamp.now(),
       'endedAt': null,
       'audioEnabled': true,
-      'videoEnabled': true,
+      'videoEnabled': false,
       'screenSharing': false,
     };
 
     try {
       await callRef.set(callData);
+      await _webrtcSignalingService.createRoom(roomName, {
+        'roomToken': roomToken,
+        'projectId': projectId,
+        'callId': callRef.id,
+        'callMode': callMode,
+        'scheduleId': scheduleId,
+        'startedBy': authUser.uid,
+        'startedByDisplayName': hostDisplayName,
+        'createdAt': FieldValue.serverTimestamp(),
+        'active': true,
+      });
 
       final collaborators = _parseCollaboratorsMap(
         projectData['collaborators'],
@@ -2842,6 +3118,18 @@ class ProjectService {
         createdBy,
         ...collaborators.keys,
       };
+
+      await WebRtcSocketService.instance.broadcastCallStart(
+        roomId: roomName,
+        callId: callRef.id,
+        projectId: projectId,
+        projectTitle: projectData['title'] as String? ?? 'Project',
+        senderId: authUser.uid,
+        senderDisplayName: hostDisplayName,
+        invitedUserIds: invitedParticipants.isNotEmpty
+            ? invitedParticipants.toSet()
+            : teamMembers,
+      );
 
       await _fanOutProjectNotification(
         projectId: projectId,
@@ -2891,25 +3179,110 @@ class ProjectService {
         .doc(projectId)
         .collection('callSchedules')
         .doc();
+    final sessionRef = _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('callSessions')
+        .doc();
 
     final reminderAt = scheduledAt.subtract(const Duration(minutes: 15));
+    final hostProfile = await _userService.getUserById(authUser.uid);
+    final hostDisplayName =
+        _displayNameForUser(hostProfile, authUser.displayName ?? 'Host');
+    final timeZone = detectBrowserTimeZone();
     final scheduleData = {
       'id': scheduleRef.id,
+      'project_id': projectId,
       'projectId': projectId,
+      'created_by': authUser.uid,
       'title': title.trim(),
       'agenda': agenda.trim(),
       'description': description.trim(),
+      'scheduled_at': Timestamp.fromDate(scheduledAt),
       'scheduledAt': Timestamp.fromDate(scheduledAt),
+      'duration_minutes': durationMinutes,
       'durationMinutes': durationMinutes,
+      'timezone': timeZone,
       'invitedParticipants': invitedParticipants,
       'createdBy': authUser.uid,
+      'hostDisplayName': hostDisplayName,
+      'timeZone': timeZone,
+      'room_id': sessionRef.id,
+      'roomId': sessionRef.id,
       'createdAt': Timestamp.now(),
       'reminderAt': Timestamp.fromDate(reminderAt),
       'status': 'scheduled',
+      'sessionId': sessionRef.id,
+    };
+
+    final sessionData = {
+      'id': sessionRef.id,
+      'projectId': projectId,
+      'startedBy': authUser.uid,
+      'participants': [authUser.uid],
+      'active': false,
+      'type': 'scheduled',
+      'callMode': 'scheduled',
+      'historyVisible': false,
+      'sessionToken': _generateRoomToken(),
+      'scheduleId': scheduleRef.id,
+      'meetingTitle': title.trim(),
+      'agenda': agenda.trim(),
+      'durationMinutes': durationMinutes,
+      'timeZone': timeZone,
+      'hostDisplayName': hostDisplayName,
+      'invitedParticipants': invitedParticipants,
+      'roomName':
+          'teamsync-${projectId.toLowerCase()}-${sessionRef.id.toLowerCase()}',
+      'roomUrl': '',
+      'startedAt': Timestamp.now(),
+      'endedAt': null,
+      'audioEnabled': true,
+      'videoEnabled': false,
+      'screenSharing': false,
     };
 
     try {
       await scheduleRef.set(scheduleData);
+      final collaboratorBatch = _firestore.batch();
+      collaboratorBatch.set(
+        scheduleRef.collection('collaborators').doc(authUser.uid),
+        {
+          'user_id': authUser.uid,
+          'userId': authUser.uid,
+          'status': 'accepted',
+          'createdAt': Timestamp.now(),
+        },
+        SetOptions(merge: true),
+      );
+      for (final invitedId in invitedParticipants.toSet()) {
+        collaboratorBatch.set(
+          scheduleRef.collection('collaborators').doc(invitedId),
+          {
+            'user_id': invitedId,
+            'userId': invitedId,
+            'status': 'invited',
+            'createdAt': Timestamp.now(),
+          },
+          SetOptions(merge: true),
+        );
+      }
+      await collaboratorBatch.commit();
+      await sessionRef.set(sessionData);
+      await _webrtcSignalingService.createRoom(
+        sessionData['roomName'] as String,
+        {
+          'roomToken': sessionData['sessionToken'],
+          'projectId': projectId,
+          'callId': sessionRef.id,
+          'callMode': 'scheduled',
+          'scheduleId': scheduleRef.id,
+          'startedBy': authUser.uid,
+          'startedByDisplayName': hostDisplayName,
+          'createdAt': FieldValue.serverTimestamp(),
+          'active': false,
+        },
+      );
 
       final collaborators = _parseCollaboratorsMap(
         projectData['collaborators'],
@@ -2924,12 +3297,30 @@ class ProjectService {
       final projectTitle = projectData['title'] as String? ?? 'Project';
       await _fanOutProjectNotification(
         projectId: projectId,
-        type: 'call_scheduled',
-        title: 'Call scheduled in $projectTitle',
-        body: '$title at ${scheduledAt.toLocal()}',
+        type: 'meeting_scheduled',
+        title: 'Meeting scheduled in $projectTitle',
+        body:
+            '$title at ${DateFormat('EEE, MMM d • h:mm a').format(scheduledAt.toLocal())}',
         onlyUserIds: targets,
         excludedUserIds: {authUser.uid},
-        data: {'scheduleId': scheduleRef.id, 'senderId': authUser.uid},
+        data: {
+          'type': 'meeting_scheduled',
+          'scheduleId': scheduleRef.id,
+          'sessionId': sessionRef.id,
+          'senderId': authUser.uid,
+          'hostUsername': hostDisplayName,
+          'hostDisplayName': hostDisplayName,
+          'meetingTitle': title.trim(),
+          'meeting_title': title.trim(),
+          'agenda': agenda.trim(),
+          'agendaParagraph': agenda.trim(),
+          'durationMinutes': durationMinutes,
+          'duration_minutes': durationMinutes,
+          'scheduledAt': scheduledAt.toIso8601String(),
+          'scheduled_at': scheduledAt.toIso8601String(),
+          'timeZone': timeZone,
+          'timezone': timeZone,
+        },
         deliverAt: DateTime.now(),
       );
 
@@ -3035,11 +3426,41 @@ class ProjectService {
       throw Exception('Only the call host can end the call');
     }
 
-    await callRef.update({
-      'active': false,
-      'endedAt': Timestamp.now(),
-      'participants': [],
-    });
+    final callMode = callDoc.data()?['callMode'] as String? ?? 'instant';
+    final roomName = callDoc.data()?['roomName'] as String? ?? '';
+
+    if (callMode == 'scheduled') {
+      await callRef.update({
+        'active': false,
+        'endedAt': Timestamp.now(),
+        'historyVisible': true,
+        'participants': [],
+      });
+
+      final scheduleId = callDoc.data()?['scheduleId'] as String? ?? '';
+      if (scheduleId.trim().isNotEmpty) {
+        await _firestore
+            .collection('projects')
+            .doc(projectId)
+            .collection('callSchedules')
+            .doc(scheduleId)
+            .set({
+          'status': 'completed',
+          'endedAt': Timestamp.now(),
+          'completedAt': Timestamp.now(),
+        }, SetOptions(merge: true));
+      }
+    } else {
+      await callRef.delete();
+    }
+
+    if (roomName.isNotEmpty) {
+      await _firestore
+          .collection('webrtc_rooms')
+          .doc(roomName)
+          .delete()
+          .catchError((_) {});
+    }
   }
 
   Future<void> updateCallState({
@@ -3069,10 +3490,15 @@ class ProjectService {
   Stream<List<ProjectNotificationItem>> watchMyNotifications() {
     final authUser = _auth.currentUser;
     if (authUser == null) {
-      return Stream.value([]);
+      return Stream.value(<ProjectNotificationItem>[]).asBroadcastStream();
     }
 
-    return _retryingStream<List<ProjectNotificationItem>>(
+    final cached = _notificationStreams[authUser.uid];
+    if (cached != null) {
+      return cached;
+    }
+
+    final stream = _retryingStream<List<ProjectNotificationItem>>(
       'watchMyNotifications(${authUser.uid})',
       () => _firestore
           .collection('users')
@@ -3093,7 +3519,9 @@ class ProjectService {
           return [];
         }
       }),
-    );
+    ).asBroadcastStream();
+    _notificationStreams[authUser.uid] = stream;
+    return stream;
   }
 
   Future<void> markNotificationRead(String notificationId) async {
@@ -3141,15 +3569,33 @@ class ProjectService {
   Stream<int> watchUnreadNotificationCount() {
     final authUser = _auth.currentUser;
     if (authUser == null) {
-      return Stream.value(0);
+      return Stream.value(0).asBroadcastStream();
     }
 
-    return _retryingStream<int>(
+    final cached = _unreadNotificationStreams[authUser.uid];
+    if (cached != null) {
+      return cached;
+    }
+
+    final stream = _retryingStream<int>(
       'watchUnreadNotificationCount(${authUser.uid})',
-      () => watchMyNotifications().map((notifications) {
-        return notifications.where((notification) => !notification.read).length;
+      () => _firestore
+          .collection('users')
+          .doc(authUser.uid)
+          .collection('notifications')
+          .snapshots()
+          .map((snapshot) {
+        return snapshot.docs.where((doc) {
+          final data = doc.data();
+          final deliverAt = _parseDateTime(data['deliverAt']);
+          final isDeliverable =
+              deliverAt == null || !deliverAt.isAfter(DateTime.now());
+          return isDeliverable && data['read'] != true;
+        }).length;
       }),
-    );
+    ).asBroadcastStream();
+    _unreadNotificationStreams[authUser.uid] = stream;
+    return stream;
   }
 
   Stream<List<ProjectCallSchedule>> watchProjectCallSchedules(
@@ -3263,15 +3709,13 @@ class ProjectService {
       senderUsername: data['senderUsername'] as String? ?? 'Unknown',
       senderPhoto: data['senderPhoto'] as String? ?? '',
       text: data['text'] as String? ?? '',
-        fileUrl: data['fileUrl'] as String? ??
-          data['downloadUrl'] as String? ??
-          '',
-        downloadUrl: data['downloadUrl'] as String? ??
-          data['fileUrl'] as String? ??
-          '',
-        fileName: data['fileName'] as String? ?? '',
-        fileType: data['fileType'] as String? ?? '',
-        fileSize: data['fileSize'] as int? ?? 0,
+      fileUrl:
+          data['fileUrl'] as String? ?? data['downloadUrl'] as String? ?? '',
+      downloadUrl:
+          data['downloadUrl'] as String? ?? data['fileUrl'] as String? ?? '',
+      fileName: data['fileName'] as String? ?? '',
+      fileType: data['fileType'] as String? ?? '',
+      fileSize: data['fileSize'] as int? ?? 0,
       replyToMessageId: data['replyToMessageId'] as String? ?? '',
       edited: data['edited'] as bool? ?? false,
       deleted: data['deleted'] as bool? ?? false,
@@ -3289,6 +3733,118 @@ class ProjectService {
           return ProjectAttachment.fromMap(map);
         }),
       ),
+    );
+  }
+
+  Stream<List<ProjectMeetingItem>> watchMyScheduledMeetings() {
+    final authUser = _auth.currentUser;
+    if (authUser == null) {
+      return Stream.value(const <ProjectMeetingItem>[]);
+    }
+
+    return _retryingStream<List<ProjectMeetingItem>>(
+      'watchMyScheduledMeetings(${authUser.uid})',
+      () {
+        late final StreamController<List<ProjectMeetingItem>> controller;
+        late final StreamSubscription<List<Project>> projectsSubscription;
+        final projectSubscriptions =
+            <String, StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>{};
+        final schedulesByProject = <String, List<ProjectCallSchedule>>{};
+        final projectsById = <String, Project>{};
+
+        void emit() {
+          final now = DateTime.now();
+          final meetings = <ProjectMeetingItem>[];
+          for (final entry in schedulesByProject.entries) {
+            final project = projectsById[entry.key];
+            if (project == null) continue;
+            for (final schedule in entry.value) {
+              if (schedule.status != 'scheduled') continue;
+              if (schedule.scheduledAt.isBefore(now)) continue;
+              meetings.add(ProjectMeetingItem(
+                id: schedule.id,
+                projectId: project.id,
+                projectTitle: project.displayTitle,
+                title: schedule.title,
+                agenda: schedule.agenda,
+                scheduledAt: schedule.scheduledAt,
+                durationMinutes: schedule.durationMinutes,
+                invitedParticipants: schedule.invitedParticipants,
+                createdBy: schedule.createdBy,
+                hostDisplayName: schedule.hostDisplayName,
+                timeZone: schedule.timeZone,
+                status: schedule.status,
+                sessionId: schedule.sessionId,
+                roomName: schedule.sessionId,
+                createdAt: schedule.createdAt,
+              ));
+            }
+          }
+          meetings.sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+          if (!controller.isClosed) {
+            controller.add(meetings);
+          }
+        }
+
+        void rebuildSubscriptions(List<Project> projects) {
+          final activeProjectIds =
+              projects.map((project) => project.id).toSet();
+          final staleIds = projectSubscriptions.keys
+              .where((id) => !activeProjectIds.contains(id))
+              .toList();
+          for (final staleId in staleIds) {
+            projectSubscriptions.remove(staleId)?.cancel();
+            schedulesByProject.remove(staleId);
+            projectsById.remove(staleId);
+          }
+
+          for (final project in projects) {
+            projectsById[project.id] = project;
+            if (projectSubscriptions.containsKey(project.id)) {
+              continue;
+            }
+            projectSubscriptions[project.id] = _firestore
+                .collection('projects')
+                .doc(project.id)
+                .collection('callSchedules')
+                .orderBy('scheduledAt', descending: false)
+                .snapshots()
+                .listen((snapshot) {
+              schedulesByProject[project.id] = snapshot.docs
+                  .map((doc) => _parseProjectCallSchedule(doc))
+                  .toList();
+              emit();
+            }, onError: (error, stackTrace) {
+              print('⚠️ watchMyScheduledMeetings(${project.id}) error: $error');
+              schedulesByProject[project.id] = const [];
+              emit();
+            });
+          }
+
+          emit();
+        }
+
+        controller = StreamController<List<ProjectMeetingItem>>.broadcast(
+          onListen: () {
+            projectsSubscription = watchMyProjects()
+                .listen(rebuildSubscriptions, onError: (error, stackTrace) {
+              print('⚠️ watchMyScheduledMeetings project stream error: $error');
+              if (!controller.isClosed) {
+                controller.add(const <ProjectMeetingItem>[]);
+              }
+            });
+          },
+          onCancel: () async {
+            await projectsSubscription.cancel();
+            for (final subscription in projectSubscriptions.values) {
+              await subscription.cancel();
+            }
+            projectSubscriptions.clear();
+          },
+        );
+
+        return controller.stream;
+      },
     );
   }
 
@@ -3334,6 +3890,15 @@ class ProjectService {
       invitedParticipants: List<String>.from(
         (data['invitedParticipants'] as List? ?? []).cast<String>(),
       ),
+      callMode: data['callMode'] as String? ?? 'instant',
+      historyVisible: data['historyVisible'] as bool? ?? false,
+      sessionToken: data['sessionToken'] as String? ?? '',
+      scheduleId: data['scheduleId'] as String? ?? '',
+      meetingTitle: data['meetingTitle'] as String? ?? '',
+      agenda: data['agenda'] as String? ?? '',
+      durationMinutes: data['durationMinutes'] as int? ?? 0,
+      timeZone: data['timeZone'] as String? ?? '',
+      hostDisplayName: data['hostDisplayName'] as String? ?? '',
       startedAt: _parseDateTime(data['startedAt']) ?? DateTime.now(),
       endedAt: _parseDateTime(data['endedAt']),
       audioEnabled: data['audioEnabled'] as bool? ?? true,
@@ -3360,6 +3925,10 @@ class ProjectService {
         (data['invitedParticipants'] as List? ?? []).cast<String>(),
       ),
       createdBy: data['createdBy'] as String? ?? '',
+      hostDisplayName: data['hostDisplayName'] as String? ?? '',
+      timeZone: data['timeZone'] as String? ?? '',
+      sessionId:
+          data['sessionId'] as String? ?? data['roomId'] as String? ?? '',
       createdAt: _parseDateTime(data['createdAt']) ?? DateTime.now(),
       reminderAt: _parseDateTime(data['reminderAt']) ?? DateTime.now(),
       status: data['status'] as String? ?? 'scheduled',

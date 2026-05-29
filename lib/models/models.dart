@@ -210,11 +210,17 @@ class Project {
   // Helper to get collaborator count
   int get collaboratorCount => safeCollaboratorCount;
 
+  int get currentCollaborators => safeCollaboratorCount;
+
+  int get collaboratorsRequired => requiredCollaborators;
+
   // Helper to check if project is private
   bool get isPrivate => visibility == 'private';
 
   // Helper to check if requests are allowed
   bool get acceptingRequests => isOpenForRequests && visibility == 'public';
+
+  bool get isOpenToRequests => isOpenForRequests;
 
   int get safeCollaboratorCount =>
       collaborators.length + (collaborators.containsKey(createdBy) ? 0 : 1);
@@ -503,6 +509,15 @@ class ProjectCallSession {
   final bool active;
   final String type;
   final List<String> invitedParticipants;
+  final String callMode;
+  final bool historyVisible;
+  final String sessionToken;
+  final String scheduleId;
+  final String meetingTitle;
+  final String agenda;
+  final int durationMinutes;
+  final String timeZone;
+  final String hostDisplayName;
   final String roomName;
   final String roomUrl;
   final DateTime startedAt;
@@ -519,6 +534,15 @@ class ProjectCallSession {
     required this.active,
     required this.type,
     required this.invitedParticipants,
+    this.callMode = 'instant',
+    this.historyVisible = false,
+    this.sessionToken = '',
+    this.scheduleId = '',
+    this.meetingTitle = '',
+    this.agenda = '',
+    this.durationMinutes = 0,
+    this.timeZone = '',
+    this.hostDisplayName = '',
     this.roomName = '',
     this.roomUrl = '',
     required this.startedAt,
@@ -539,6 +563,9 @@ class ProjectCallSchedule {
   final int durationMinutes;
   final List<String> invitedParticipants;
   final String createdBy;
+  final String hostDisplayName;
+  final String timeZone;
+  final String sessionId;
   final DateTime createdAt;
   final DateTime reminderAt;
   final String status;
@@ -553,9 +580,48 @@ class ProjectCallSchedule {
     required this.durationMinutes,
     required this.invitedParticipants,
     required this.createdBy,
+    this.hostDisplayName = '',
+    this.timeZone = '',
+    this.sessionId = '',
     required this.createdAt,
     required this.reminderAt,
     required this.status,
+  });
+}
+
+class ProjectMeetingItem {
+  final String id;
+  final String projectId;
+  final String projectTitle;
+  final String title;
+  final String agenda;
+  final DateTime scheduledAt;
+  final int durationMinutes;
+  final List<String> invitedParticipants;
+  final String createdBy;
+  final String hostDisplayName;
+  final String timeZone;
+  final String status;
+  final String sessionId;
+  final String roomName;
+  final DateTime createdAt;
+
+  const ProjectMeetingItem({
+    required this.id,
+    required this.projectId,
+    required this.projectTitle,
+    required this.title,
+    required this.agenda,
+    required this.scheduledAt,
+    required this.durationMinutes,
+    required this.invitedParticipants,
+    required this.createdBy,
+    required this.hostDisplayName,
+    required this.timeZone,
+    required this.status,
+    this.sessionId = '',
+    this.roomName = '',
+    required this.createdAt,
   });
 }
 

@@ -7,7 +7,7 @@ import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
 import 'idea_board_screen.dart';
 import 'chat_home_screen.dart';
-import 'project_call_screen.dart';
+import 'calls_screen.dart';
 
 class ProjectWorkspaceScreen extends StatefulWidget {
   final String projectId;
@@ -81,7 +81,7 @@ class _ProjectWorkspaceScreenState extends State<ProjectWorkspaceScreen> {
         final screens = [
           IdeaBoardScreen(projectId: widget.projectId),
           ChatHomeScreen(projectId: widget.projectId),
-          ProjectCallScreen(projectId: widget.projectId),
+          CallsScreen(projectId: widget.projectId),
         ];
 
         return Scaffold(

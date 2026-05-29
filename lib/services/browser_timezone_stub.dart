@@ -1,0 +1,1 @@
+String detectBrowserTimeZone() => DateTime.now().timeZoneName;
