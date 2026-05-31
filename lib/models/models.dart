@@ -107,7 +107,7 @@ class IdeaBoardFile {
     return IdeaBoardFile(
       id: map['id'] as String? ?? '',
       fileName: map['fileName'] as String? ?? map['name'] as String? ?? 'Attachment',
-      fileUrl: map['fileUrl'] as String? ?? map['url'] as String? ?? map['downloadUrl'] as String? ?? '',
+      fileUrl: map['fileUrl'] as String? ?? map['file_url'] as String? ?? map['url'] as String? ?? map['downloadUrl'] as String? ?? '',
       fileType: map['fileType'] as String? ?? map['type'] as String? ?? map['mimeType'] as String? ?? 'file',
       fileSize: map['fileSize'] as int? ?? map['sizeBytes'] as int? ?? map['size'] as int? ?? 0,
       uploadedBy: map['uploadedBy'] as String? ?? '',
@@ -124,6 +124,7 @@ class IdeaBoardFile {
       'id': id,
       'fileName': fileName,
       'fileUrl': fileUrl,
+      'file_url': fileUrl,
       'fileType': fileType,
       'fileSize': fileSize,
       'uploadedBy': uploadedBy,
@@ -282,7 +283,7 @@ class ProjectAttachment {
       name: map['name'] as String? ?? map['fileName'] as String? ?? 'Attachment',
       mimeType: map['mimeType'] as String? ?? map['fileType'] as String? ?? map['type'] as String? ?? 'application/octet-stream',
       size: map['size'] as int? ?? map['fileSize'] as int? ?? map['sizeBytes'] as int? ?? 0,
-      downloadUrl: map['downloadUrl'] as String? ?? map['fileUrl'] as String? ?? map['url'] as String? ?? '',
+      downloadUrl: map['downloadUrl'] as String? ?? map['file_url'] as String? ?? map['fileUrl'] as String? ?? map['url'] as String? ?? '',
       uploadedBy: map['uploadedBy'] as String? ?? '',
       createdAt: createdAt,
       storagePath: map['storagePath'] as String? ?? '',
@@ -296,11 +297,13 @@ class ProjectAttachment {
       'mimeType': mimeType,
       'size': size,
       'downloadUrl': downloadUrl,
+      'file_url': downloadUrl,
       'uploadedBy': uploadedBy,
       'createdAt': createdAt.toIso8601String(),
       'storagePath': storagePath,
       'fileName': name,
       'fileUrl': downloadUrl,
+      'file_url': downloadUrl,
       'fileType': mimeType,
       'fileSize': size,
       'url': downloadUrl,
@@ -392,6 +395,7 @@ class ProjectChannel {
   final DateTime createdAt;
   final DateTime? lastMessageAt;
   final int messageCount;
+  final String lastMessageSenderId;
 
   const ProjectChannel({
     required this.id,
@@ -403,6 +407,7 @@ class ProjectChannel {
     required this.createdAt,
     this.lastMessageAt,
     this.messageCount = 0,
+    this.lastMessageSenderId = '',
   });
 
   factory ProjectChannel.fromMap(Map<String, dynamic> map) {
@@ -436,6 +441,7 @@ class ProjectChannel {
       createdAt: createdAt,
       lastMessageAt: lastMessageAt,
       messageCount: map['messageCount'] as int? ?? 0,
+      lastMessageSenderId: map['lastMessageSenderId'] as String? ?? '',
     );
   }
 
@@ -450,6 +456,7 @@ class ProjectChannel {
       'createdAt': createdAt,
       'lastMessageAt': lastMessageAt,
       'messageCount': messageCount,
+      'lastMessageSenderId': lastMessageSenderId,
     };
   }
 }

@@ -53,7 +53,10 @@ class _MainShellState extends State<MainShell> {
         final unreadCount = snapshot.data ?? 0;
 
         return Scaffold(
-          body: IndexedStack(index: _currentIndex, children: _screens),
+          backgroundColor: AppTheme.darkBackground,
+          body: SizedBox.expand(
+            child: IndexedStack(index: _currentIndex, children: _screens),
+          ),
           bottomNavigationBar: Container(
             decoration: const BoxDecoration(
               border: Border(top: BorderSide(color: AppTheme.border, width: 1)),

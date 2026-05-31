@@ -141,66 +141,68 @@ class _EntryScreenState extends State<EntryScreen>
     final current = _pages[_currentPage];
 
     return Scaffold(
-      body: AnimatedContainer(
-        duration: const Duration(milliseconds: 450),
-        curve: Curves.easeOut,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [current.bgStart, current.bgEnd],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+      body: SizedBox.expand(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 450),
+          curve: Curves.easeOut,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [current.bgStart, current.bgEnd],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: Stack(
-            children: [
-              Positioned(
-                top: -60,
-                right: -20,
-                child: _GlowBlob(color: current.accent.withOpacity(0.25)),
-              ),
-              Positioned(
-                bottom: -80,
-                left: -40,
-                child: _GlowBlob(color: current.accent.withOpacity(0.18)),
-              ),
-              PageView.builder(
-                controller: _pageController,
-                physics: _currentPage == _pages.length - 1
-                    ? const NeverScrollableScrollPhysics()
-                    : const BouncingScrollPhysics(),
-                itemCount: _pages.length,
-                onPageChanged: (index) => setState(() => _currentPage = index),
-                itemBuilder: (context, index) {
-                  final page = _pages[index];
-                  if (index == _pages.length - 2) {
-                    return _SignInPane(
+          child: SafeArea(
+            child: Stack(
+              children: [
+                Positioned(
+                  top: -60,
+                  right: -20,
+                  child: _GlowBlob(color: current.accent.withOpacity(0.25)),
+                ),
+                Positioned(
+                  bottom: -80,
+                  left: -40,
+                  child: _GlowBlob(color: current.accent.withOpacity(0.18)),
+                ),
+                PageView.builder(
+                  controller: _pageController,
+                  physics: _currentPage == _pages.length - 1
+                      ? const NeverScrollableScrollPhysics()
+                      : const BouncingScrollPhysics(),
+                  itemCount: _pages.length,
+                  onPageChanged: (index) => setState(() => _currentPage = index),
+                  itemBuilder: (context, index) {
+                    final page = _pages[index];
+                    if (index == _pages.length - 2) {
+                      return _SignInPane(
+                        page: page,
+                        floatAnimation: _floatAnimation,
+                        currentPage: _currentPage,
+                        totalPages: _pages.length,
+                        onRegister: _goToRegister,
+                      );
+                    }
+                    if (index == _pages.length - 1) {
+                      return _RegisterPane(
+                        page: page,
+                        floatAnimation: _floatAnimation,
+                        currentPage: _currentPage,
+                        totalPages: _pages.length,
+                        onRegistered: _goToSignIn,
+                      );
+                    }
+                    return _OnboardingPane(
                       page: page,
                       floatAnimation: _floatAnimation,
                       currentPage: _currentPage,
                       totalPages: _pages.length,
-                      onRegister: _goToRegister,
+                      onNext: _goNext,
                     );
-                  }
-                  if (index == _pages.length - 1) {
-                    return _RegisterPane(
-                      page: page,
-                      floatAnimation: _floatAnimation,
-                      currentPage: _currentPage,
-                      totalPages: _pages.length,
-                      onRegistered: _goToSignIn,
-                    );
-                  }
-                  return _OnboardingPane(
-                    page: page,
-                    floatAnimation: _floatAnimation,
-                    currentPage: _currentPage,
-                    totalPages: _pages.length,
-                    onNext: _goNext,
-                  );
-                },
-              ),
-            ],
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),

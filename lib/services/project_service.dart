@@ -1,5 +1,13 @@
+// Anti-pattern guard:
+// - Do not reintroduce self-notification echoes.
+// - Do not write placeholder file rows before Storage upload completes.
+// - Do not create duplicate unread chat alerts per message.
+// - Do not show blank attachment downloads or SVG previews in-place.
+// - Do not leak local optimistic chat state into the visible timeline.
+
 import 'dart:math';
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
@@ -2472,7 +2480,8 @@ class ProjectService {
     final normalizedAttachments = attachments.map((a) {
       final map = Map<String, dynamic>.from(a as Map);
       return {
-        'downloadUrl': map['downloadUrl'] ?? map['fileUrl'] ?? map['url'] ?? '',
+        'downloadUrl': map['downloadUrl'] ?? map['fileUrl'] ?? map['file_url'] ?? map['url'] ?? '',
+        'file_url': map['file_url'] ?? map['downloadUrl'] ?? map['fileUrl'] ?? map['url'] ?? '',
         'fileName': map['name'] ?? map['fileName'] ?? '',
         'fileType': map['mimeType'] ?? map['fileType'] ?? map['type'] ?? '',
         'senderId': authUser.uid,
@@ -2500,11 +2509,20 @@ class ProjectService {
     if (normalizedAttachments.isNotEmpty) {
       final primaryAttachment = normalizedAttachments.first;
       messageData['downloadUrl'] = primaryAttachment['downloadUrl'] ?? '';
-      messageData['fileUrl'] = primaryAttachment['downloadUrl'] ?? '';
+      messageData['file_url'] = primaryAttachment['file_url'] ?? '';
+      messageData['fileUrl'] = primaryAttachment['file_url'] ?? '';
       messageData['fileName'] = primaryAttachment['fileName'] ?? '';
       messageData['fileType'] = primaryAttachment['fileType'] ?? '';
       messageData['fileSize'] = primaryAttachment['fileSize'] ?? 0;
     }
+
+    messageData.forEach((fieldName, fieldValue) {
+      if (fieldValue == null) {
+        debugPrint(
+          '[FIRESTORE NULL WARNING] Field "$fieldName" is null. This will cause an invalid-argument rejection.',
+        );
+      }
+    });
 
     try {
       await messageRef.set(messageData);
@@ -2513,37 +2531,48 @@ class ProjectService {
       await channelDoc.reference.update({
         'lastMessageAt': Timestamp.now(),
         'messageCount': FieldValue.increment(1),
+        'lastMessageSenderId': authUser.uid,
+        'senderUid': authUser.uid,
       });
 
       // Fan out notification to channel members
       final projectTitle = projectData['title'] as String? ?? 'Project';
       final messagePreview =
           text.substring(0, (text.length > 50 ? 50 : text.length));
+      final notificationData = {
+        'messageId': messageRef.id,
+        'channelId': channelId,
+        'senderId': authUser.uid,
+        'senderUid': authUser.uid,
+      };
 
       // For private channels, send only to members; for public channels, broadcast to all
       if (isPrivate && members.isNotEmpty) {
         await _fanOutProjectNotification(
           projectId: projectId,
-          type: 'new_message',
+          type: 'chat_message',
           title: 'New message in $projectTitle',
           body: '$userUsername: $messagePreview...',
           onlyUserIds: members.toSet(),
           excludedUserIds: {authUser.uid},
-          data: {'messageId': messageRef.id, 'channelId': channelId},
+          data: notificationData,
         );
       } else {
         // Public channel - broadcast to all collaborators
         await _fanOutProjectNotification(
           projectId: projectId,
-          type: 'new_message',
+          type: 'chat_message',
           title: 'New message in $projectTitle',
           body: '$userUsername: $messagePreview...',
           excludedUserIds: {authUser.uid},
-          data: {'messageId': messageRef.id, 'channelId': channelId},
+          data: notificationData,
         );
       }
-    } catch (e) {
-      throw Exception('Failed to send message: ${e.toString()}');
+    } catch (e, stackTrace) {
+      debugPrint('[FIRESTORE WRITE CRITICAL FAIL] Path: projects/$projectId/channels/$channelId/messages');
+      debugPrint('Exception Context: $e');
+      debugPrint('Stack Payload: $stackTrace');
+      rethrow;
     }
   }
 
@@ -2898,7 +2927,15 @@ class ProjectService {
           .where('createdAt', isGreaterThan: Timestamp.fromDate(lastReadAt))
           .get();
 
-      return snapshot.docs.length;
+      // Exclude messages authored by the same user to avoid self-echo unread counts.
+      var count = 0;
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final senderId = (data['senderId'] as String?) ?? (data['senderUid'] as String?) ?? '';
+        if (senderId == userId) continue;
+        count += 1;
+      }
+      return count;
     } catch (e) {
       print('⚠️ Error getting unread count: $e');
       return 0;
@@ -3488,39 +3525,51 @@ class ProjectService {
   // ============ NOTIFICATION SYSTEM ============
 
   Stream<List<ProjectNotificationItem>> watchMyNotifications() {
-    final authUser = _auth.currentUser;
-    if (authUser == null) {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUserId == null) {
       return Stream.value(<ProjectNotificationItem>[]).asBroadcastStream();
     }
 
-    final cached = _notificationStreams[authUser.uid];
+    final cached = _notificationStreams[currentUserId];
     if (cached != null) {
       return cached;
     }
 
     final stream = _retryingStream<List<ProjectNotificationItem>>(
-      'watchMyNotifications(${authUser.uid})',
+      'watchMyNotifications($currentUserId)',
       () => _firestore
           .collection('users')
-          .doc(authUser.uid)
+          .doc(currentUserId)
           .collection('notifications')
           .orderBy('createdAt', descending: true)
           .snapshots()
           .map((snapshot) {
         try {
-          return snapshot.docs
-              .map((doc) => _parseNotificationItem(doc))
-              .where((item) =>
-                  item.deliverAt == null ||
-                  !item.deliverAt!.isAfter(DateTime.now()))
-              .toList();
+          final items = <ProjectNotificationItem>[];
+          for (final doc in snapshot.docs) {
+            final data = doc.data();
+            // CRITICAL: sender is always excluded from their own notifications and unread counts. Do not remove this check. This has been a recurring bug.
+            if (data['senderId'] == currentUserId ||
+                data['senderUid'] == currentUserId) {
+              continue;
+            }
+
+            final item = _parseNotificationItem(doc);
+            if (item.deliverAt != null &&
+                item.deliverAt!.isAfter(DateTime.now())) {
+              continue;
+            }
+
+            items.add(item);
+          }
+          return items;
         } catch (e) {
           print('❌ Error parsing notifications: $e');
           return [];
         }
       }),
     ).asBroadcastStream();
-    _notificationStreams[authUser.uid] = stream;
+    _notificationStreams[currentUserId] = stream;
     return stream;
   }
 
@@ -3567,34 +3616,52 @@ class ProjectService {
   }
 
   Stream<int> watchUnreadNotificationCount() {
-    final authUser = _auth.currentUser;
-    if (authUser == null) {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUserId == null) {
       return Stream.value(0).asBroadcastStream();
     }
 
-    final cached = _unreadNotificationStreams[authUser.uid];
+    final cached = _unreadNotificationStreams[currentUserId];
     if (cached != null) {
       return cached;
     }
 
     final stream = _retryingStream<int>(
-      'watchUnreadNotificationCount(${authUser.uid})',
+      'watchUnreadNotificationCount($currentUserId)',
       () => _firestore
           .collection('users')
-          .doc(authUser.uid)
+          .doc(currentUserId)
           .collection('notifications')
           .snapshots()
           .map((snapshot) {
-        return snapshot.docs.where((doc) {
+        var unreadCount = 0;
+        for (final doc in snapshot.docs) {
           final data = doc.data();
+          // CRITICAL: sender is always excluded from their own notifications and unread counts. Do not remove this check. This has been a recurring bug.
+          if (data['senderId'] == currentUserId ||
+              data['senderUid'] == currentUserId) {
+            continue;
+          }
+
+          final payload = Map<String, dynamic>.from(data['data'] as Map? ?? {});
+          final payloadSenderId = payload['senderId'] as String?;
+          final payloadSenderUid = payload['senderUid'] as String?;
+          if (payloadSenderId == currentUserId ||
+              payloadSenderUid == currentUserId) {
+            continue;
+          }
+
           final deliverAt = _parseDateTime(data['deliverAt']);
           final isDeliverable =
               deliverAt == null || !deliverAt.isAfter(DateTime.now());
-          return isDeliverable && data['read'] != true;
-        }).length;
+          if (isDeliverable && data['read'] != true) {
+            unreadCount += 1;
+          }
+        }
+        return unreadCount;
       }),
     ).asBroadcastStream();
-    _unreadNotificationStreams[authUser.uid] = stream;
+    _unreadNotificationStreams[currentUserId] = stream;
     return stream;
   }
 
@@ -3629,7 +3696,7 @@ class ProjectService {
     DateTime? deliverAt,
     Set<String> onlyUserIds = const <String>{},
     Set<String> excludedUserIds = const <String>{},
-    Map<String, dynamic> data = const <String, dynamic>{},
+      Map<String, dynamic>? data,
   }) async {
     try {
       final projectDoc =
@@ -3662,19 +3729,56 @@ class ProjectService {
         recipients.remove(authUser.uid);
       }
 
-      final batch = _firestore.batch();
       for (final userId in recipients) {
         if (userId == currentUserId) {
           continue;
         }
 
-        final notificationRef = _firestore
+        final notificationsRef = _firestore
             .collection('users')
             .doc(userId)
-            .collection('notifications')
-            .doc();
+            .collection('notifications');
 
-        batch.set(notificationRef, {
+        if (type == 'chat_message') {
+          final channelId = data?['channelId']?.toString() ?? '';
+          final notificationId = 'chat_message_$channelId';
+          final notificationRef = notificationsRef.doc(notificationId);
+          final existingDoc = await notificationRef.get();
+
+          final notificationData = <String, dynamic>{
+            if (data != null) ...data,
+            'channelId': channelId,
+          };
+
+          final condensedTitle = 'Unread messages in this channel';
+          final condensedBody = 'You have unread messages in this channel';
+          final payload = <String, dynamic>{
+            'id': notificationRef.id,
+            'userId': userId,
+            'projectId': projectId,
+            'type': type,
+            'title': condensedTitle,
+            'body': condensedBody,
+            'read': false,
+            'deliverAt':
+                deliverAt != null ? Timestamp.fromDate(deliverAt) : null,
+            'data': notificationData,
+            'createdAt': FieldValue.serverTimestamp(),
+          };
+
+          await _firestore.runTransaction((transaction) async {
+            if (existingDoc.exists) {
+              transaction.update(notificationRef, payload);
+              return;
+            }
+
+            transaction.set(notificationRef, payload);
+          });
+          continue;
+        }
+
+        final notificationRef = notificationsRef.doc();
+        await notificationRef.set({
           'id': notificationRef.id,
           'userId': userId,
           'projectId': projectId,
@@ -3682,13 +3786,11 @@ class ProjectService {
           'title': title,
           'body': body,
           'read': false,
-          'createdAt': Timestamp.now(),
+          'createdAt': FieldValue.serverTimestamp(),
           'deliverAt': deliverAt != null ? Timestamp.fromDate(deliverAt) : null,
           'data': data,
         });
       }
-
-      await batch.commit();
     } catch (e) {
       print('⚠️  Error fanning out notifications: $e');
     }

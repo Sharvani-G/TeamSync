@@ -163,7 +163,11 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
                                           FutureBuilder<int>(
                                             future: _getUnread(ch.id),
                                             builder: (context, unreadSnap) {
-                                              final unread = unreadSnap.data ?? 0;
+                                              final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+                                              var unread = unreadSnap.data ?? 0;
+                                              if (ch.lastMessageSenderId == currentUserId) {
+                                                unread = 0;
+                                              }
                                               if (unread <= 0) return const SizedBox.shrink();
                                               return Container(
                                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

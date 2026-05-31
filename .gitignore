@@ -70,3 +70,5 @@ cmdline-tools.zip
 
 # Optional docs/build outputs often generated locally
 BUILD_REPORT.md
+functions/serviceAccountKey.json
+serviceAccountKey.json

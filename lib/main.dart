@@ -1,3 +1,10 @@
+// Anti-pattern guard:
+// - Do not reintroduce self-notification echoes.
+// - Do not write placeholder file rows before Storage upload completes.
+// - Do not create duplicate unread chat alerts per message.
+// - Do not show blank attachment downloads or SVG previews in-place.
+// - Do not leak local optimistic chat state into the visible timeline.
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -5,8 +12,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'firebase_options.dart';
 // models referenced in other files; keep import minimal at top-level
+import 'config/env_config.dart';
 import 'app/router.dart';
 import 'theme/app_theme.dart';
 import 'services/settings_service.dart';
@@ -21,11 +28,13 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   appendBootLog('[BOOT] app start');
   print('${DateTime.now().toIso8601String()} [BOOT] app start');
+  final envConfig = await TeamSyncEnvConfig.instance;
+  envConfig.logStartupSelection();
   await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
+    options: envConfig.firebaseOptions,
   );
   if (kIsWeb) {
-    appendBootLog('[BOOT] using production Firebase (no emulator)');
+    appendBootLog('[BOOT] using ${envConfig.storageRegion} storage profile');
   }
   appendBootLog('[BOOT] firebase initialized');
   print('${DateTime.now().toIso8601String()} [BOOT] firebase initialized');
@@ -65,7 +74,7 @@ class _ProjectSyncAppState extends State<ProjectSyncApp> {
           debugShowCheckedModeBanner: false,
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
-          themeMode: mode,
+          themeMode: ThemeMode.dark,
           initialRoute: _initialRoute(),
           onGenerateRoute: generateRoute,
         );

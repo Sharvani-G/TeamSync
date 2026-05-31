@@ -112,6 +112,7 @@ class NotificationsScreen extends StatelessWidget {
 
   IconData _iconForType(String type) {
     switch (type) {
+      case 'chat_message':
       case 'new_message':
         return Icons.chat_bubble_outline;
       case 'call_started':

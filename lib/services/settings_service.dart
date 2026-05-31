@@ -8,7 +8,7 @@ class SettingsService {
   static const _keyDarkMode = 'settings_dark_mode';
   static const _keyLanguage = 'settings_language';
 
-  final ValueNotifier<ThemeMode> themeMode = ValueNotifier(ThemeMode.system);
+  final ValueNotifier<ThemeMode> themeMode = ValueNotifier(ThemeMode.dark);
   final ValueNotifier<String> language = ValueNotifier('en');
 
   SharedPreferences? _prefs;

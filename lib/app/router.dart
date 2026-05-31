@@ -34,8 +34,8 @@ Route<dynamic> generateRoute(RouteSettings settings) {
         settings);
   }
 
-  // /project/:id/idea-board
-  final ideaBoardMatch =
+    // /project/:id/idea-board
+    final ideaBoardMatch =
       RegExp(r'^/project/(\w+)/idea-board$').firstMatch(name);
   if (ideaBoardMatch != null) {
     return _slide(
@@ -74,9 +74,9 @@ Route<dynamic> generateRoute(RouteSettings settings) {
     return _slide(const AIReportScreen(), settings);
   }
 
-  // /project/:id/chat/:channelId
+    // /project/:id/chat/:channelId and /projects/:id/chat/:channelId
   final chatChannelMatch =
-      RegExp(r'^/project/(\w+)/chat/([\w-]+)$').firstMatch(name);
+      RegExp(r'^/projects?/(\w+)/chat/([\w-]+)$').firstMatch(name);
   if (chatChannelMatch != null) {
     return _slide(
         ChatChannelScreen(
@@ -93,7 +93,7 @@ Route<dynamic> generateRoute(RouteSettings settings) {
   }
 
   // /project/:id/chat
-  final chatMatch = RegExp(r'^/project/(\w+)/chat$').firstMatch(name);
+  final chatMatch = RegExp(r'^/projects?/(\w+)/chat$').firstMatch(name);
   if (chatMatch != null) {
     return _slide(ChatHomeScreen(projectId: chatMatch.group(1)!), settings);
   }

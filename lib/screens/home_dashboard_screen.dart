@@ -268,15 +268,21 @@ class _NotificationCard extends StatelessWidget {
     const cardColor = HomeDashboardScreen._cardColor;
 
     return GestureDetector(
-        onTap: () async {
+      onTap: () async {
+        await ProjectService.instance.markNotificationRead(item.id);
         if (!context.mounted) return;
-        // navigate to relevant route if available (look for link in data map)
+
+        final projectId = item.data['projectId'] as String? ?? item.projectId;
+        final channelId = item.data['channelId'] as String? ?? '';
+        if (projectId.isNotEmpty && channelId.isNotEmpty) {
+          Navigator.pushNamed(context, '/projects/$projectId/chat/$channelId');
+          return;
+        }
+
         final dynamic maybeLink = item.data['link'];
         if (maybeLink is String && maybeLink.isNotEmpty) {
           Navigator.pushNamed(context, maybeLink);
         }
-        // mark read
-        await ProjectService.instance.markNotificationRead(item.id);
       },
       child: Container(
         decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(12)),

@@ -5,14 +5,39 @@ const cors = require('cors');
 const http = require('http');
 const multer = require('multer');
 const { Server } = require('socket.io');
+const path = require('path');
+const fs = require('fs');
 
-admin.initializeApp();
+const serviceAccountPath = path.join(__dirname, 'serviceAccountKey.json');
+
+if (!admin.apps.length) {
+  if (fs.existsSync(serviceAccountPath)) {
+    const serviceAccount = require(serviceAccountPath);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      projectId: serviceAccount.project_id,
+      storageBucket: 'teamsync-6a35e.firebasestorage.app',
+    });
+    console.log(`[ADMIN] Firebase Admin initialized with project: ${serviceAccount.project_id}`);
+  } else {
+    console.warn('[ADMIN] WARNING: serviceAccountKey.json not detected. Falling back to Application Default Credentials.');
+    admin.initializeApp({
+      projectId: 'teamsync-6a35e',
+      storageBucket: 'teamsync-6a35e.firebasestorage.app',
+    });
+  }
+}
+
+const storageRouter = require('./routes/storage');
 
 function createUploadApp() {
   const app = express();
   app.use(cors({ origin: true }));
+  app.use(express.json({ limit: '1mb' }));
 
   const upload = multer({ storage: multer.memoryStorage() });
+
+  app.use('/api/storage', storageRouter);
 
   // POST /upload
   // Accepts multipart/form-data with field `files` and optional metadata fields:

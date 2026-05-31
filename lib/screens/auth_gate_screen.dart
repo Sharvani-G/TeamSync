@@ -148,10 +148,13 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
     print('${DateTime.now().toIso8601String()} [ROUTE] browser hash = $path');
     final supportedPrefixes = [
       RegExp(r'^/project/\w+$'),
+      RegExp(r'^/projects/\w+$'),
       RegExp(r'^/project/\w+/idea-board$'),
       RegExp(r'^/project/\w+/idea-board/\w+$'),
       RegExp(r'^/project/\w+/chat$'),
       RegExp(r'^/project/\w+/chat/[\w-]+$'),
+      RegExp(r'^/projects/\w+/chat$'),
+      RegExp(r'^/projects/\w+/chat/[\w-]+$'),
       RegExp(r'^/project/\w+/call$'),
       RegExp(r'^/project/\w+/workspace(?:/(idea-board|chat|calls))?$'),
       RegExp(r'^/project/\w+/track$'),
@@ -171,7 +174,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
     final path = _startupPath();
 
     final chatChannelMatch =
-        RegExp(r'^/project/(\w+)/chat/([\w-]+)$').firstMatch(path);
+      RegExp(r'^/projects?/(\w+)/chat/([\w-]+)$').firstMatch(path);
     if (chatChannelMatch != null) {
       return ChatChannelScreen(
         projectId: chatChannelMatch.group(1)!,
@@ -179,7 +182,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
       );
     }
 
-    final chatMatch = RegExp(r'^/project/(\w+)/chat$').firstMatch(path);
+    final chatMatch = RegExp(r'^/projects?/(\w+)/chat$').firstMatch(path);
     if (chatMatch != null) {
       return ChatHomeScreen(projectId: chatMatch.group(1)!);
     }
