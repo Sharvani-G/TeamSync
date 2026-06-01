@@ -587,6 +587,8 @@ class ProjectCallSchedule {
   final DateTime createdAt;
   final DateTime reminderAt;
   final String status;
+  final List<String> joinedUids;
+  final List<String> attendeeUids;
 
   const ProjectCallSchedule({
     required this.id,
@@ -604,6 +606,8 @@ class ProjectCallSchedule {
     required this.createdAt,
     required this.reminderAt,
     required this.status,
+    this.joinedUids = const [],
+    this.attendeeUids = const [],
   });
 }
 
@@ -623,6 +627,8 @@ class ProjectMeetingItem {
   final String sessionId;
   final String roomName;
   final DateTime createdAt;
+  final List<String> joinedUids;
+  final List<String> attendeeUids;
 
   const ProjectMeetingItem({
     required this.id,
@@ -640,6 +646,8 @@ class ProjectMeetingItem {
     this.sessionId = '',
     this.roomName = '',
     required this.createdAt,
+    this.joinedUids = const [],
+    this.attendeeUids = const [],
   });
 }
 

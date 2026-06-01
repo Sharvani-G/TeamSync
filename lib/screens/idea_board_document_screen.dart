@@ -454,7 +454,7 @@ class FileAttachmentWidget extends StatelessWidget {
           SizedBox(height: 12.h),
           Row(
             children: [
-              _ActionButton(icon: Icons.visibility_outlined, label: 'View', onTap: onPreview),
+              _ActionButton(icon: Icons.visibility_outlined, label: 'Open', onTap: onPreview),
               SizedBox(width: 8.w),
               _ActionButton(icon: Icons.download_outlined, label: 'Download', onTap: onDownload),
               if (canDelete) ...[

@@ -6,8 +6,23 @@ import '../theme/app_colors.dart';
 import '../models/models.dart';
 import '../services/project_service.dart';
 
-class HomeDashboardScreen extends StatelessWidget {
+class HomeDashboardScreen extends StatefulWidget {
   const HomeDashboardScreen({super.key});
+
+  @override
+  State<HomeDashboardScreen> createState() => _HomeDashboardScreenState();
+}
+
+class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
+  late final Stream<List<Project>> _projectsStream;
+  late final Stream<List<ProjectMeetingItem>> _meetingsStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _projectsStream = ProjectService.instance.watchMyProjects();
+    _meetingsStream = ProjectService.instance.watchMyScheduledMeetings();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -66,7 +81,7 @@ class HomeDashboardScreen extends StatelessWidget {
 
                     // Projects List
                     StreamBuilder<List<Project>>(
-                      stream: ProjectService.instance.watchMyProjects(),
+                      stream: _projectsStream,
                       builder: (context, snap) {
                         if (snap.hasError) return _errorBox('Error loading projects');
                         if (snap.connectionState == ConnectionState.waiting) {
@@ -97,7 +112,7 @@ class HomeDashboardScreen extends StatelessWidget {
                     SizedBox(height: 16.h),
 
                     StreamBuilder<List<ProjectMeetingItem>>(
-                      stream: ProjectService.instance.watchMyScheduledMeetings(),
+                      stream: _meetingsStream,
                       builder: (context, snap) {
                         if (snap.hasError) return _errorBox('Error loading meetings');
                         if (snap.connectionState == ConnectionState.waiting) {
@@ -119,104 +134,7 @@ class HomeDashboardScreen extends StatelessWidget {
                           itemCount: meetings.length,
                           separatorBuilder: (_, __) => SizedBox(height: 12.h),
                           itemBuilder: (c, i) {
-                            final m = meetings[i];
-                            final now = DateTime.now();
-                            final meetingTime = m.scheduledAt;
-                            final windowEnd = meetingTime.add(Duration(minutes: m.durationMinutes * 2));
-
-                            final bool canJoin = now.isAfter(meetingTime) && now.isBefore(windowEnd);
-                            final bool isUpcoming = now.isBefore(meetingTime);
-                            final bool isExpired = now.isAfter(windowEnd);
-
-                            return StreamBuilder<DocumentSnapshot>(
-                              stream: FirebaseFirestore.instance
-                                  .collection('projects')
-                                  .doc(m.projectId)
-                                  .collection('callSchedules')
-                                  .doc(m.id)
-                                  .snapshots(),
-                              builder: (context, meetingSnap) {
-                                final meetingData = meetingSnap.data?.data() as Map<String, dynamic>?;
-                                final joinedUids = List<String>.from(meetingData?['joined_uids'] ?? []);
-
-                                return Container(
-                                  decoration: BoxDecoration(
-                                    color: AppColors.kBgCard,
-                                    borderRadius: BorderRadius.circular(12.r),
-                                  ),
-                                  padding: EdgeInsets.all(16.w),
-                                  child: Row(
-                                    children: [
-                                      CircleAvatar(
-                                        backgroundColor: AppColors.kBgElevated,
-                                        child: Icon(Icons.video_call, color: AppColors.kAccentLight),
-                                      ),
-                                      SizedBox(width: 12.w),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              m.title,
-                                              style: TextStyle(
-                                                color: AppColors.kTextPrimary,
-                                                fontSize: 15.sp,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                            SizedBox(height: 4.h),
-                                            Text(
-                                              m.projectTitle,
-                                              style: TextStyle(color: AppColors.kTextSecond, fontSize: 13.sp),
-                                            ),
-                                            SizedBox(height: 4.h),
-                                            Text(
-                                              DateFormat.yMMMd().add_jm().format(m.scheduledAt),
-                                              style: TextStyle(color: AppColors.kTextSecond.withValues(alpha: 0.7), fontSize: 11.sp),
-                                            ),
-                                            if (isExpired) ...[
-                                              SizedBox(height: 4.h),
-                                              Text(
-                                                '${joinedUids.length} collaborator(s) joined',
-                                                style: TextStyle(color: AppColors.kAccentLight, fontSize: 11.sp, fontWeight: FontWeight.w600),
-                                              ),
-                                            ],
-                                          ],
-                                        ),
-                                      ),
-                                      if (isUpcoming)
-                                        ElevatedButton(
-                                          onPressed: null,
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.grey.shade800,
-                                            disabledBackgroundColor: Colors.grey.shade800,
-                                            padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
-                                          ),
-                                          child: Text('Join at ${DateFormat.jm().format(m.scheduledAt)}', style: TextStyle(color: Colors.white38, fontSize: 10.sp)),
-                                        ),
-                                      if (canJoin)
-                                        ElevatedButton(
-                                          onPressed: () async {
-                                            await ProjectService.instance.joinScheduledMeeting(m.projectId, m.id);
-                                            if (c.mounted) {
-                                              Navigator.pushNamed(c, '/project/${m.projectId}/workspace/calls');
-                                            }
-                                          },
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.green,
-                                            padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
-                                          ),
-                                          child: Text('Join Now', style: TextStyle(color: Colors.white, fontSize: 12.sp, fontWeight: FontWeight.bold)),
-                                        ),
-                                      if (isExpired)
-                                        Text('Ended', style: TextStyle(color: Colors.grey, fontSize: 12.sp)),
-                                    ],
-                                  ),
-                                );
-                              },
-                            );
+                            return _ScheduledMeetingCard(meeting: meetings[i]);
                           },
                         );
                       },
@@ -244,9 +162,129 @@ class HomeDashboardScreen extends StatelessWidget {
   Widget _errorBox(String message) => Container(
         width: double.infinity,
         padding: EdgeInsets.all(20.w),
-        decoration: BoxDecoration(color: AppColors.kDanger.withOpacity(0.1), borderRadius: BorderRadius.circular(12.r)),
+        decoration: BoxDecoration(color: AppColors.kDanger.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12.r)),
         child: Text(message, style: TextStyle(color: AppColors.kDanger, fontSize: 14.sp)),
       );
+}
+
+class _ScheduledMeetingCard extends StatefulWidget {
+  final ProjectMeetingItem meeting;
+  const _ScheduledMeetingCard({required this.meeting});
+
+  @override
+  State<_ScheduledMeetingCard> createState() => _ScheduledMeetingCardState();
+}
+
+class _ScheduledMeetingCardState extends State<_ScheduledMeetingCard> {
+  late final Stream<DocumentSnapshot> _stream;
+
+  @override
+  void initState() {
+    super.initState();
+    _stream = FirebaseFirestore.instance
+        .collection('projects')
+        .doc(widget.meeting.projectId)
+        .collection('callSchedules')
+        .doc(widget.meeting.id)
+        .snapshots();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final m = widget.meeting;
+    final now = DateTime.now();
+    final meetingTime = m.scheduledAt;
+    final windowEnd = meetingTime.add(Duration(minutes: m.durationMinutes * 2));
+
+    final bool canJoin = now.isAfter(meetingTime) && now.isBefore(windowEnd);
+    final bool isUpcoming = now.isBefore(meetingTime);
+    final bool isExpired = now.isAfter(windowEnd);
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: _stream,
+      builder: (context, meetingSnap) {
+        final meetingData = meetingSnap.data?.data() as Map<String, dynamic>?;
+        final joinedUids = List<String>.from(meetingData?['joined_uids'] ?? m.joinedUids);
+
+        return Container(
+          decoration: BoxDecoration(
+            color: AppColors.kBgCard,
+            borderRadius: BorderRadius.circular(12.r),
+          ),
+          padding: EdgeInsets.all(16.w),
+          child: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: AppColors.kBgElevated,
+                child: Icon(Icons.video_call, color: AppColors.kAccentLight),
+              ),
+              SizedBox(width: 12.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      m.title,
+                      style: TextStyle(
+                        color: AppColors.kTextPrimary,
+                        fontSize: 15.sp,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    SizedBox(height: 4.h),
+                    Text(
+                      m.projectTitle,
+                      style: TextStyle(color: AppColors.kTextSecond, fontSize: 13.sp),
+                    ),
+                    SizedBox(height: 4.h),
+                    Text(
+                      DateFormat.yMMMd().add_jm().format(m.scheduledAt),
+                      style: TextStyle(color: AppColors.kTextSecond.withValues(alpha: 0.7), fontSize: 11.sp),
+                    ),
+                    if (isExpired) ...[
+                      SizedBox(height: 4.h),
+                      Text(
+                        '${joinedUids.length} joined',
+                        style: TextStyle(color: Colors.grey, fontSize: 11.sp),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (isUpcoming)
+                ElevatedButton(
+                  onPressed: null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey.shade800,
+                    disabledBackgroundColor: Colors.grey.shade800,
+                    padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                  ),
+                  child: Text('Join at ${DateFormat.jm().format(m.scheduledAt)}', style: TextStyle(color: Colors.white38, fontSize: 10.sp)),
+                ),
+              if (canJoin)
+                ElevatedButton(
+                  onPressed: () async {
+                    await ProjectService.instance.joinScheduledMeeting(m.projectId, m.id);
+                    if (context.mounted) {
+                      Navigator.pushNamed(context, '/project/${m.projectId}/workspace/calls');
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                  ),
+                  child: Text('Join Now', style: TextStyle(color: Colors.white, fontSize: 12.sp, fontWeight: FontWeight.bold)),
+                ),
+              if (isExpired)
+                Text('Ended', style: TextStyle(color: Colors.grey, fontSize: 12.sp)),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _ProjectCard extends StatefulWidget {

@@ -34,6 +34,18 @@ class _CallsScreenState extends State<CallsScreen> {
   bool _isStartingMeet = false;
   int _historyVisibleCount = 10;
 
+  late final Stream<Project?> _projectStream;
+  late final Stream<List<ProjectCallSchedule>> _schedulesStream;
+  late final Stream<List<ProjectCallSession>> _historyStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _projectStream = ProjectService.instance.watchProject(widget.projectId);
+    _schedulesStream = ProjectService.instance.watchProjectCallSchedules(widget.projectId);
+    _historyStream = ProjectService.instance.watchProjectCallHistory(widget.projectId);
+  }
+
   @override
   void dispose() {
     _meetingTitleController.dispose();
@@ -262,7 +274,7 @@ class _CallsScreenState extends State<CallsScreen> {
       ),
       body: SafeArea(
         child: StreamBuilder<Project?>(
-          stream: ProjectService.instance.watchProject(widget.projectId),
+          stream: _projectStream,
           builder: (context, projectSnapshot) {
             final project = projectSnapshot.data;
             if (projectSnapshot.connectionState == ConnectionState.waiting &&
@@ -592,8 +604,7 @@ class _CallsScreenState extends State<CallsScreen> {
                               ),
                               const SizedBox(height: 14),
                               StreamBuilder<List<ProjectCallSchedule>>(
-                                stream: ProjectService.instance
-                                    .watchProjectCallSchedules(widget.projectId),
+                                stream: _schedulesStream,
                                 builder: (context, snapshot) {
                                   final schedules = snapshot.data ??
                                       const <ProjectCallSchedule>[];
@@ -628,6 +639,7 @@ class _CallsScreenState extends State<CallsScreen> {
 
                                       final bool canJoin = now.isAfter(meetTime) && now.isBefore(windowEnd);
                                       final bool isUpcoming = now.isBefore(meetTime);
+                                      final bool isExpired = now.isAfter(windowEnd);
 
                                       return Container(
                                         padding: const EdgeInsets.all(12),
@@ -643,13 +655,22 @@ class _CallsScreenState extends State<CallsScreen> {
                                                 children: [
                                                   Text(s.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                                                   Text(DateFormat.yMMMd().add_jm().format(s.scheduledAt), style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                                                  if (isExpired) ...[
+                                                    const SizedBox(height: 4),
+                                                    Text('${s.joinedUids.length} joined', style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                                                  ],
                                                 ],
                                               ),
                                             ),
                                             if (isUpcoming)
-                                              TextButton(
+                                              ElevatedButton(
                                                 onPressed: null,
-                                                child: Text('Join at ${DateFormat.jm().format(s.scheduledAt)}', style: const TextStyle(color: Colors.white24, fontSize: 12)),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Colors.grey.shade800,
+                                                  disabledBackgroundColor: Colors.grey.shade800,
+                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                ),
+                                                child: Text('Join at ${DateFormat.jm().format(s.scheduledAt)}', style: const TextStyle(color: Colors.white38, fontSize: 10)),
                                               ),
                                             if (canJoin)
                                               ElevatedButton(
@@ -666,9 +687,14 @@ class _CallsScreenState extends State<CallsScreen> {
                                                     );
                                                   }
                                                 },
-                                                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                                                child: const Text('Join Now', style: TextStyle(color: Colors.white)),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Colors.green,
+                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                ),
+                                                child: const Text('Join Now', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                                               ),
+                                            if (isExpired)
+                                              const Text('Ended', style: TextStyle(color: Colors.grey, fontSize: 12)),
                                           ],
                                         ),
                                       );
@@ -710,8 +736,7 @@ class _CallsScreenState extends State<CallsScreen> {
                               ),
                               const SizedBox(height: 14),
                               StreamBuilder<List<ProjectCallSession>>(
-                                stream: ProjectService.instance
-                                    .watchProjectCallHistory(widget.projectId),
+                                stream: _historyStream,
                                 builder: (context, snapshot) {
                                   final history = snapshot.data ??
                                       const <ProjectCallSession>[];

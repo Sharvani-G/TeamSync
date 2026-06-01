@@ -125,13 +125,25 @@ class WebRtcSocketService {
       socket.emit('webrtc:incoming-call', {
         'roomId': roomId,
         'callId': callId,
-        'projectId': projectId,
-        'projectTitle': projectTitle,
+        'callerId': senderId,
         'senderId': senderId,
         'callerName': senderDisplayName,
+        'projectId': projectId,
+        'projectName': projectTitle,
+        'projectTitle': projectTitle,
         'targetUserId': targetId,
+        'targetUids': targets.toList(),
       });
     }
+  }
+
+  Future<void> declineCall(String roomId, String callerId) async {
+    final socket = await _ensureSocket();
+    socket.emit('webrtc:decline', {
+      'roomId': roomId,
+      'callerId': callerId,
+      'declinedById': FirebaseAuth.instance.currentUser?.uid ?? _userId,
+    });
   }
 
   Future<void> hangup(String roomId, {String? targetSocketId}) async {

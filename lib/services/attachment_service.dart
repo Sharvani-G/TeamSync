@@ -568,6 +568,7 @@ class AttachmentService {
     required int fileSize,
     required Map<String, dynamic> context,
   }) async {
+    debugPrint('[DEBUG] Calling API at: ${AppConfig.apiBaseUrl}/api/storage/cloudinary-signature');
     final gatewayResponse = await http
         .post(
           _storageGatewayBaseUri.resolve('api/storage/cloudinary-signature'),

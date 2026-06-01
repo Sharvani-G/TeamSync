@@ -1185,10 +1185,11 @@ class ProjectService {
         return <IdeaBoardBlock>[];
       }
 
-      return project.ideaBoardBlocks
+      final list = project.ideaBoardBlocks
           .where((block) => block.levelId.trim() == trimmedLevelId)
           .toList()
         ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      return list.take(20).toList();
     });
   }
 
@@ -3297,6 +3298,8 @@ class ProjectService {
       'durationMinutes': durationMinutes,
       'timezone': timeZone,
       'invitedParticipants': invitedParticipants,
+      'attendee_uids': invitedParticipants,
+      'joined_uids': <String>[],
       'createdBy': authUser.uid,
       'hostDisplayName': hostDisplayName,
       'timeZone': timeZone,
@@ -3598,6 +3601,8 @@ class ProjectService {
 
   Stream<List<ProjectCallSchedule>> watchProjectCallSchedules(
       String projectId) {
+    final authUser = _auth.currentUser;
+    final currentUid = authUser?.uid ?? '';
     return _retryingStream<List<ProjectCallSchedule>>(
       'watchProjectCallSchedules($projectId)',
       () => _firestore
@@ -3611,6 +3616,7 @@ class ProjectService {
         try {
           return snapshot.docs
               .map((doc) => _parseProjectCallSchedule(doc))
+              .where((schedule) => schedule.attendeeUids.contains(currentUid))
               .toList();
         } catch (e) {
           print('❌ Error parsing call schedules: $e');
@@ -3828,8 +3834,8 @@ class ProjectService {
               if (schedule.status != 'scheduled') continue;
               if (schedule.scheduledAt.isBefore(now.subtract(const Duration(hours: 1)))) continue;
 
-              // Only show if user is invited or creator
-              if (schedule.createdBy != authUser.uid && !schedule.invitedParticipants.contains(authUser.uid)) {
+              // Only show if user is in attendee_uids list
+              if (!schedule.attendeeUids.contains(authUser.uid)) {
                 continue;
               }
 
@@ -3849,6 +3855,8 @@ class ProjectService {
                 sessionId: schedule.sessionId,
                 roomName: schedule.sessionId,
                 createdAt: schedule.createdAt,
+                joinedUids: schedule.joinedUids,
+                attendeeUids: schedule.attendeeUids,
               ));
             }
           }
@@ -3880,6 +3888,7 @@ class ProjectService {
                 .doc(project.id)
                 .collection('callSchedules')
                 .orderBy('scheduledAt', descending: false)
+                .limit(30)
                 .snapshots()
                 .listen((snapshot) {
               schedulesByProject[project.id] = snapshot.docs
@@ -4004,6 +4013,12 @@ class ProjectService {
       createdAt: _parseDateTime(data['createdAt']) ?? DateTime.now(),
       reminderAt: _parseDateTime(data['reminderAt']) ?? DateTime.now(),
       status: data['status'] as String? ?? 'scheduled',
+      joinedUids: List<String>.from(
+        (data['joined_uids'] as List? ?? data['joinedUids'] as List? ?? []).cast<String>(),
+      ),
+      attendeeUids: List<String>.from(
+        (data['attendee_uids'] as List? ?? data['attendeeUids'] as List? ?? data['invitedParticipants'] as List? ?? []).cast<String>(),
+      ),
     );
   }
 

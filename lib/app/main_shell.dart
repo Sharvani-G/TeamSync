@@ -140,13 +140,19 @@ class _MainShellState extends State<MainShell> {
 
       _incomingCallSub = WebRtcSocketService.instance.incomingCalls.listen((payload) {
         final targetUserId = payload['targetUserId']?.toString() ?? '';
+        final targetUids = List<String>.from(payload['targetUids'] ?? []);
         if (targetUserId.isNotEmpty && targetUserId != user.uid) {
           return;
         }
+        if (targetUids.isNotEmpty && !targetUids.contains(user.uid)) {
+          return;
+        }
         final callId = payload['callId']?.toString() ?? '';
+        final roomId = payload['roomId']?.toString() ?? '';
         final projectId = payload['projectId']?.toString() ?? '';
+        final callerId = payload['callerId']?.toString() ?? payload['senderId']?.toString() ?? '';
         final callerName = payload['callerName']?.toString() ?? 'Someone';
-        final projectTitle = payload['projectTitle']?.toString() ?? 'Incoming call';
+        final projectTitle = payload['projectName']?.toString() ?? payload['projectTitle']?.toString() ?? 'Incoming call';
 
         if (!mounted) return;
 
@@ -159,12 +165,16 @@ class _MainShellState extends State<MainShell> {
             projectTitle: projectTitle,
             onDecline: () {
               Navigator.of(ctx).pop();
+              if (roomId.isNotEmpty && callerId.isNotEmpty) {
+                WebRtcSocketService.instance.declineCall(roomId, callerId);
+              }
             },
             onAccept: () {
               Navigator.of(ctx).pop();
               if (!context.mounted || projectId.isEmpty || callId.isEmpty) {
                 return;
               }
+              Navigator.of(context).pushNamed('/project/$projectId/workspace/calls');
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => InCallScreen(projectId: projectId, callId: callId),
@@ -180,6 +190,7 @@ class _MainShellState extends State<MainShell> {
           .where('userId', isEqualTo: user.uid)
           .where('read', isEqualTo: false)
           .where('type', whereIn: ['call_started', 'call_scheduled'])
+          .limit(30)
           .snapshots()
           .listen((snap) {
         for (final doc in snap.docs) {

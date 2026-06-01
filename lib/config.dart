@@ -1,4 +1,6 @@
-const String serverUploadUrl = String.fromEnvironment(
-	'TEAMSYNC_STORAGE_API_URL',
-	defaultValue: 'http://127.0.0.1:8080',
-);
+class AppConfig {
+  static const String apiBaseUrl = 'http://127.0.0.1:8080';
+}
+
+const String serverUploadUrl = AppConfig.apiBaseUrl;
+

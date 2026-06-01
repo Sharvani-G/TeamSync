@@ -5,9 +5,9 @@ const { v2: cloudinary } = require('cloudinary');
 const router = express.Router();
 
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dkrfetmrq',
+  api_key: process.env.CLOUDINARY_API_KEY || '823464582758267',
+  api_secret: process.env.CLOUDINARY_API_SECRET || '1PHSyZI9n9MfVmEIrzU2xSk4t_w',
   secure: true,
 });
 
@@ -88,7 +88,11 @@ router.post('/cloudinary-signature', verifyFirebaseToken, async (req, res) => {
       return res.status(400).json({ error: 'File type not supported.' });
     }
 
-    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME || 'dkrfetmrq';
+    const apiKey = process.env.CLOUDINARY_API_KEY || '823464582758267';
+    const apiSecret = process.env.CLOUDINARY_API_SECRET || '1PHSyZI9n9MfVmEIrzU2xSk4t_w';
+
+    if (!cloudName || !apiKey || !apiSecret) {
       return res.status(500).json({ error: 'Cloudinary credentials are not configured.' });
     }
 
@@ -96,57 +100,15 @@ router.post('/cloudinary-signature', verifyFirebaseToken, async (req, res) => {
     const timestamp = Math.floor(Date.now() / 1000);
     const signature = cloudinary.utils.api_sign_request(
       { folder, timestamp },
-      process.env.CLOUDINARY_API_SECRET,
+      apiSecret,
     );
 
-    const uploadUrl = `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/auto/upload`;
+    const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`;
 
     console.log(`[CLOUDINARY] Signature generated for uid=${uid} folder=${folder}`);
     return res.json({
       uploadUrl,
-      apiKey: process.env.CLOUDINARY_API_KEY,
-      timestamp,
-      signature,
-      folder,
-    });
-  } catch (err) {
-    console.error('[CLOUDINARY] Signature generation failed:', err);
-    return res.status(500).json({ error: err.message || 'Cloudinary signature generation failed.' });
-  }
-});
-
-router.post('/cloudinary-signature', verifyFirebaseToken, async (req, res) => {
-  try {
-    const { fileName, mimeType, fileSize, context } = req.body || {};
-    const uid = req.user.uid;
-
-    if (!fileName || !mimeType || fileSize == null || !context || !context.projectId) {
-      return res.status(400).json({ error: 'Missing required fields.' });
-    }
-    if (Number(fileSize) > 10 * 1024 * 1024) {
-      return res.status(400).json({ error: 'File too large. Maximum size is 10MB.' });
-    }
-    if (!isSupportedMimeType(mimeType)) {
-      return res.status(400).json({ error: 'File type not supported.' });
-    }
-
-    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
-      return res.status(500).json({ error: 'Cloudinary credentials are not configured.' });
-    }
-
-    const folder = buildCloudinaryFolder(context);
-    const timestamp = Math.floor(Date.now() / 1000);
-    const signature = cloudinary.utils.api_sign_request(
-      { folder, timestamp },
-      process.env.CLOUDINARY_API_SECRET,
-    );
-
-    const uploadUrl = `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/auto/upload`;
-
-    console.log(`[CLOUDINARY] Signature generated for uid=${uid} folder=${folder}`);
-    return res.json({
-      uploadUrl,
-      apiKey: process.env.CLOUDINARY_API_KEY,
+      apiKey: apiKey,
       timestamp,
       signature,
       folder,

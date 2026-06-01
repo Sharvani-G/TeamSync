@@ -71,7 +71,7 @@ class _IncomingCallOverlayScreenState extends State<IncomingCallOverlayScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 _CallActionBtn(
-                  icon: Icons.phone_disabled,
+                  icon: Icons.call_end,
                   color: Colors.red,
                   label: 'Decline',
                   onTap: widget.onDecline,
