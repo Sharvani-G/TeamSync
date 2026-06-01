@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../services/settings_service.dart';
-import '../theme/app_theme.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import '../theme/app_colors.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -8,49 +8,66 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Appearance', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 12),
-            ValueListenableBuilder(
-              valueListenable: SettingsService.instance.themeMode,
-              builder: (context, ThemeMode mode, _) {
-                final isDark = mode == ThemeMode.dark;
-                return SwitchListTile.adaptive(
-                  title: const Text('Dark mode'),
-                  value: isDark,
-                  onChanged: (v) => SettingsService.instance.setDarkMode(v),
-                );
-              },
-            ),
-            const SizedBox(height: 20),
-            const Text('Language', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            ValueListenableBuilder(
-              valueListenable: SettingsService.instance.language,
-              builder: (context, String lang, _) {
-                return DropdownButton<String>(
-                  value: lang,
-                  items: const [
-                    DropdownMenuItem(value: 'en', child: Text('English')),
-                    DropdownMenuItem(value: 'es', child: Text('Spanish')),
-                  ],
-                  onChanged: (val) async {
-                    if (val == null) return;
-                    await SettingsService.instance.setLanguage(val);
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Language updated')));
-                  },
-                );
-              },
-            ),
-          ],
+      backgroundColor: AppColors.kBgDeep,
+      appBar: AppBar(
+        backgroundColor: AppColors.kBgDeep,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios_new, color: AppColors.kTextPrimary, size: 20.sp),
+          onPressed: () => Navigator.pop(context),
         ),
+        title: Text('Settings', style: TextStyle(color: AppColors.kTextPrimary, fontSize: 18.sp, fontWeight: FontWeight.w600)),
       ),
+      body: ListView(
+        padding: EdgeInsets.all(16.w),
+        children: [
+          _SettingsTile(
+            title: 'Account Settings',
+            subtitle: 'Manage your profile and security',
+            icon: Icons.person_outline,
+            onTap: () {},
+          ),
+          Divider(color: AppColors.kDivider, height: 1),
+          _SettingsTile(
+            title: 'Notifications',
+            subtitle: 'Configure how you receive alerts',
+            icon: Icons.notifications_none,
+            onTap: () {},
+          ),
+          Divider(color: AppColors.kDivider, height: 1),
+          _SettingsTile(
+            title: 'Privacy & Security',
+            subtitle: 'Visibility and data preferences',
+            icon: Icons.lock_outline,
+            onTap: () {},
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _SettingsTile({required this.title, required this.subtitle, required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      onTap: onTap,
+      contentPadding: EdgeInsets.symmetric(vertical: 8.h),
+      leading: Container(
+        padding: EdgeInsets.all(8.r),
+        decoration: BoxDecoration(color: AppColors.kBgCard, borderRadius: BorderRadius.circular(8.r)),
+        child: Icon(icon, color: AppColors.kAccentLight, size: 22.sp),
+      ),
+      title: Text(title, style: TextStyle(color: AppColors.kTextPrimary, fontSize: 15.sp, fontWeight: FontWeight.w500)),
+      subtitle: Text(subtitle, style: TextStyle(color: AppColors.kTextSecond, fontSize: 13.sp)),
+      trailing: Icon(Icons.chevron_right, color: AppColors.kTextHint, size: 20.sp),
     );
   }
 }

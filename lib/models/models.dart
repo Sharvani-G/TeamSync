@@ -1,5 +1,17 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+enum ProjectRole { admin, collaborator, nonMember }
+
+ProjectRole getMyRole({
+  required String currentUid,
+  required String adminUid,
+  required List<String> collaboratorUids,
+}) {
+  if (currentUid == adminUid) return ProjectRole.admin;
+  if (collaboratorUids.contains(currentUid)) return ProjectRole.collaborator;
+  return ProjectRole.nonMember;
+}
+
 class Attachment {
   final String id;
   final String name;
@@ -124,7 +136,6 @@ class IdeaBoardFile {
       'id': id,
       'fileName': fileName,
       'fileUrl': fileUrl,
-      'file_url': fileUrl,
       'fileType': fileType,
       'fileSize': fileSize,
       'uploadedBy': uploadedBy,
@@ -180,6 +191,7 @@ class Project {
   final String lastUpdated;
   final DateTime createdAt;
   final List<ProjectLevel> levels;
+  final List<String> ideaBoardSections;
   final List<IdeaBoardBlock> ideaBoardBlocks;
   final ProjectStats stats;
 
@@ -197,6 +209,7 @@ class Project {
     required this.lastUpdated,
     required this.createdAt,
     required this.levels,
+    required this.ideaBoardSections,
     required this.stats,
     required this.ideaBoardBlocks,
   });
@@ -297,13 +310,11 @@ class ProjectAttachment {
       'mimeType': mimeType,
       'size': size,
       'downloadUrl': downloadUrl,
-      'file_url': downloadUrl,
       'uploadedBy': uploadedBy,
       'createdAt': createdAt.toIso8601String(),
       'storagePath': storagePath,
       'fileName': name,
       'fileUrl': downloadUrl,
-      'file_url': downloadUrl,
       'fileType': mimeType,
       'fileSize': size,
       'url': downloadUrl,

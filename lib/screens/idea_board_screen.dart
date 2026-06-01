@@ -15,10 +15,18 @@ class IdeaBoardScreen extends StatefulWidget {
 }
 
 class _IdeaBoardScreenState extends State<IdeaBoardScreen> {
+  late Stream<Project?> _projectStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _projectStream = ProjectService.instance.watchProject(widget.projectId);
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<Project?>(
-      stream: ProjectService.instance.watchProject(widget.projectId),
+      stream: _projectStream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
@@ -49,39 +57,35 @@ class _IdeaBoardScreenState extends State<IdeaBoardScreen> {
           );
         }
 
-        final orderedLevels = [...project.levels]
-          ..sort((a, b) => a.order.compareTo(b.order));
-
-        if (orderedLevels.isEmpty) {
-          return Scaffold(
-            appBar: SimpleAppBar(title: project.title),
-            body: const Center(
-              child: Text('No levels have been created for this project yet.'),
-            ),
-          );
-        }
+        final sections = project.ideaBoardSections.isNotEmpty
+            ? project.ideaBoardSections
+            : ["Problem Statement", "Research", "Design", "Development", "Testing"];
 
         return Scaffold(
           appBar: SimpleAppBar(title: project.title),
           body: ListView.separated(
             padding: const EdgeInsets.all(16),
-            itemCount: orderedLevels.length,
+            itemCount: sections.length,
             separatorBuilder: (_, __) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
-              final level = orderedLevels[index];
+              final sectionTitle = sections[index];
+              // Use the title as the ID for now, or index.
+              // Since the blocks are stored with levelId, we need a stable ID.
+              // If we use index, reordering in Create Project will break existing blocks mapping.
+              // But if we use title, renaming a section will break it.
+              // The prompt says "store levels as an array of strings".
               return Card(
                 child: ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: AppTheme.primary.withOpacity(0.12),
+                    backgroundColor: AppTheme.primary.withValues(alpha: 0.12),
                     foregroundColor: AppTheme.primary,
-                    child: Text('${level.order}'),
+                    child: Text('${index + 1}'),
                   ),
-                  title: Text(level.title),
-                  subtitle: Text(_formatCreatedAt(level.createdAt)),
+                  title: Text(sectionTitle),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.pushNamed(
                     context,
-                    '/project/${widget.projectId}/idea-board/${level.id}',
+                    '/project/${widget.projectId}/idea-board/$sectionTitle',
                   ),
                 ),
               );

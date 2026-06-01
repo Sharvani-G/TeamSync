@@ -20,6 +20,7 @@ void main() {
       lastUpdated: 'now',
       createdAt: DateTime(2026, 5, 10),
       levels: const [],
+      ideaBoardSections: const ['Problem Statement', 'Development'],
       stats: const ProjectStats(
         tasksCompleted: 35,
         ideasAdded: 4,
@@ -51,6 +52,7 @@ void main() {
       lastUpdated: 'now',
       createdAt: DateTime(2026, 5, 10),
       levels: const [],
+      ideaBoardSections: const [],
       stats: const ProjectStats(
         tasksCompleted: 0,
         ideasAdded: 0,

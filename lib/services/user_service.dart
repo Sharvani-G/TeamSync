@@ -295,6 +295,7 @@ class UserService {
         final existing = await _firestore
             .collection('users')
             .where('usernameLower', isEqualTo: lowerUsername)
+            .limit(1)
             .get();
 
         if (existing.docs.isNotEmpty &&

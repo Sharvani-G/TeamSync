@@ -56,9 +56,13 @@ class AppTheme {
         ),
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.kBgElevated,
+        backgroundColor: AppColors.kBgDeep,
         elevation: 0,
-        titleTextStyle: textTheme.titleLarge?.copyWith(color: textPrimary, fontSize: 18.sp),
+        titleTextStyle: textTheme.titleLarge?.copyWith(
+          color: textPrimary,
+          fontSize: 18.sp,
+          fontWeight: FontWeight.w600,
+        ),
         iconTheme: IconThemeData(color: textPrimary),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(

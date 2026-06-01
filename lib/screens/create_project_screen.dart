@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/project_service.dart';
 import '../services/user_service.dart';
-import '../theme/app_theme.dart';
 import '../theme/app_colors.dart';
-import '../widgets/shared_widgets.dart';
+import '../models/models.dart';
 
 class CreateProjectScreen extends StatefulWidget {
   const CreateProjectScreen({super.key});
@@ -13,702 +15,442 @@ class CreateProjectScreen extends StatefulWidget {
 }
 
 class _CreateProjectScreenState extends State<CreateProjectScreen> {
-  final _titleController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
   final _descController = TextEditingController();
-  final _usernameController = TextEditingController();
-  final _contactEmailController = TextEditingController();
-  final _requiredCollabController = TextEditingController();
-  final _customLevelController = TextEditingController();
-  
-  bool _isPublic = false;
-  bool _isOpenForRequests = false;
-  final List<String> _collaboratorUsernames = [];
-  final List<String> _requiredSkills = [];
   final _skillController = TextEditingController();
-  bool _isLoading = false;
-  
-  // Default levels
-  late List<Map<String, dynamic>> _levels;
+  final _collabUsernameController = TextEditingController();
+  final _collabCountController = TextEditingController(text: '1');
 
-  @override
-  void initState() {
-    super.initState();
-    _initializeDefaultLevels();
-  }
-
-  void _initializeDefaultLevels() {
-    _levels = [
-      {'title': 'Problem Statement', 'order': 1},
-      {'title': 'Ideation', 'order': 2},
-      {'title': 'Research', 'order': 3},
-      {'title': 'Development', 'order': 4},
-      {'title': 'Testing', 'order': 5},
-      {'title': 'Documentation', 'order': 6},
-    ];
-  }
-
-  void _removeLevel(int index) {
-    setState(() {
-      _levels.removeAt(index);
-      // Reorder
-      for (int i = 0; i < _levels.length; i++) {
-        _levels[i]['order'] = i + 1;
-      }
-    });
-  }
-
-  void _addCustomLevel() {
-    final title = _customLevelController.text.trim();
-    if (title.isEmpty) {
-      _showSnackBar('Please enter a level name');
-      return;
-    }
-
-    if (_levels.any((l) => l['title'].toLowerCase() == title.toLowerCase())) {
-      _showSnackBar('Level "$title" already exists');
-      return;
-    }
-
-    setState(() {
-      _levels.add({
-        'title': title,
-        'order': _levels.length + 1,
-      });
-      _customLevelController.clear();
-    });
-  }
+  final List<String> _skills = [];
+  final List<String> _sections = ["Problem Statement", "Research", "Design", "Development", "Testing"];
+  String _visibility = 'private';
+  bool _isOpenToRequests = false;
+  final List<AppUser> _selectedCollaborators = [];
+  bool _isSearchingUser = false;
+  String? _userSearchError;
+  final _sectionController = TextEditingController();
 
   @override
   void dispose() {
-    _titleController.dispose();
+    _nameController.dispose();
     _descController.dispose();
-    _usernameController.dispose();
-    _contactEmailController.dispose();
-    _requiredCollabController.dispose();
-    _customLevelController.dispose();
     _skillController.dispose();
+    _collabUsernameController.dispose();
+    _collabCountController.dispose();
+    _sectionController.dispose();
     super.dispose();
   }
 
-  /// Add collaborator by username with validation
-  Future<void> _addCollaborator() async {
-    final username = _usernameController.text.trim();
-    if (username.isEmpty) {
-      _showSnackBar('Please enter a username');
-      return;
-    }
-
-    // Check for duplicates
-    if (_collaboratorUsernames.any((existing) => existing.toLowerCase() == username.toLowerCase())) {
-      _showSnackBar('User "@$username" already added');
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      // Verify user exists
-      final user = await UserService.instance.getUserByUsername(username);
-      if (user == null) {
-        _showSnackBar('User "@$username" not found');
-        return;
-      }
-
+  void _addSection() {
+    final section = _sectionController.text.trim();
+    if (section.isNotEmpty && !_sections.contains(section)) {
       setState(() {
-        _collaboratorUsernames.add(username);
-        _usernameController.clear();
+        _sections.add(section);
+        _sectionController.clear();
       });
-
-      _showSnackBar('Added @${user.$2} as collaborator');
-    } catch (e) {
-      _showSnackBar('Error: ${e.toString()}');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  void _removeCollaborator(String username) {
-    setState(() => _collaboratorUsernames.remove(username));
   }
 
   void _addSkill() {
     final skill = _skillController.text.trim();
-    if (skill.isEmpty) {
-      _showSnackBar('Please enter a skill');
-      return;
+    if (skill.isNotEmpty && !_skills.contains(skill)) {
+      setState(() {
+        _skills.add(skill);
+        _skillController.clear();
+      });
     }
+  }
 
-    if (_requiredSkills.contains(skill.toLowerCase())) {
-      _showSnackBar('Skill "$skill" already added');
+  Future<void> _searchAndAddCollaborator() async {
+    final username = _collabUsernameController.text.trim();
+    if (username.isEmpty) return;
+
+    if (_selectedCollaborators.any((u) => u.username == username)) {
+      setState(() => _userSearchError = 'User already added');
       return;
     }
 
     setState(() {
-      _requiredSkills.add(skill.toLowerCase());
-      _skillController.clear();
+      _isSearchingUser = true;
+      _userSearchError = null;
     });
-  }
 
-  void _removeSkill(String skill) {
-    setState(() => _requiredSkills.remove(skill));
+    try {
+      final user = await UserService.instance.getUserByUsername(username);
+      if (user != null) {
+        // getUserByUsername returns (uid, username) or similar?
+        // Let's check models.dart for AppUser.
+        // ProjectService uses UserService.getUserByUsername(username).
+        // I should probably fetch the full AppUser.
+        final fullUser = await UserService.instance.getUserById(user.$1);
+        if (fullUser != null) {
+          if (fullUser.id == FirebaseAuth.instance.currentUser?.uid) {
+            setState(() => _userSearchError = 'Cannot add yourself');
+          } else {
+            setState(() {
+              _selectedCollaborators.add(fullUser);
+              _collabUsernameController.clear();
+            });
+          }
+        } else {
+          setState(() => _userSearchError = 'User not found');
+        }
+      } else {
+        setState(() => _userSearchError = 'User not found');
+      }
+    } catch (e) {
+      setState(() => _userSearchError = 'Error searching user');
+    } finally {
+      setState(() => _isSearchingUser = false);
+    }
   }
 
   Future<void> _createProject() async {
-    // Validate inputs
-    final title = _titleController.text.trim();
-    final description = _descController.text.trim();
+    if (!_formKey.currentState!.validate()) return;
 
-    if (title.isEmpty) {
-      _showSnackBar('Please enter project title');
-      return;
-    }
-
-    if (description.isEmpty) {
-      _showSnackBar('Please enter project description');
-      return;
-    }
-
-    if (_levels.isEmpty) {
-      _showSnackBar('Please add at least one project level');
-      return;
-    }
-
-    setState(() => _isLoading = true);
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
     try {
-      await ProjectService.instance.createProject(
-        title: title,
-        description: description,
-        collaboratorUsernames: _collaboratorUsernames,
-        visibility: _isPublic ? 'public' : 'private',
-        isOpenForRequests: _isOpenForRequests,
-        requiredCollaborators: int.tryParse(_requiredCollabController.text) ?? 0,
-        requiredSkills: _requiredSkills,
-        contactEmail: _contactEmailController.text.trim(),
-        levels: _levels,
+      if (_sections.isEmpty) {
+        throw Exception('At least one Idea Board section is required');
+      }
+
+      final projectId = await ProjectService.instance.createProject(
+        title: _nameController.text.trim(),
+        description: _descController.text.trim(),
+        requiredSkills: _skills,
+        visibility: _visibility,
+        isOpenForRequests: _isOpenToRequests,
+        requiredCollaborators: _isOpenToRequests ? int.tryParse(_collabCountController.text) ?? 1 : 0,
+        collaboratorUsernames: _selectedCollaborators.map((u) => u.username).toList(),
+        contactEmail: user.email ?? '',
+        ideaBoardSections: _sections,
       );
 
-      if (!mounted) return;
-
-      _showSnackBar('Project created successfully!');
-      Navigator.of(context).pop(); // Go back to home
+      if (mounted) {
+        // Navigate directly to workspace
+        Navigator.pushReplacementNamed(context, '/project/$projectId/workspace');
+      }
     } catch (e) {
-      _showSnackBar('Error: ${e.toString()}');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
     }
-  }
-
-  void _showSnackBar(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const SimpleAppBar(title: 'Create Project'),
+      backgroundColor: AppColors.kBgDeep,
+      appBar: AppBar(
+        backgroundColor: AppColors.kBgDeep,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios_new, color: AppColors.kTextPrimary, size: 20.sp),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text('Create Project', style: TextStyle(color: AppColors.kTextPrimary, fontSize: 18.sp, fontWeight: FontWeight.w600)),
+      ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Project Title
-            _label('Project Title *'),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _titleController,
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: AppColors.kBgInput,
-                hintText: 'Enter project name',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+        padding: EdgeInsets.all(16.w),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _Label('Project Name *'),
+              SizedBox(height: 8.h),
+              TextFormField(
+                controller: _nameController,
+                style: TextStyle(color: AppColors.kTextPrimary, fontSize: 14.sp),
+                decoration: _inputDecoration('Enter project name'),
+                validator: (v) => v == null || v.isEmpty ? 'Project name is required' : null,
               ),
-            ),
-            const SizedBox(height: 20),
+              SizedBox(height: 20.h),
 
-            // Project Description
-            _label('Project Description *'),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _descController,
-              maxLines: 3,
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: AppColors.kBgInput,
-                hintText: 'Describe your project goals and scope',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+              _Label('Project Description *'),
+              SizedBox(height: 8.h),
+              TextFormField(
+                controller: _descController,
+                style: TextStyle(color: AppColors.kTextPrimary, fontSize: 14.sp),
+                minLines: 3,
+                maxLines: null,
+                decoration: _inputDecoration('Describe your project goals and scope'),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Description is required';
+                  if (v.length < 20) return 'Description must be at least 20 characters';
+                  return null;
+                },
               ),
-            ),
-            const SizedBox(height: 20),
+              SizedBox(height: 20.h),
 
-            // Contact Email
-            _label('Contact Email'),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _contactEmailController,
-              keyboardType: TextInputType.emailAddress,
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: AppColors.kBgInput,
-                hintText: 'project@example.com',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Project Levels
-            _label('Project Levels'),
-            const SizedBox(height: 8),
-            // Display current levels
-            Column(
-              children: List.generate(
-                _levels.length,
-                (index) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: AppTheme.border),
-                      borderRadius: BorderRadius.circular(10),
-                      color: AppColors.kBgCard,
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            _levels[index]['title'],
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: AppTheme.textPrimary,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close, size: 18),
-                          onPressed: _levels.length > 1
-                              ? () => _removeLevel(index)
-                              : null,
-                          color: _levels.length > 1
-                              ? AppTheme.danger
-                              : AppTheme.textMuted,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints.tightFor(
-                            width: 32,
-                            height: 32,
-                          ),
-                        ),
-                      ],
+              _Label('Skills / Roles needed (optional)'),
+              SizedBox(height: 8.h),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _skillController,
+                      style: TextStyle(color: AppColors.kTextPrimary, fontSize: 14.sp),
+                      decoration: _inputDecoration('e.g. Flutter Developer'),
+                      onSubmitted: (_) => _addSkill(),
                     ),
                   ),
-                ),
+                  SizedBox(width: 8.w),
+                  ElevatedButton(
+                    onPressed: _addSkill,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.kAccentBlue,
+                      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+                    ),
+                    child: Text('Add', style: TextStyle(color: Colors.white)),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 16),
-            // Add custom level
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _customLevelController,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: AppColors.kBgInput,
-                      hintText: 'Add custom stage',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 12,
-                      ),
-                    ),
-                    onSubmitted: (_) => _addCustomLevel(),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  onPressed: _addCustomLevel,
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('Add'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 12,
-                    ),
-                    backgroundColor: AppTheme.primary,
-                    foregroundColor: AppTheme.textPrimary,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
+              SizedBox(height: 8.h),
+              Wrap(
+                spacing: 8.w,
+                children: _skills.map((skill) => Chip(
+                  label: Text(skill, style: TextStyle(color: Colors.white, fontSize: 12.sp)),
+                  backgroundColor: AppColors.kBgElevated,
+                  deleteIcon: Icon(Icons.close, size: 14.sp, color: Colors.white),
+                  onDeleted: () => setState(() => _skills.remove(skill)),
+                )).toList(),
+              ),
+              SizedBox(height: 20.h),
 
-            // Visibility
-            _label('Project Visibility *'),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: _VisibilityButton(
-                    label: 'Public',
-                    icon: Icons.people,
-                    selected: _isPublic,
-                    onTap: () => setState(() {
-                      _isPublic = true;
-                      _isOpenForRequests = false; // Reset requests
-                    }),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _VisibilityButton(
+              _Label('Project Visibility *'),
+              SizedBox(height: 8.h),
+              Row(
+                children: [
+                  _VisibilityOption(
                     label: 'Private',
-                    icon: Icons.lock,
-                    selected: !_isPublic,
-                    onTap: () => setState(() {
-                      _isPublic = false;
-                      _isOpenForRequests = false; // Disable for private
+                    value: 'private',
+                    groupValue: _visibility,
+                    onChanged: (v) => setState(() {
+                      _visibility = v!;
+                      _isOpenToRequests = false;
                     }),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            if (!_isPublic)
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.kBgInput,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.kDivider),
-                ),
-                child: Row(
+                  SizedBox(width: 16.w),
+                  _VisibilityOption(
+                    label: 'Public',
+                    value: 'public',
+                    groupValue: _visibility,
+                    onChanged: (v) => setState(() => _visibility = v!),
+                  ),
+                ],
+              ),
+              SizedBox(height: 20.h),
+
+              if (_visibility == 'public') ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Icon(Icons.info, size: 18, color: AppTheme.primary),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Private projects are only visible to collaborators',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.textMuted,
-                        ),
-                      ),
+                    _Label('Open to join requests'),
+                    Switch(
+                      value: _isOpenToRequests,
+                      onChanged: (v) => setState(() => _isOpenToRequests = v),
+                      activeColor: AppColors.kAccentBlue,
                     ),
                   ],
                 ),
-              ),
-            const SizedBox(height: 20),
+                if (_isOpenToRequests) ...[
+                  SizedBox(height: 8.h),
+                  _Label('Collaborators required (1-20)'),
+                  SizedBox(height: 8.h),
+                  TextFormField(
+                    controller: _collabCountController,
+                    keyboardType: TextInputType.number,
+                    style: TextStyle(color: AppColors.kTextPrimary, fontSize: 14.sp),
+                    decoration: _inputDecoration('Number of collaborators needed'),
+                    validator: (v) {
+                      final n = int.tryParse(v ?? '');
+                      if (n == null || n < 1 || n > 20) return 'Enter a number between 1 and 20';
+                      return null;
+                    },
+                  ),
+                  SizedBox(height: 20.h),
+                ],
+              ],
 
-            // Open for Requests (only for public projects)
-            if (_isPublic) ...[
-              _label('Open for Join Requests?'),
-              const SizedBox(height: 8),
-              Card(
-                color: AppColors.kBgCard,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+              SizedBox(height: 20.h),
+
+              _Label('Idea Board Sections *'),
+              SizedBox(height: 8.h),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _sectionController,
+                      style: TextStyle(color: AppColors.kTextPrimary, fontSize: 14.sp),
+                      decoration: _inputDecoration('e.g. Analysis'),
+                      onSubmitted: (_) => _addSection(),
+                    ),
+                  ),
+                  SizedBox(width: 8.w),
+                  ElevatedButton(
+                    onPressed: _addSection,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.kAccentBlue,
+                      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+                    ),
+                    child: Text('Add', style: TextStyle(color: Colors.white)),
+                  ),
+                ],
+              ),
+              SizedBox(height: 8.h),
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.kBgInput,
+                  borderRadius: BorderRadius.circular(12.r),
+                ),
+                child: ReorderableListView(
+                  shrinkWrap: true,
+                  physics: NeverScrollableScrollPhysics(),
+                  onReorder: (oldIndex, newIndex) {
+                    setState(() {
+                      if (newIndex > oldIndex) newIndex -= 1;
+                      final String item = _sections.removeAt(oldIndex);
+                      _sections.insert(newIndex, item);
+                    });
+                  },
+                  children: _sections.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final section = entry.value;
+                    return ListTile(
+                      key: ValueKey(section),
+                      dense: true,
+                      title: Text(section, style: TextStyle(color: Colors.white, fontSize: 14.sp)),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Checkbox(
-                            value: _isOpenForRequests,
-                            onChanged: (val) =>
-                                setState(() => _isOpenForRequests = val ?? false),
-                            activeColor: AppTheme.primary,
+                          IconButton(
+                            icon: Icon(Icons.close, size: 18.sp, color: Colors.white70),
+                            onPressed: () {
+                              if (_sections.length > 1) {
+                                setState(() => _sections.removeAt(index));
+                              }
+                            },
                           ),
-                          const Expanded(
-                            child: Text(
-                              'Allow users to request to join this project',
-                              style: TextStyle(fontSize: 13),
-                            ),
-                          ),
+                          Icon(Icons.drag_handle, color: Colors.white54),
                         ],
                       ),
-                      if (_isOpenForRequests) ...[
-                        const Divider(height: 16),
-                        _label('Required Number of Collaborators'),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _requiredCollabController,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: AppColors.kBgInput,
-                            hintText: 'e.g., 5',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        _label('Required Skills'),
-                        const SizedBox(height: 8),
-                        ..._requiredSkills.map((skill) =>
-                            _SkillTile(
-                              skill: skill,
-                              onRemove: () => _removeSkill(skill),
-                            )),
-                        if (_requiredSkills.isNotEmpty)
-                          const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _skillController,
-                                decoration: InputDecoration(
-                                  filled: true,
-                                  fillColor: AppColors.kBgInput,
-                                  hintText: 'Add skill (e.g., Flutter)',
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 10,
-                                  ),
-                                ),
-                                onSubmitted: (_) => _addSkill(),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            OutlinedButton.icon(
-                              onPressed: _addSkill,
-                              icon: const Icon(Icons.add, size: 16),
-                              label: const Text('Add'),
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ],
-                  ),
+                    );
+                  }).toList(),
                 ),
               ),
-              const SizedBox(height: 20),
-            ],
+              SizedBox(height: 20.h),
 
-            // Add Collaborators
-            _label('Add Collaborators (by username)'),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _usernameController,
-                        enabled: !_isLoading,
-                        decoration: InputDecoration(
-                          filled: true,
-                          fillColor: AppColors.kBgInput,
-                          hintText: 'e.g., john_doe',
-                          prefixText: '@',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                    onSubmitted: (_) => _addCollaborator(),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _addCollaborator,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                    backgroundColor: AppTheme.primary,
-                    foregroundColor: AppTheme.textPrimary,
-                  ),
-                  child: const Text('Add'),
-                ),
-              ],
-            ),
-
-            if (_collaboratorUsernames.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _collaboratorUsernames
-                    .map((username) => Chip(
-                      avatar: const Icon(Icons.person, size: 18),
-                      label: Text('@$username'),
-                      onDeleted: () => _removeCollaborator(username),
-                      backgroundColor: AppColors.kBgInput,
-                      labelStyle: const TextStyle(
-                        fontSize: 13,
-                        color: AppTheme.primary,
+              _Label('Add Collaborators (optional)'),
+              SizedBox(height: 8.h),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _collabUsernameController,
+                      style: TextStyle(color: AppColors.kTextPrimary, fontSize: 14.sp),
+                      decoration: _inputDecoration('Enter username').copyWith(
+                        errorText: _userSearchError,
                       ),
-                      deleteIconColor: AppTheme.primary,
-                      side: BorderSide.none,
-                    ))
-                    .toList(),
-              ),
-            ],
-
-            const SizedBox(height: 28),
-
-            // Create Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _createProject,
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(52),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  backgroundColor: AppTheme.primary,
-                  foregroundColor: AppTheme.textPrimary,
-                ),
-                child: _isLoading
-                    ? SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(AppTheme.textPrimary),
+                      onSubmitted: (_) => _searchAndAddCollaborator(),
+                    ),
+                  ),
+                  SizedBox(width: 8.w),
+                  _isSearchingUser
+                    ? SizedBox(width: 40, height: 40, child: CircularProgressIndicator())
+                    : ElevatedButton(
+                        onPressed: _searchAndAddCollaborator,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.kAccentBlue,
+                          padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
                         ),
-                      )
-                    : const Text('Create Project'),
+                        child: Text('Add', style: TextStyle(color: Colors.white)),
+                      ),
+                ],
               ),
-            ),
+              SizedBox(height: 8.h),
+              Wrap(
+                spacing: 8.w,
+                children: _selectedCollaborators.map((u) => Chip(
+                  avatar: CircleAvatar(
+                    backgroundColor: AppColors.kAccentLight,
+                    child: Text(u.name[0].toUpperCase(), style: TextStyle(color: Colors.white, fontSize: 10.sp)),
+                  ),
+                  label: Text(u.name, style: TextStyle(color: Colors.white, fontSize: 12.sp)),
+                  backgroundColor: AppColors.kBgElevated,
+                  deleteIcon: Icon(Icons.close, size: 14.sp, color: Colors.white),
+                  onDeleted: () => setState(() => _selectedCollaborators.remove(u)),
+                )).toList(),
+              ),
+              SizedBox(height: 40.h),
 
-            const SizedBox(height: 24),
-          ],
+              SizedBox(
+                width: double.infinity,
+                height: 52.h,
+                child: ElevatedButton(
+                  onPressed: _createProject,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.kAccentBlue,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                  ),
+                  child: Text('Create Project', style: TextStyle(color: Colors.white, fontSize: 16.sp, fontWeight: FontWeight.w600)),
+                ),
+              ),
+              SizedBox(height: 20.h),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _label(String text) => Text(
-    text,
-    style: TextStyle(
-      fontSize: 13,
-      fontWeight: FontWeight.w600,
-      color: AppTheme.textPrimary,
-    ),
-  );
+  InputDecoration _inputDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: AppColors.kTextHint),
+      filled: true,
+      fillColor: AppColors.kBgInput,
+      contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r), borderSide: BorderSide(color: AppColors.kAccentBlue, width: 1.5)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r), borderSide: BorderSide.none),
+      errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r), borderSide: BorderSide(color: AppColors.kDanger)),
+      focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r), borderSide: BorderSide(color: AppColors.kDanger, width: 1.5)),
+    );
+  }
 }
 
-class _VisibilityButton extends StatelessWidget {
+class _Label extends StatelessWidget {
+  final String text;
+  const _Label(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(text, style: TextStyle(color: AppColors.kTextSecond, fontSize: 13.sp, fontWeight: FontWeight.w600));
+  }
+}
+
+class _VisibilityOption extends StatelessWidget {
   final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
+  final String value;
+  final String groupValue;
+  final ValueChanged<String?> onChanged;
 
-  const _VisibilityButton({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
+  const _VisibilityOption({required this.label, required this.value, required this.groupValue, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
+    final selected = value == groupValue;
     return GestureDetector(
-      onTap: onTap,
+      onTap: () => onChanged(value),
       child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
         decoration: BoxDecoration(
-          border: Border.all(
-            color: selected ? AppTheme.primary : AppColors.kDivider,
-            width: selected ? 2 : 1,
-          ),
-          borderRadius: BorderRadius.circular(8),
-          color: selected ? AppTheme.primary.withOpacity(0.08) : AppColors.kBgCard,
+          color: selected ? AppColors.kAccentBlue : AppColors.kBgElevated,
+          borderRadius: BorderRadius.circular(20.r),
         ),
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-        child: Column(
-          children: [
-            Icon(
-              icon,
-              size: 24,
-              color: selected ? AppTheme.primary : AppTheme.textMuted,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: selected ? AppTheme.primary : AppTheme.textPrimary,
-              ),
-            ),
-          ],
-        ),
+        child: Text(label, style: TextStyle(color: Colors.white, fontSize: 14.sp, fontWeight: selected ? FontWeight.w600 : FontWeight.w400)),
       ),
     );
   }
 }
-
-class _SkillTile extends StatelessWidget {
-  final String skill;
-  final VoidCallback onRemove;
-
-  const _SkillTile({
-    required this.skill,
-    required this.onRemove,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                border: Border.all(color: AppTheme.border),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                skill,
-                style: const TextStyle(fontSize: 13),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: const Icon(Icons.close, size: 18),
-            onPressed: onRemove,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-            style: IconButton.styleFrom(
-              backgroundColor: AppColors.kDanger.withOpacity(0.12),
-            ),
-            iconSize: 16,
-            color: AppColors.kDanger,
-          ),
-        ],
-      ),
-    );
-  }
-}
-

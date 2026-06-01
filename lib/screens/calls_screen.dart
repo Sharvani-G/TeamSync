@@ -580,6 +580,110 @@ class _CallsScreenState extends State<CallsScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              Text(
+                                'Upcoming meetings',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleLarge
+                                    ?.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                              ),
+                              const SizedBox(height: 14),
+                              StreamBuilder<List<ProjectCallSchedule>>(
+                                stream: ProjectService.instance
+                                    .watchProjectCallSchedules(widget.projectId),
+                                builder: (context, snapshot) {
+                                  final schedules = snapshot.data ??
+                                      const <ProjectCallSchedule>[];
+                                  final upcoming = schedules
+                                      .where((s) => s.status == 'scheduled')
+                                      .toList();
+
+                                  if (snapshot.connectionState ==
+                                          ConnectionState.waiting &&
+                                      upcoming.isEmpty) {
+                                    return const Center(child: CircularProgressIndicator());
+                                  }
+
+                                  if (upcoming.isEmpty) {
+                                    return const Text(
+                                      'No upcoming meetings.',
+                                      style: TextStyle(color: Colors.white54),
+                                    );
+                                  }
+
+                                  return ListView.separated(
+                                    shrinkWrap: true,
+                                    physics: const NeverScrollableScrollPhysics(),
+                                    itemCount: upcoming.length,
+                                    separatorBuilder: (_, __) =>
+                                        const SizedBox(height: 12),
+                                    itemBuilder: (context, index) {
+                                      final s = upcoming[index];
+                                      final now = DateTime.now();
+                                      final meetTime = s.scheduledAt;
+                                      final windowEnd = meetTime.add(Duration(minutes: s.durationMinutes * 2));
+
+                                      final bool canJoin = now.isAfter(meetTime) && now.isBefore(windowEnd);
+                                      final bool isUpcoming = now.isBefore(meetTime);
+
+                                      return Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF0E1A27),
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(s.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                                  Text(DateFormat.yMMMd().add_jm().format(s.scheduledAt), style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                                                ],
+                                              ),
+                                            ),
+                                            if (isUpcoming)
+                                              TextButton(
+                                                onPressed: null,
+                                                child: Text('Join at ${DateFormat.jm().format(s.scheduledAt)}', style: const TextStyle(color: Colors.white24, fontSize: 12)),
+                                              ),
+                                            if (canJoin)
+                                              ElevatedButton(
+                                                onPressed: () async {
+                                                  await ProjectService.instance.joinScheduledMeeting(widget.projectId, s.id);
+                                                  if (context.mounted) {
+                                                    Navigator.of(context).push(
+                                                      MaterialPageRoute(
+                                                        builder: (_) => InCallScreen(
+                                                          projectId: widget.projectId,
+                                                          callId: s.sessionId,
+                                                        ),
+                                                      ),
+                                                    );
+                                                  }
+                                                },
+                                                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                                                child: const Text('Join Now', style: TextStyle(color: Colors.white)),
+                                              ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        _SectionCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                               Row(
                                 children: [
                                   Text(
@@ -805,14 +909,7 @@ class _CollaboratorRoster extends StatelessWidget {
                     final newVal = value ?? false;
                     if (onSelectionChanged != null) {
                       onSelectionChanged!(userId, newVal);
-                      return;
                     }
-                    // Fallback: attempt to find parent state and mutate safely.
-                    final state = context.findAncestorStateOfType<_CallsScreenState>();
-                    if (state == null) return;
-                    // Update internal map using the state's setState since this
-                    // widget is stateless and should not directly call setState.
-                    state.setState(() => state._collaboratorSelections[userId] = newVal);
                   },
                   title: Text(
                     displayName,

@@ -1,136 +1,60 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../models/models.dart';
 import '../services/project_service.dart';
-import '../theme/app_theme.dart';
 import '../theme/app_colors.dart';
-import '../widgets/shared_widgets.dart';
 
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<ProjectNotificationItem>>(
-      stream: ProjectService.instance.watchMyNotifications(),
-      builder: (context, snapshot) {
-        final notifications = snapshot.data ?? [];
+    return Scaffold(
+      backgroundColor: AppColors.kBgDeep,
+      appBar: AppBar(
+        backgroundColor: AppColors.kBgDeep,
+        elevation: 0,
+        title: Text('Notifications', style: TextStyle(color: AppColors.kTextPrimary, fontSize: 18.sp, fontWeight: FontWeight.w600)),
+      ),
+      body: StreamBuilder<List<ProjectNotificationItem>>(
+        stream: ProjectService.instance.watchMyNotifications(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          final notifications = snapshot.data ?? [];
+          if (notifications.isEmpty) return Center(child: Text('No notifications', style: TextStyle(color: AppColors.kTextSecond, fontSize: 14.sp)));
 
-        return Scaffold(
-          appBar: AppBar(
-            automaticallyImplyLeading: false,
-            title: const Text('Notifications'),
-            actions: [
-              if (notifications.any((item) => !item.read))
-                TextButton(
-                  onPressed: () => ProjectService.instance.markAllNotificationsRead(),
-                  child: const Text('Mark all read'),
-                ),
-            ],
-            bottom: const PreferredSize(
-              preferredSize: Size.fromHeight(1),
-              child: Divider(height: 1),
-            ),
-          ),
-          body: snapshot.connectionState == ConnectionState.waiting
-              ? const Center(child: CircularProgressIndicator())
-              : notifications.isEmpty
-                  ? const EmptyState(
-                      icon: Icons.notifications_none,
-                      title: 'No notifications',
-                      subtitle: 'You are all caught up!',
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: notifications.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 10),
-                      itemBuilder: (context, index) {
-                        final item = notifications[index];
-                        return InkWell(
-                          onTap: () => ProjectService.instance.markNotificationRead(item.id),
-                          child: Container(
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: item.read ? AppColors.kBgCard : AppColors.kBgInput,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: item.read ? AppColors.kDivider : AppTheme.primary.withOpacity(0.18)),
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                CircleAvatar(
-                                  backgroundColor: item.read ? AppColors.kBgElevated : AppTheme.primary.withOpacity(0.12),
-                                  child: Icon(
-                                    _iconForType(item.type),
-                                    size: 18,
-                                    color: item.read ? AppTheme.textSecondary : AppTheme.primary,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              item.title,
-                                              style: TextStyle(
-                                                fontSize: 14,
-                                                fontWeight: item.read ? FontWeight.w500 : FontWeight.w700,
-                                                color: AppTheme.textPrimary,
-                                              ),
-                                            ),
-                                          ),
-                                          Text(
-                                            _formatTimestamp(item.createdAt),
-                                            style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        item.body,
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: AppTheme.textSecondary,
-                                          height: 1.4,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
+          return ListView.separated(
+            padding: EdgeInsets.all(16.w),
+            itemCount: notifications.length,
+            separatorBuilder: (_, __) => Divider(color: AppColors.kDivider, height: 1),
+            itemBuilder: (context, index) {
+              final n = notifications[index];
+              return Padding(
+                padding: EdgeInsets.symmetric(vertical: 12.h),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(n.title, style: TextStyle(color: AppColors.kTextPrimary, fontSize: 14.sp, fontWeight: FontWeight.w500)),
+                          SizedBox(height: 4.h),
+                          Text(n.body, style: TextStyle(color: AppColors.kTextSecond, fontSize: 13.sp)),
+                          SizedBox(height: 4.h),
+                          Text('${n.createdAt.month}/${n.createdAt.day}', style: TextStyle(color: AppColors.kTextHint, fontSize: 11.sp)),
+                        ],
+                      ),
                     ),
-        );
-      },
+                    if (n.read != true)
+                      Container(width: 8.r, height: 8.r, decoration: const BoxDecoration(color: AppColors.kAccentBlue, shape: BoxShape.circle)),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
-  }
-
-  IconData _iconForType(String type) {
-    switch (type) {
-      case 'chat_message':
-      case 'new_message':
-        return Icons.chat_bubble_outline;
-      case 'call_started':
-        return Icons.videocam_outlined;
-      case 'collaborator_added':
-      case 'collaborator_removed':
-        return Icons.people_outline;
-      case 'join_request_accepted':
-        return Icons.check_circle_outline;
-      default:
-        return Icons.notifications_none;
-    }
-  }
-
-  String _formatTimestamp(DateTime value) {
-    final month = value.month.toString().padLeft(2, '0');
-    final day = value.day.toString().padLeft(2, '0');
-    return '$month/$day';
   }
 }

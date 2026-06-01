@@ -10,6 +10,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
 import '../services/webrtc_socket_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_colors.dart';
 import '../screens/in_call_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -62,6 +63,11 @@ class _MainShellState extends State<MainShell> {
             ),
             child: BottomNavigationBar(
               currentIndex: _currentIndex,
+              selectedItemColor: Theme.of(context).colorScheme.primary,
+              unselectedItemColor: Colors.grey.shade500,
+              backgroundColor: Theme.of(context).colorScheme.surface,
+              type: BottomNavigationBarType.fixed,
+              elevation: 8,
               onTap: (i) async {
                 setState(() => _currentIndex = i);
                 try {
@@ -97,7 +103,7 @@ class _MainShellState extends State<MainShell> {
                             ),
                             child: Text(
                               unreadCount > 99 ? '99+' : '$unreadCount',
-                              style: const TextStyle(fontSize: 8, color: Colors.white, fontWeight: FontWeight.w700),
+                              style: const TextStyle(fontSize: 8, color: AppColors.kWhite, fontWeight: FontWeight.w700),
                             ),
                           ),
                         ),
@@ -144,27 +150,27 @@ class _MainShellState extends State<MainShell> {
 
         if (!mounted) return;
 
-        Navigator.of(context, rootNavigator: true).push(
-          MaterialPageRoute(
-            fullscreenDialog: true,
-            builder: (_) => IncomingCallOverlayScreen(
-              callerName: callerName,
-              projectTitle: projectTitle,
-              onDecline: () {
-                Navigator.of(context, rootNavigator: true).maybePop();
-              },
-              onAccept: () {
-                Navigator.of(context, rootNavigator: true).maybePop();
-                if (!context.mounted || projectId.isEmpty || callId.isEmpty) {
-                  return;
-                }
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => InCallScreen(projectId: projectId, callId: callId),
-                  ),
-                );
-              },
-            ),
+        showGeneralDialog(
+          context: context,
+          barrierDismissible: false,
+          barrierColor: Colors.black.withOpacity(0.8),
+          pageBuilder: (ctx, anim1, anim2) => IncomingCallOverlayScreen(
+            callerName: callerName,
+            projectTitle: projectTitle,
+            onDecline: () {
+              Navigator.of(ctx).pop();
+            },
+            onAccept: () {
+              Navigator.of(ctx).pop();
+              if (!context.mounted || projectId.isEmpty || callId.isEmpty) {
+                return;
+              }
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => InCallScreen(projectId: projectId, callId: callId),
+                ),
+              );
+            },
           ),
         );
       });

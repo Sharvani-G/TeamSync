@@ -1,82 +1,55 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart' as picker;
 
 import '../models/models.dart';
 import '../services/attachment_service.dart';
-import '../services/file_delivery_service.dart';
-import '../services/file_service.dart';
 import '../services/project_service.dart';
-import '../theme/app_theme.dart';
-import '../widgets/shared_widgets.dart';
+import '../theme/app_colors.dart';
 
-// File-level helpers used across widgets in this file
-bool _isCloudinaryUrl(String url) {
-  return url.trim().startsWith('https://res.cloudinary.com');
-}
-
-bool _isImageFile(dynamic value) {
-  if (value is String) return value.startsWith('image/');
-  if (value is IdeaBoardFile) {
-    final mime = value.fileType.trim().toLowerCase();
-    if (mime.isNotEmpty) return mime.startsWith('image/');
-    final ext = value.fileName.split('.').length > 1 ? value.fileName.split('.').last : '';
-    return ext.toLowerCase().startsWith('jpg') || ext.toLowerCase().startsWith('png') || ext.toLowerCase().startsWith('gif') || ext.toLowerCase().startsWith('webp');
-  }
-  return false;
-}
-
-bool _isImageAttachment(String mimeType) {
-  return mimeType.startsWith('image/');
-}
-
-String _getMimeType(String fileName, String? extension) {
-  const map = {
-    'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
-    'png': 'image/png', 'gif': 'image/gif', 'webp': 'image/webp',
-    'pdf': 'application/pdf',
-    'doc': 'application/msword',
-    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'xls': 'application/vnd.ms-excel',
-    'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'txt': 'text/plain', 'csv': 'text/csv', 'zip': 'application/zip',
-  };
-  return map[extension?.toLowerCase()] ?? 'application/octet-stream';
-}
+bool _isCloudinaryUrl(String url) => url.trim().startsWith('https://res.cloudinary.com');
 
 class IdeaBoardDocumentScreen extends StatefulWidget {
   final String projectId;
   final String levelId;
 
-  const IdeaBoardDocumentScreen(
-      {super.key, required this.projectId, required this.levelId});
+  const IdeaBoardDocumentScreen({super.key, required this.projectId, required this.levelId});
 
   @override
-  State<IdeaBoardDocumentScreen> createState() =>
-      _IdeaBoardDocumentScreenState();
+  State<IdeaBoardDocumentScreen> createState() => _IdeaBoardDocumentScreenState();
 }
 
 class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
-  static final _IdeaBoardUploadCoordinator _uploadCoordinator =
-      _IdeaBoardUploadCoordinator();
-
   bool _isMutating = false;
+  String? _uploadingBlockId;
+  double _uploadProgress = 0.0;
+  String? _uploadError;
 
-  Future<List<picker.PlatformFile>> _pickFiles(
-      {bool allowMultiple = true}) async {
-    try {
-      return await AttachmentService.instance
-          .pickFiles(allowMultiple: allowMultiple);
-    } catch (e, stackTrace) {
-      debugPrint('File picker failed: $e');
-      debugPrintStack(stackTrace: stackTrace);
-      rethrow;
-    }
+  late Stream<Project?> _projectStream;
+  late Stream<List<IdeaBoardBlock>> _blocksStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _projectStream = ProjectService.instance.watchProject(widget.projectId);
+    _blocksStream = ProjectService.instance.watchIdeaBoardBlocks(
+      projectId: widget.projectId,
+      levelId: widget.levelId,
+    );
+  }
+
+  String extractPublicId(String url) {
+    final uri = Uri.parse(url);
+    final segments = uri.pathSegments;
+    final uploadIndex = segments.indexOf('upload');
+    if (uploadIndex == -1) return '';
+    final afterUpload = segments.sublist(uploadIndex + 1);
+    final withoutVersion = afterUpload.first.startsWith('v') ? afterUpload.sublist(1) : afterUpload;
+    final joined = withoutVersion.join('/');
+    return joined.contains('.') ? joined.substring(0, joined.lastIndexOf('.')) : joined;
   }
 
   Future<void> _addBlock(String type) async {
@@ -90,10 +63,11 @@ class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
         content: type == 'title' ? 'Untitled section' : '',
       );
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to add block: $e')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isMutating = false);
     }
@@ -101,14 +75,13 @@ class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
 
   Future<void> _deleteBlock(String blockId) async {
     try {
-      await ProjectService.instance.removeIdeaBoardBlock(
-        projectId: widget.projectId,
-        blockId: blockId,
-      );
+      await ProjectService.instance.removeIdeaBoardBlock(projectId: widget.projectId, blockId: blockId);
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete block: $e')),
+        );
+      }
     }
   }
 
@@ -120,32 +93,21 @@ class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
         content: content,
       );
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.toString())));
+      debugPrint('Failed to save content: $e');
     }
   }
 
   Future<void> _attachFiles(IdeaBoardBlock block) async {
-    try {
-      final files = await _pickFiles();
-      if (files.isEmpty) return;
+    final result = await picker.FilePicker.pickFiles(withData: true);
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    if (file.bytes == null) return;
 
-      await _uploadFilesToBlock(block, files);
-    } catch (e, stackTrace) {
-      debugPrint('Attachment upload failed: $e');
-      debugPrintStack(stackTrace: stackTrace);
-    }
-  }
-
-  Future<void> _uploadFilesToBlock(
-      IdeaBoardBlock block, List<picker.PlatformFile> files) async {
-    final retryAction = () => _uploadFilesToBlock(block, files);
-    _uploadCoordinator.begin(
-      blockId: block.id,
-      fileName: files.isNotEmpty ? files.first.name : 'Attachment',
-      retryAction: retryAction,
-    );
+    setState(() {
+      _uploadingBlockId = block.id;
+      _uploadError = null;
+      _uploadProgress = 0.0;
+    });
 
     try {
       await AttachmentService.instance.attachToIdeaBoard(
@@ -153,434 +115,139 @@ class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
         levelId: widget.levelId,
         blockId: block.id,
         existingFiles: block.files.map((item) => item.toMap()).toList(),
-        files: files,
-        onProgress: (progress, currentFileName) {
-          _uploadCoordinator.updateProgress(
-            fileName: currentFileName,
-            progress: progress,
-          );
+        files: [file],
+        onProgress: (p, name) {
+          if (mounted) setState(() => _uploadProgress = p);
         },
-        appendToBlock: true,
       );
-    } catch (e, stackTrace) {
-      debugPrint('[SCREEN REJECTION INTERCEPTED] Details: $e');
-      debugPrint('-> Forensics Stack: $stackTrace');
-      _uploadCoordinator.fail(
-        blockId: block.id,
-        message: e.toString(),
-        retryAction: retryAction,
-      );
-      rethrow;
+    } catch (e) {
+      if (mounted) {
+        setState(() => _uploadError = e.toString().replaceAll('Exception: ', ''));
+      }
     } finally {
-      if (_uploadCoordinator.isActiveForBlock(block.id) &&
-          !_uploadCoordinator.hasError) {
-        _uploadCoordinator.clear();
+      if (mounted) {
+        setState(() {
+          _uploadingBlockId = null;
+        });
       }
     }
   }
 
-  Future<void> _replaceFile(IdeaBoardBlock block, IdeaBoardFile target) async {
+  Future<void> _deleteFile(IdeaBoardBlock block, IdeaBoardFile file) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete File'),
+        content: Text('Are you sure you want to delete ${file.fileName}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text('Delete', style: TextStyle(color: AppColors.kDanger))),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
     try {
-      final files = await _pickFiles(allowMultiple: false);
-      if (files.isEmpty) return;
+      final publicId = extractPublicId(file.fileUrl);
+      if (publicId.isNotEmpty) {
+        await AttachmentService.instance.deleteFile(publicId: publicId);
+      }
 
-      final uploaded = await AttachmentService.instance.uploadFiles(
-        storagePathPrefix: 'project_files/${widget.projectId}/${block.id}',
-        context: {
-          'type': 'ideaboard',
-          'projectId': widget.projectId,
-          'levelId': widget.levelId,
-          'blockId': block.id,
-        },
-        files: [files.first],
-        onProgress: null,
-      );
-
-      final attachment = uploaded.first;
-
-      final updatedFiles = block.files.map<Map<String, dynamic>>((item) {
-        if (item.id != target.id) {
-          return item.toMap();
-        }
-        return attachment.toMap();
-      }).toList();
+      final updatedFiles = block.files
+          .where((f) => f.id != file.id)
+          .map((f) => f.toMap())
+          .toList();
 
       await ProjectService.instance.updateIdeaBoardBlock(
         projectId: widget.projectId,
         blockId: block.id,
         files: updatedFiles,
       );
-
-      await FileService.instance.deleteIdeaBoardAttachment(target.storagePath);
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete: $e')));
     }
-  }
-
-  bool _isImageFile(IdeaBoardFile file) {
-    return _mimeOrExtension(file).startsWith('image/');
-  }
-
-  bool _isPdfFile(IdeaBoardFile file) {
-    final mimeOrExt = _mimeOrExtension(file);
-    return mimeOrExt == 'application/pdf' || _fileExtension(file) == '.pdf';
-  }
-
-  bool _isSvgFile(IdeaBoardFile file) {
-    final mimeOrExt = _mimeOrExtension(file);
-    return mimeOrExt == 'image/svg+xml' || _fileExtension(file) == '.svg';
-  }
-
-  bool _isOfficeFile(IdeaBoardFile file) {
-    final mimeOrExt = _mimeOrExtension(file);
-    final extension = _fileExtension(file);
-    return mimeOrExt.contains('officedocument') ||
-        mimeOrExt == 'application/msword' ||
-        mimeOrExt == 'application/vnd.ms-excel' ||
-        mimeOrExt == 'application/vnd.ms-powerpoint' ||
-        extension == '.doc' ||
-        extension == '.docx' ||
-        extension == '.xls' ||
-        extension == '.xlsx' ||
-        extension == '.ppt' ||
-        extension == '.pptx';
-  }
-
-  String _mimeOrExtension(IdeaBoardFile file) {
-    final mime = file.fileType.trim().toLowerCase();
-    if (mime.isNotEmpty) {
-      return mime;
-    }
-    final extension = _fileExtension(file);
-    if (extension == '.pdf') return 'application/pdf';
-    if (extension == '.jpg' || extension == '.jpeg') return 'image/jpeg';
-    if (extension == '.png') return 'image/png';
-    if (extension == '.gif') return 'image/gif';
-    if (extension == '.webp') return 'image/webp';
-    if (extension == '.svg') return 'image/svg+xml';
-    if (extension == '.txt') return 'text/plain';
-    if (extension == '.csv') return 'text/csv';
-    if (extension == '.zip') return 'application/zip';
-    if (extension == '.doc') return 'application/msword';
-    if (extension == '.docx') return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-    if (extension == '.xls') return 'application/vnd.ms-excel';
-    if (extension == '.xlsx') return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-    if (extension == '.ppt') return 'application/vnd.ms-powerpoint';
-    if (extension == '.pptx') return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-    return extension;
-  }
-
-  bool _isCloudinaryUrl(String url) {
-    return url.trim().startsWith('https://res.cloudinary.com');
-  }
-
-  String _cloudinaryDownloadUrl(String url) {
-    final trimmed = url.trim();
-    if (trimmed.isEmpty) {
-      return '';
-    }
-    return trimmed.contains('?') ? '$trimmed&fl_attachment' : '$trimmed?fl_attachment';
-  }
-
-  String _fileExtension(IdeaBoardFile file) {
-    final source = file.fileName.trim().isNotEmpty
-        ? file.fileName.trim()
-        : file.fileUrl.trim();
-    final uri = Uri.tryParse(source);
-    final path = uri?.pathSegments.isNotEmpty == true
-        ? uri!.pathSegments.last
-        : source;
-    final dotIndex = path.lastIndexOf('.');
-    if (dotIndex == -1) {
-      return '';
-    }
-    return path.substring(dotIndex).toLowerCase();
-  }
-
-  String _docsViewerUrl(String url) {
-    return 'https://docs.google.com/viewer?url=${Uri.encodeComponent(url)}';
-  }
-
-  Future<void> _showFileMessage(String message) async {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  }
-
-  Future<void> _showImagePreview(IdeaBoardFile file) async {
-    final url = file.fileUrl.trim();
-    if (!_isCloudinaryUrl(url)) {
-      await _showFileMessage('File unavailable. Please re-upload.');
-      return;
-    }
-
-    if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        return Dialog(
-          insetPadding: const EdgeInsets.all(16),
-          backgroundColor: Colors.black,
-          child: Stack(
-            children: [
-              SizedBox(
-                width: double.infinity,
-                height: double.infinity,
-                  child: InteractiveViewer(
-                    minScale: 0.5,
-                    maxScale: 4.0,
-                    child: CachedNetworkImage(
-                      imageUrl: url,
-                      fit: BoxFit.contain,
-                      errorWidget: (_, __, ___) => const Center(
-                        child: Text(
-                          'Unable to preview this file.',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                    ),
-                  ),
-              ),
-              Positioned(
-                top: 12,
-                right: 12,
-                child: IconButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  icon: const Icon(Icons.close, color: Colors.white),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
   }
 
   Future<void> _previewFile(IdeaBoardFile file) async {
-    final downloadUrl = file.fileUrl.trim();
-    if (!_isCloudinaryUrl(downloadUrl)) {
-      await _showFileMessage('File unavailable. Please re-upload.');
-      return;
-    }
-
-    if (_isImageFile(file)) {
-      await _showImagePreview(file);
-      return;
-    }
-
-    await launchUrl(
-      Uri.parse(downloadUrl),
-      mode: LaunchMode.externalApplication,
-    );
+    final url = file.fileUrl.trim();
+    if (!_isCloudinaryUrl(url)) return;
+    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
   }
 
   Future<void> _downloadFile(IdeaBoardFile file) async {
-    final downloadUrl = file.fileUrl.trim();
-    if (!_isCloudinaryUrl(downloadUrl)) {
-      await _showFileMessage('File unavailable. Please re-upload.');
-      return;
-    }
-
-    await FileDeliveryService.instance.downloadFromUrl(
-      url: _cloudinaryDownloadUrl(downloadUrl),
-      fileName: file.fileName.isNotEmpty ? file.fileName : 'download',
-    );
-  }
-
-  Future<void> _moveBlock(IdeaBoardBlock block, bool moveUp) async {
-    try {
-      await ProjectService.instance.moveIdeaBoardBlock(
-        projectId: widget.projectId,
-        blockId: block.id,
-        moveUp: moveUp,
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
-    }
-  }
-
-  Future<void> _removeFile(IdeaBoardBlock block, IdeaBoardFile file) async {
-    final updated = block.files
-        .where((item) => item.id != file.id)
-        .map((item) => item.toMap())
-        .toList();
-
-    await FileService.instance.deleteIdeaBoardAttachment(file.storagePath);
-
-    await ProjectService.instance.updateIdeaBoardBlock(
-      projectId: widget.projectId,
-      blockId: block.id,
-      files: updated,
-    );
+    final url = file.fileUrl.trim();
+    if (!_isCloudinaryUrl(url)) return;
+    await launchUrl(Uri.parse('$url?fl_attachment'), mode: LaunchMode.externalApplication);
   }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<Project?>(
-      stream: ProjectService.instance.watchProject(widget.projectId),
+      stream: _projectStream,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        if (snapshot.hasError) {
-          return Scaffold(
-            appBar: const SimpleAppBar(title: 'Idea Board'),
-            body: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  'You do not have access to this document or it could not be loaded.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey[700]),
-                ),
-              ),
-            ),
-          );
+        if (snapshot.connectionState == ConnectionState.waiting && snapshot.data == null) {
+          return const Scaffold(backgroundColor: AppColors.kBgDeep, body: Center(child: CircularProgressIndicator()));
         }
 
         final project = snapshot.data;
-        if (project == null) {
-          return const Scaffold(
-            body: Center(child: Text('Project not found')),
-          );
-        }
+        if (project == null) return const Scaffold(backgroundColor: AppColors.kBgDeep, body: Center(child: Text('Project not found', style: TextStyle(color: Colors.white))));
 
-        final orderedLevels = [...project.levels]
-          ..sort((a, b) => a.order.compareTo(b.order));
-
-        if (orderedLevels.isEmpty) {
-          return Scaffold(
-            appBar: SimpleAppBar(title: project.title),
-            body: const Center(
-              child: Text('This project does not have any levels yet.'),
-            ),
-          );
-        }
-
-        ProjectLevel? level;
-        try {
-          level = orderedLevels.firstWhere((item) => item.id == widget.levelId);
-        } catch (_) {
-          level = null;
-        }
-
-        if (level == null) {
-          return Scaffold(
-            appBar: SimpleAppBar(title: project.title),
-            body: const Center(
-              child: Text('Level not found'),
-            ),
-          );
-        }
-
-        final authUser = FirebaseAuth.instance.currentUser;
-        final isCollaborator =
-            authUser != null && project.isCollaborator(authUser.uid);
+        final isCollaborator = project.isCollaborator(FirebaseAuth.instance.currentUser?.uid ?? '');
+        final levelTitle = widget.levelId;
 
         return Scaffold(
-          appBar: SimpleAppBar(title: level.title),
+          backgroundColor: AppColors.kBgDeep,
+          appBar: AppBar(
+            backgroundColor: AppColors.kBgDeep,
+            elevation: 0,
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back_ios_new, color: AppColors.kTextPrimary, size: 20.sp),
+              onPressed: () => Navigator.pop(context),
+            ),
+            title: Text(levelTitle, style: TextStyle(color: AppColors.kTextPrimary, fontSize: 18.sp, fontWeight: FontWeight.w600)),
+          ),
           body: Column(
             children: [
               if (!isCollaborator)
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  color: const Color(0xFFE0F2FE),
-                  child: const Text(
-                    'View only mode: only collaborators can edit this idea board.',
-                    style: TextStyle(
-                      color: Color(0xFF075985),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  padding: EdgeInsets.all(12.w),
+                  color: AppColors.kAccentBlue.withValues(alpha: 0.1),
+                  child: Text('View only mode', style: TextStyle(color: AppColors.kAccentLight, fontWeight: FontWeight.w600, fontSize: 13.sp)),
                 ),
               Expanded(
-                child: StreamBuilder<_IdeaBoardUploadState?>(
-                  stream: _uploadCoordinator.stream,
-                  initialData: _uploadCoordinator.currentState,
-                  builder: (context, uploadSnapshot) {
-                    final uploadState = uploadSnapshot.data;
-                    return StreamBuilder<List<IdeaBoardBlock>>(
-                      stream: ProjectService.instance.watchIdeaBoardBlocks(
-                        projectId: widget.projectId,
-                        levelId: widget.levelId,
+                child: StreamBuilder<List<IdeaBoardBlock>>(
+                  stream: _blocksStream,
+                  builder: (context, blockSnap) {
+                    if (blockSnap.connectionState == ConnectionState.waiting && blockSnap.data == null) {
+                       return const Center(child: CircularProgressIndicator());
+                    }
+                    final blocks = blockSnap.data ?? [];
+                    return ListView.separated(
+                      padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 100.h),
+                      itemCount: blocks.length,
+                      separatorBuilder: (_, __) => SizedBox(height: 16.h),
+                      itemBuilder: (c, i) => _IdeaBlockCard(
+                        block: blocks[i],
+                        canEdit: isCollaborator,
+                        uploadingBlockId: _uploadingBlockId,
+                        uploadProgress: _uploadProgress,
+                        uploadError: _uploadError,
+                        onDelete: () => _deleteBlock(blocks[i].id),
+                        onSaveContent: (val) => _saveContent(blocks[i].id, val),
+                        onAttachFiles: () => _attachFiles(blocks[i]),
+                        onPreviewFile: _previewFile,
+                        onDownloadFile: _downloadFile,
+                        onDeleteFile: (file) => _deleteFile(blocks[i], file),
                       ),
-                      builder: (context, blockSnapshot) {
-                        if (blockSnapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return const Center(
-                              child: CircularProgressIndicator());
-                        }
-
-                        final blocks =
-                            blockSnapshot.data ?? const <IdeaBoardBlock>[];
-
-                        return ListView(
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-                          children: [
-                            if (blocks.isEmpty)
-                              Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(16),
-                                  gradient: const LinearGradient(
-                                    colors: [
-                                      Color(0xFFEFF6FF),
-                                      Color(0xFFDBEAFE)
-                                    ],
-                                  ),
-                                ),
-                                child: const Text(
-                                  'No content yet. Add a title, paragraph, or file block to start collaborating.',
-                                  style: TextStyle(color: AppTheme.textPrimary),
-                                ),
-                              ),
-                            ...blocks.map(
-                              (block) => _IdeaBlockCard(
-                                block: block,
-                                canEdit: isCollaborator,
-                                uploadState:
-                                    uploadState?.blockId == block.id ? uploadState : null,
-                                onDelete: () => _deleteBlock(block.id),
-                                onSaveContent: (value) =>
-                                    _saveContent(block.id, value),
-                                onAttachFiles: () => _attachFiles(block),
-                                onReplaceFile: (file) => _replaceFile(block, file),
-                                onPreviewFile: (file) => _previewFile(file),
-                                onDownloadFile: (file) => _downloadFile(file),
-                                onRemoveFile: (file) => _removeFile(block, file),
-                                onMoveUp: () => _moveBlock(block, true),
-                                onMoveDown: () => _moveBlock(block, false),
-                              ),
-                            ),
-                          ],
-                        );
-                      },
                     );
                   },
                 ),
               ),
             ],
           ),
-          floatingActionButton: isCollaborator
-              ? _AddBlockFab(
-                  isBusy: _isMutating,
-                  onAddTitle: () => _addBlock('title'),
-                  onAddParagraph: () => _addBlock('paragraph'),
-                  onAddFileBlock: () => _addBlock('file'),
-                )
-              : null,
+          floatingActionButton: isCollaborator ? _AddBlockFab(onAdd: _addBlock) : null,
         );
       },
     );
@@ -588,87 +255,53 @@ class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
 }
 
 class _AddBlockFab extends StatelessWidget {
-  const _AddBlockFab({
-    required this.isBusy,
-    required this.onAddTitle,
-    required this.onAddParagraph,
-    required this.onAddFileBlock,
-  });
-
-  final bool isBusy;
-  final VoidCallback onAddTitle;
-  final VoidCallback onAddParagraph;
-  final VoidCallback onAddFileBlock;
+  final Function(String) onAdd;
+  const _AddBlockFab({required this.onAdd});
 
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<String>(
-      enabled: !isBusy,
-      onSelected: (value) {
-        if (value == 'title') onAddTitle();
-        if (value == 'paragraph') onAddParagraph();
-        if (value == 'file') onAddFileBlock();
-      },
-      itemBuilder: (context) => const [
-        PopupMenuItem(value: 'title', child: Text('+ Add Title Block')),
-        PopupMenuItem(value: 'paragraph', child: Text('+ Add Paragraph Block')),
-        PopupMenuItem(value: 'file', child: Text('+ Add Attachment Block')),
+      onSelected: onAdd,
+      itemBuilder: (context) => [
+        const PopupMenuItem(value: 'title', child: Text('Add Title')),
+        const PopupMenuItem(value: 'paragraph', child: Text('Add Paragraph')),
+        const PopupMenuItem(value: 'file', child: Text('Add File')),
       ],
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF0EA5E9), Color(0xFF2563EB)],
-          ),
-          borderRadius: BorderRadius.circular(999),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF2563EB).withOpacity(0.3),
-              blurRadius: 14,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Text(
-          isBusy ? 'Saving...' : '+ Add Block',
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+        padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
+        decoration: BoxDecoration(color: AppColors.kAccentBlue, borderRadius: BorderRadius.circular(999.r)),
+        child: Text('+ Add Block', style: TextStyle(color: AppColors.kWhite, fontWeight: FontWeight.w700, fontSize: 14.sp)),
       ),
     );
   }
 }
 
 class _IdeaBlockCard extends StatefulWidget {
-  const _IdeaBlockCard({
-    required this.block,
-    required this.canEdit,
-    required this.uploadState,
-    required this.onDelete,
-    required this.onSaveContent,
-    required this.onAttachFiles,
-    required this.onReplaceFile,
-    required this.onPreviewFile,
-    required this.onDownloadFile,
-    required this.onRemoveFile,
-    required this.onMoveUp,
-    required this.onMoveDown,
-  });
-
   final IdeaBoardBlock block;
   final bool canEdit;
-  final _IdeaBoardUploadState? uploadState;
   final VoidCallback onDelete;
   final ValueChanged<String> onSaveContent;
   final VoidCallback onAttachFiles;
-  final Future<void> Function(IdeaBoardFile file) onReplaceFile;
-  final Future<void> Function(IdeaBoardFile file) onPreviewFile;
-  final Future<void> Function(IdeaBoardFile file) onDownloadFile;
-  final Future<void> Function(IdeaBoardFile file) onRemoveFile;
-  final VoidCallback onMoveUp;
-  final VoidCallback onMoveDown;
+  final Function(IdeaBoardFile) onPreviewFile;
+  final Function(IdeaBoardFile) onDownloadFile;
+  final Function(IdeaBoardFile) onDeleteFile;
+  final String? uploadingBlockId;
+  final double uploadProgress;
+  final String? uploadError;
+
+  const _IdeaBlockCard({
+    required this.block,
+    required this.canEdit,
+    required this.onDelete,
+    required this.onSaveContent,
+    required this.onAttachFiles,
+    required this.onPreviewFile,
+    required this.onDownloadFile,
+    required this.onDeleteFile,
+    this.uploadingBlockId,
+    this.uploadProgress = 0,
+    this.uploadError,
+  });
 
   @override
   State<_IdeaBlockCard> createState() => _IdeaBlockCardState();
@@ -676,493 +309,196 @@ class _IdeaBlockCard extends StatefulWidget {
 
 class _IdeaBlockCardState extends State<_IdeaBlockCard> {
   late final TextEditingController _controller;
-  Timer? _saveTimer;
+  late final FocusNode _focusNode;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.block.content);
-    _controller.addListener(_scheduleSave);
-  }
-
-  @override
-  void didUpdateWidget(covariant _IdeaBlockCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.block.content != widget.block.content &&
-        _controller.text != widget.block.content) {
-      _controller.text = widget.block.content;
-    }
-  }
-
-  void _scheduleSave() {
-    if (!widget.canEdit) return;
-    _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(milliseconds: 700), () {
-      if (!mounted) return;
-      widget.onSaveContent(_controller.text);
-    });
+    _focusNode = FocusNode();
+    _focusNode.addListener(_onFocusChange);
   }
 
   @override
   void dispose() {
-    _saveTimer?.cancel();
-    _controller.removeListener(_scheduleSave);
+    _focusNode.removeListener(_onFocusChange);
+    _focusNode.dispose();
     _controller.dispose();
+    _timer?.cancel();
     super.dispose();
+  }
+
+  void _onFocusChange() {
+    if (!_focusNode.hasFocus) {
+      // Focus lost, save immediately
+      _timer?.cancel();
+      widget.onSaveContent(_controller.text);
+    }
+  }
+
+  @override
+  void didUpdateWidget(_IdeaBlockCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.block.content != _controller.text && !_focusNode.hasFocus) {
+      _controller.text = widget.block.content;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final isTitle = widget.block.type == 'title';
-    final isFile = widget.block.type == 'file';
-    final isUploadingThisBlock = widget.uploadState != null;
+    final isUploading = widget.uploadingBlockId == widget.block.id;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
+      padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: AppColors.kBgCard,
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(color: AppColors.kDivider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (widget.uploadState != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _UploadStatusCard(
-                state: widget.uploadState!,
-                onRetry: widget.uploadState?.retryAction,
-                onDismiss: _IdeaBoardDocumentScreenState._uploadCoordinator.clear,
-              ),
-            ),
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(999),
-                  color: const Color(0xFFF1F5F9),
-                ),
-                child: Text(
-                  widget.block.type.toUpperCase(),
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF334155),
-                  ),
-                ),
+                padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+                decoration: BoxDecoration(color: AppColors.kBgElevated, borderRadius: BorderRadius.circular(4.r)),
+                child: Text(widget.block.type.toUpperCase(), style: TextStyle(color: AppColors.kTextSecond, fontSize: 10.sp, fontWeight: FontWeight.w600)),
               ),
               const Spacer(),
-              if (widget.canEdit) ...[
-                IconButton(
-                  onPressed: widget.onMoveUp,
-                  icon: const Icon(Icons.keyboard_arrow_up, size: 18),
-                  tooltip: 'Move Up',
-                ),
-                IconButton(
-                  onPressed: widget.onMoveDown,
-                  icon: const Icon(Icons.keyboard_arrow_down, size: 18),
-                  tooltip: 'Move Down',
-                ),
-                IconButton(
-                  onPressed: widget.onDelete,
-                  icon: const Icon(Icons.delete_outline, size: 18),
-                ),
-              ],
+              if (widget.canEdit) IconButton(icon: Icon(Icons.delete_outline, color: AppColors.kDanger, size: 20.sp), onPressed: widget.onDelete),
             ],
           ),
-          if (!isFile)
+          if (widget.block.type != 'file')
             TextField(
               controller: _controller,
-              readOnly: !widget.canEdit,
-              minLines: isTitle ? 1 : 3,
+              focusNode: _focusNode,
+              onChanged: (val) {
+                _timer?.cancel();
+                _timer = Timer(const Duration(milliseconds: 1500), () => widget.onSaveContent(val));
+              },
+              style: TextStyle(color: AppColors.kTextPrimary, fontSize: isTitle ? 20.sp : 14.sp, fontWeight: isTitle ? FontWeight.w600 : FontWeight.w400),
               maxLines: null,
-              style: TextStyle(
-                fontSize: isTitle ? 24 : 15,
-                fontWeight: isTitle ? FontWeight.w700 : FontWeight.w400,
-              ),
-              decoration: InputDecoration(
-                border: InputBorder.none,
-                hintText: isTitle ? 'Section title' : 'Write content...',
-              ),
+              decoration: InputDecoration(border: InputBorder.none, hintText: isTitle ? 'Section Title' : 'Start typing...'),
             ),
           if (widget.block.files.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            ...widget.block.files.map(
-              (file) => Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: Row(
-                  children: [
-                    if (_isCloudinaryUrl(file.fileUrl.trim()) && _isImageFile(file))
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () => widget.onPreviewFile(file),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                              child: AspectRatio(
-                                aspectRatio: 16 / 10,
-                                child: CachedNetworkImage(
-                                  imageUrl: file.fileUrl.trim(),
-                                  fit: BoxFit.cover,
-                                  errorWidget: (_, __, ___) => Container(
-                                    color: Colors.black12,
-                                    child: const Center(
-                                      child: Icon(Icons.image_not_supported_outlined),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                          ),
-                        ),
-                      )
-                    else
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFEFF6FF),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: const Icon(Icons.attach_file, size: 16, color: Color(0xFF2563EB)),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        file.fileName,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      if (!_isCloudinaryUrl(file.fileUrl.trim()))
-                                        const Text(
-                                          'File unavailable. Please re-upload.',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            color: Color(0xFFB91C1C),
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        )
-                                      else
-                                        Text(
-                                          _formatFileSize(file.fileSize),
-                                          style: const TextStyle(fontSize: 10, color: AppColors.kTextSecond),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                TextButton.icon(
-                                  onPressed: _isCloudinaryUrl(file.fileUrl.trim())
-                                      ? () => widget.onPreviewFile(file)
-                                      : null,
-                                  icon: const Icon(Icons.open_in_new, size: 15),
-                                  label: const Text('Open'),
-                                  style: TextButton.styleFrom(foregroundColor: AppColors.kAccentLight),
-                                ),
-                                TextButton.icon(
-                                  onPressed: _isCloudinaryUrl(file.fileUrl.trim())
-                                      ? () => widget.onDownloadFile(file)
-                                      : null,
-                                  icon: const Icon(Icons.download_outlined, size: 15),
-                                  label: const Text('Download'),
-                                  style: TextButton.styleFrom(foregroundColor: AppColors.kAccentLight),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    if (widget.canEdit) ...[
-                      IconButton(
-                        onPressed: () => widget.onReplaceFile(file),
-                        icon: const Icon(Icons.swap_horiz, size: 16),
-                        tooltip: 'Replace',
-                      ),
-                      IconButton(
-                        onPressed: () => widget.onRemoveFile(file),
-                        icon: const Icon(Icons.close, size: 16),
-                        tooltip: 'Remove',
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
+            SizedBox(height: 12.h),
+            ...widget.block.files.map((f) => FileAttachmentWidget(
+                  file: f,
+                  canDelete: widget.canEdit,
+                  onPreview: () => widget.onPreviewFile(f),
+                  onDownload: () => widget.onDownloadFile(f),
+                  onDelete: () => widget.onDeleteFile(f),
+                )),
           ],
-          if (widget.canEdit)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed:
-                    widget.canEdit && !isUploadingThisBlock ? widget.onAttachFiles : null,
-                icon: const Icon(Icons.upload_file),
-                label: const Text('Attach File'),
-                style: TextButton.styleFrom(foregroundColor: AppColors.kAccentLight),
-              ),
+          if (isUploading) ...[
+            SizedBox(height: 12.h),
+            LinearProgressIndicator(value: widget.uploadProgress, backgroundColor: AppColors.kBgElevated, color: AppColors.kAccentBlue),
+            SizedBox(height: 4.h),
+            Text('Uploading...', style: TextStyle(color: AppColors.kTextSecond, fontSize: 11.sp)),
+          ],
+          if (widget.uploadError != null && isUploading) ...[
+            SizedBox(height: 8.h),
+            Text(widget.uploadError!, style: TextStyle(color: AppColors.kDanger, fontSize: 12.sp)),
+          ],
+          if (widget.canEdit && widget.block.type != 'title')
+            TextButton.icon(
+              onPressed: widget.onAttachFiles,
+              icon: Icon(Icons.add_circle_outline, color: AppColors.kAccentLight, size: 18.sp),
+              label: Text('Attach File', style: TextStyle(color: AppColors.kAccentLight, fontSize: 13.sp)),
             ),
         ],
       ),
     );
   }
-
-  String _formatFileSize(int size) {
-    if (size <= 0) return 'Unknown size';
-    const units = ['B', 'KB', 'MB', 'GB'];
-    var value = size.toDouble();
-    var unitIndex = 0;
-    while (value >= 1024 && unitIndex < units.length - 1) {
-      value /= 1024;
-      unitIndex += 1;
-    }
-    return '${value.toStringAsFixed(unitIndex == 0 ? 0 : 1)} ${units[unitIndex]}';
-  }
 }
 
-class _UploadStatusCard extends StatelessWidget {
-  const _UploadStatusCard({
-    required this.state,
-    required this.onRetry,
-    required this.onDismiss,
-  });
+class FileAttachmentWidget extends StatelessWidget {
+  final IdeaBoardFile file;
+  final bool canDelete;
+  final VoidCallback onPreview;
+  final VoidCallback onDownload;
+  final VoidCallback onDelete;
 
-  final _IdeaBoardUploadState state;
-  final Future<void> Function()? onRetry;
-  final VoidCallback onDismiss;
+  const FileAttachmentWidget({super.key, required this.file, required this.canDelete, required this.onPreview, required this.onDownload, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
-    if (state.isFailed) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: const Color(0xFF0F172A),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFF1E293B)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.pause_circle_outline,
-                color: Colors.white, size: 18),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                state.message,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            TextButton(
-              onPressed: onRetry,
-              style: TextButton.styleFrom(foregroundColor: Colors.white),
-              child: const Text('Retry'),
-            ),
-            TextButton(
-              onPressed: onDismiss,
-              style: TextButton.styleFrom(foregroundColor: Colors.white),
-              child: const Text('Dismiss'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final isSaving = state.progress >= 1.0;
-    final statusText = isSaving
-        ? 'Saving ${state.fileName}...'
-        : state.progress < 0.3
-            ? 'Preparing ${state.fileName}...'
-            : 'Uploading ${state.fileName}...';
-
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      margin: EdgeInsets.only(bottom: 12.h),
+      padding: EdgeInsets.all(12.w),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.border),
+        color: AppColors.kBgElevated,
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(color: AppColors.kDivider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              Icon(Icons.insert_drive_file, color: AppColors.kAccentLight, size: 24.sp),
+              SizedBox(width: 12.w),
               Expanded(
                 child: Text(
-                  statusText,
+                  file.fileName,
+                  style: TextStyle(color: AppColors.kTextPrimary, fontSize: 14.sp, fontWeight: FontWeight.w600),
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF0F172A),
-                  ),
                 ),
               ),
-              const SizedBox(width: 12),
-              if (!isSaving)
-                Text(
-                  '${(state.progress * 100).clamp(0, 99).toStringAsFixed(0)}%',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF0F172A),
-                  ),
-                )
-              else
-                const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
             ],
           ),
-          const SizedBox(height: 8),
-          if (!isSaving)
-            TweenAnimationBuilder<double>(
-              tween: Tween<double>(end: state.progress.clamp(0, 0.99)),
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              builder: (context, value, _) {
-                return ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: LinearProgressIndicator(
-                    value: value,
-                    minHeight: 8,
-                    backgroundColor: const Color(0xFFE2E8F0),
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      Color(0xFF2563EB),
-                    ),
-                  ),
-                );
-              },
-            ),
+          SizedBox(height: 12.h),
+          Row(
+            children: [
+              _ActionButton(icon: Icons.visibility_outlined, label: 'View', onTap: onPreview),
+              SizedBox(width: 8.w),
+              _ActionButton(icon: Icons.download_outlined, label: 'Download', onTap: onDownload),
+              if (canDelete) ...[
+                const Spacer(),
+                _ActionButton(icon: Icons.delete_outline, label: 'Delete', color: AppColors.kDanger, onTap: onDelete),
+              ],
+            ],
+          ),
         ],
       ),
     );
   }
 }
 
-class _IdeaBoardUploadState {
-  final String blockId;
-  final String fileName;
-  final double progress;
-  final String message;
-  final Future<void> Function()? retryAction;
+class _ActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color? color;
 
-  const _IdeaBoardUploadState({
-    required this.blockId,
-    required this.fileName,
-    required this.progress,
-    required this.message,
-    this.retryAction,
-  });
+  const _ActionButton({required this.icon, required this.label, required this.onTap, this.color});
 
-  bool get isFailed => retryAction != null && message.isNotEmpty;
+  @override
+  Widget build(BuildContext context) {
+    final finalColor = color ?? AppColors.kAccentLight;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8.r),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 6.h),
+        decoration: BoxDecoration(
+          color: finalColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8.r),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16.sp, color: finalColor),
+            SizedBox(width: 4.w),
+            Text(label, style: TextStyle(color: finalColor, fontSize: 12.sp, fontWeight: FontWeight.w500)),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _IdeaBoardUploadCoordinator {
-  final StreamController<_IdeaBoardUploadState?> _controller =
-      StreamController<_IdeaBoardUploadState?>.broadcast();
-  _IdeaBoardUploadState? _currentState;
-
-  Stream<_IdeaBoardUploadState?> get stream => _controller.stream;
-  _IdeaBoardUploadState? get currentState => _currentState;
-  bool get hasError => _currentState?.isFailed ?? false;
-
-  void begin({
-    required String blockId,
-    required String fileName,
-    required Future<void> Function() retryAction,
-  }) {
-    _currentState = _IdeaBoardUploadState(
-      blockId: blockId,
-      fileName: fileName,
-      progress: 0,
-      message: '',
-      retryAction: retryAction,
-    );
-    _emit();
-  }
-
-  void updateProgress({
-    required String fileName,
-    required double progress,
-  }) {
-    final current = _currentState;
-    if (current == null) {
-      return;
-    }
-    _currentState = _IdeaBoardUploadState(
-      blockId: current.blockId,
-      fileName: fileName,
-      progress: progress.clamp(0, 1),
-      message: current.message,
-      retryAction: current.retryAction,
-    );
-    _emit();
-  }
-
-  void fail({
-    required String blockId,
-    required String message,
-    required Future<void> Function() retryAction,
-  }) {
-    final current = _currentState;
-    _currentState = _IdeaBoardUploadState(
-      blockId: blockId,
-      fileName: current?.fileName ?? 'Attachment',
-      progress: current?.progress ?? 0,
-      message: message,
-      retryAction: retryAction,
-    );
-    _emit();
-  }
-
-  bool isActiveForBlock(String blockId) {
-    return _currentState?.blockId == blockId;
-  }
-
-  void clear() {
-    _currentState = null;
-    _emit();
-  }
-
-  void _emit() {
-    if (!_controller.isClosed) {
-      _controller.add(_currentState);
-    }
-  }
-}

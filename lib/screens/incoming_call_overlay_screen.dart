@@ -1,14 +1,13 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
-
-import '../services/call_ringtone_service.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import '../theme/app_colors.dart';
 
 class IncomingCallOverlayScreen extends StatefulWidget {
   final String callerName;
   final String projectTitle;
-  final FutureOr<void> Function() onAccept;
-  final FutureOr<void> Function() onDecline;
+  final VoidCallback onAccept;
+  final VoidCallback onDecline;
 
   const IncomingCallOverlayScreen({
     super.key,
@@ -23,123 +22,106 @@ class IncomingCallOverlayScreen extends StatefulWidget {
 }
 
 class _IncomingCallOverlayScreenState extends State<IncomingCallOverlayScreen> {
-  final CallRingtoneService _ringtoneService = CallRingtoneService();
-  bool _ending = false;
+  Timer? _dismissTimer;
 
   @override
   void initState() {
     super.initState();
-    _ringtoneService.start();
-  }
-
-  Future<void> _accept() async {
-    if (_ending) return;
-    _ending = true;
-    await _ringtoneService.stop();
-    if (!mounted) return;
-    widget.onAccept();
-  }
-
-  Future<void> _decline() async {
-    if (_ending) return;
-    _ending = true;
-    await _ringtoneService.stop();
-    if (!mounted) return;
-    widget.onDecline();
+    _dismissTimer = Timer(const Duration(seconds: 45), () {
+      widget.onDecline();
+    });
   }
 
   @override
   void dispose() {
-    _ringtoneService.stop();
+    _dismissTimer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF091017),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF0D1721), Color(0xFF091017)],
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Container(
-                padding: const EdgeInsets.all(28),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF121C27),
-                  borderRadius: BorderRadius.circular(28),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      height: 92,
-                      width: 92,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: const Color(0xFF203142),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-                      ),
-                      child: const Icon(Icons.call, color: Colors.white, size: 42),
-                    ),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'Incoming call',
-                      style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      widget.callerName,
-                      style: TextStyle(color: Colors.white.withValues(alpha: 0.92), fontSize: 20, fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      widget.projectTitle,
-                      style: TextStyle(color: Colors.white.withValues(alpha: 0.62)),
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: _decline,
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Color(0xFFE35D6A)),
-                              foregroundColor: const Color(0xFFE35D6A),
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                            child: const Text('Decline'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: _accept,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF67D47D),
-                              foregroundColor: Colors.black,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                            child: const Text('Accept'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+    return Material(
+      color: Colors.black.withOpacity(0.85),
+      child: Container(
+        width: double.infinity,
+        height: double.infinity,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircleAvatar(
+              radius: 60.r,
+              backgroundColor: AppColors.kAccentBlue,
+              child: Text(
+                widget.callerName.isNotEmpty ? widget.callerName[0].toUpperCase() : '?',
+                style: TextStyle(color: Colors.white, fontSize: 40.sp, fontWeight: FontWeight.bold),
               ),
             ),
-          ),
+            SizedBox(height: 24.h),
+            Text(
+              '${widget.callerName} is calling',
+              style: TextStyle(color: Colors.white, fontSize: 24.sp, fontWeight: FontWeight.w600),
+            ),
+            SizedBox(height: 8.h),
+            Text(
+              'From ${widget.projectTitle}',
+              style: TextStyle(color: AppColors.kTextSecond, fontSize: 16.sp),
+            ),
+            SizedBox(height: 40.h),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _CallActionBtn(
+                  icon: Icons.phone_disabled,
+                  color: Colors.red,
+                  label: 'Decline',
+                  onTap: widget.onDecline,
+                ),
+                SizedBox(width: 40.w),
+                _CallActionBtn(
+                  icon: Icons.phone,
+                  color: Colors.green,
+                  label: 'Join',
+                  onTap: widget.onAccept,
+                ),
+              ],
+            ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+class _CallActionBtn extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String label;
+  final VoidCallback onTap;
+
+  const _CallActionBtn({required this.icon, required this.color, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: 70.w,
+            height: 70.w,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(color: color.withOpacity(0.3), blurRadius: 15, spreadRadius: 2),
+              ],
+            ),
+            child: Icon(icon, color: Colors.white, size: 32.sp),
+          ),
+        ),
+        SizedBox(height: 12.h),
+        Text(label, style: TextStyle(color: Colors.white70, fontSize: 13.sp)),
+      ],
     );
   }
 }

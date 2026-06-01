@@ -84,16 +84,16 @@ class _ProjectSyncAppState extends State<ProjectSyncApp> {
       valueListenable: _settings.themeMode,
       builder: (context, mode, _) {
         return ScreenUtilInit(
-          designSize: const Size(375, 812),
+          designSize: const Size(390, 844),
           minTextAdapt: true,
           builder: (context, child) {
             return MaterialApp(
               title: 'TeamSync',
               debugShowCheckedModeBanner: false,
               navigatorKey: appNavigatorKey,
-              theme: AppTheme.lightTheme,
+              theme: AppTheme.darkTheme,
               darkTheme: AppTheme.darkTheme,
-              themeMode: mode,
+              themeMode: ThemeMode.dark,
               initialRoute: _initialRoute(),
               onGenerateRoute: generateRoute,
             );

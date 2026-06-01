@@ -173,6 +173,7 @@ class NotificationService {
       () => _firestore
           .collection('notifications')
           .where('userId', isEqualTo: currentUserId)
+          .limit(30)
           .snapshots()
           .map((snapshot) {
         final items = <ProjectNotificationItem>[];
@@ -216,6 +217,8 @@ class NotificationService {
       () => _firestore
           .collection('notifications')
           .where('userId', isEqualTo: currentUserId)
+          .where('read', isEqualTo: false)
+          .limit(100)
           .snapshots()
           .map((snapshot) {
         var unreadCount = 0;
@@ -286,6 +289,24 @@ class NotificationService {
     bool dedupe = false,
     String? documentId,
   }) async {
+    if (dedupe && type == 'chat_message') {
+      final channelId = data?['channelId']?.toString() ?? '';
+      if (channelId.isNotEmpty) {
+        final existing = await _firestore
+            .collection('notifications')
+            .where('userId', isEqualTo: userId)
+            .where('type', isEqualTo: 'chat_message')
+            .where('data.channelId', isEqualTo: channelId)
+            .where('read', isEqualTo: false)
+            .limit(1)
+            .get();
+
+        if (existing.docs.isNotEmpty) {
+          return; // Already have unread notification for this channel
+        }
+      }
+    }
+
     final notificationRef = documentId == null
         ? _firestore.collection('notifications').doc()
         : _firestore.collection('notifications').doc(documentId);

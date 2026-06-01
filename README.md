@@ -31,6 +31,16 @@ Firestore security rules are provided in `firestore.rules` following the channel
 A unit test harness using the Firestore emulator is included under `tools/` to validate common
 access patterns (collaborator vs outsider, private channel isolation, unread/member doc access).
 
+## Firestore Quota Warning
+
+**Firestore Spark (free) plan limits:**
+- 50,000 reads/day
+- 20,000 writes/day
+- 20,000 deletes/day
+- Quota resets at midnight Pacific Time (UTC-8)
+- If quota is hit: wait until midnight PST for it to reset
+- During presentation: avoid rapid repeated block creation/deletion tests
+
 To run the rules tests locally:
 
 1. Install Firebase CLI (for emulator) if not installed:

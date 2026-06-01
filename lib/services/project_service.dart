@@ -159,18 +159,21 @@ class ProjectService {
         final createdQuery = _firestore
             .collection('projects')
             .where('createdBy', isEqualTo: authUser.uid)
+            .limit(50)
             .snapshots();
 
         // Query 2: projects where user is admin
         final adminQuery = _firestore
             .collection('projects')
             .where('collaborators.${authUser.uid}', isEqualTo: 'admin')
+            .limit(50)
             .snapshots();
 
         // Query 3: projects where user is collaborator
         final collaboratorQuery = _firestore
             .collection('projects')
             .where('collaborators.${authUser.uid}', isEqualTo: 'collaborator')
+            .limit(50)
             .snapshots();
 
         subCreated = createdQuery.listen((snap) {
@@ -220,6 +223,7 @@ class ProjectService {
       () => _firestore
           .collection('projects')
           .where('visibility', isEqualTo: 'public')
+          .limit(50)
           .snapshots()
           .map((snapshot) {
         return snapshot.docs.map((doc) => _parseProject(doc)).toList();
@@ -256,6 +260,7 @@ class ProjectService {
     required List<String> requiredSkills,
     required String contactEmail,
     List<Map<String, dynamic>>? levels,
+    List<String>? ideaBoardSections,
   }) async {
     final authUser = _auth.currentUser;
     if (authUser == null) {
@@ -313,17 +318,27 @@ class ProjectService {
     final projectData = {
       'id': projectRef.id,
       'title': title.trim(),
+      'name': title.trim(), // Alias for name
       'description': description.trim(),
       'createdBy': authUser.uid,
+      'admin_uid': authUser.uid,
+      'admin_name': authUser.displayName ?? 'Unknown',
+      'admin_email': authUser.email ?? '',
       'collaborators': collaborators,
       'visibility': visibility,
       'isOpenForRequests': finalIsOpenForRequests,
+      'is_open_to_requests': finalIsOpenForRequests,
       'requiredCollaborators': requiredCollaborators,
+      'collaborators_required': requiredCollaborators,
       'requiredSkills': requiredSkills,
+      'skills': requiredSkills,
       'contactEmail': contactEmail.trim(),
-      'createdAt': Timestamp.now(),
-      'lastUpdated': Timestamp.now(),
+      'createdAt': FieldValue.serverTimestamp(),
+      'created_at': FieldValue.serverTimestamp(),
+      'lastUpdated': FieldValue.serverTimestamp(),
+      'current_collaborator_count': collaborators.length - 1, // Exclude admin if we count them separately, but collaborators map includes admin as 'admin'
       'levels': levelEntries,
+      'idea_board_sections': ideaBoardSections ?? _defaultLevelTitles,
       'ideaBoardBlocks': <Map<String, dynamic>>[],
       'tasksCompleted': 0,
       'ideasAdded': 0,
@@ -337,6 +352,15 @@ class ProjectService {
 
       batch.set(projectRef, projectData);
 
+      // Add collaborators subcollection
+      collaborators.forEach((uid, role) {
+        batch.set(projectRef.collection('collaborators').doc(uid), {
+          'uid': uid,
+          'role': role,
+          'addedAt': FieldValue.serverTimestamp(),
+        });
+      });
+
       // Create default #general channel
       final generalChannelRef =
           projectRef.collection('channels').doc('general');
@@ -345,9 +369,9 @@ class ProjectService {
         'projectId': projectRef.id,
         'name': 'general',
         'createdBy': authUser.uid,
-        'members': <String>[],
+        'members': <String>[authUser.uid, ...collaborators.keys.where((k) => k != authUser.uid)],
         'isPrivate': false,
-        'createdAt': Timestamp.now(),
+        'createdAt': FieldValue.serverTimestamp(),
         'lastMessageAt': null,
         'messageCount': 0,
       };
@@ -555,7 +579,7 @@ class ProjectService {
 
     await _fanOutProjectNotification(
       projectId: projectId,
-      type: 'collaborator_added',
+      type: 'n5',
       title: 'Added to project',
       body: 'You were added to the project by the admin.',
       onlyUserIds: {userId},
@@ -747,6 +771,18 @@ class ProjectService {
       });
     });
 
+    final projectSnap = await projectRef.get();
+    final adminId = projectSnap.data()?['createdBy'] as String? ?? '';
+
+    await _fanOutProjectNotification(
+      projectId: projectId,
+      type: 'n3',
+      title: 'New join request',
+      body: 'A new user wants to join your project.',
+      onlyUserIds: {adminId},
+      data: {'projectId': projectId},
+    );
+
     return requestRef.id;
   }
 
@@ -872,6 +908,7 @@ class ProjectService {
       () => _firestore
           .collection('joinRequests')
           .where('projectId', isEqualTo: projectId)
+          .limit(50)
           .snapshots()
           .asyncMap((snapshot) async {
         final projectDoc =
@@ -895,6 +932,7 @@ class ProjectService {
           .where('projectId', isEqualTo: projectId)
           .where('status', isEqualTo: 'pending')
           .orderBy('createdAt', descending: true)
+          .limit(30)
           .snapshots()
           .map((snapshot) =>
               snapshot.docs.map((doc) => _parseJoinRequest(doc)).toList()),
@@ -913,6 +951,7 @@ class ProjectService {
       () => _firestore
           .collection('joinRequests')
           .where('requestedBy', isEqualTo: authUser.uid)
+          .limit(30)
           .snapshots()
           .map((snapshot) {
         final requests =
@@ -1046,7 +1085,7 @@ class ProjectService {
     try {
       await _fanOutProjectNotification(
         projectId: resolvedProjectId,
-        type: 'request_approved',
+        type: 'n4',
         title: 'Request approved',
         body:
             'Your request to join $projectNameForMessage was approved. You are now a collaborator.',
@@ -1140,13 +1179,14 @@ class ProjectService {
     required String projectId,
     required String levelId,
   }) {
+    final trimmedLevelId = levelId.trim();
     return watchProject(projectId).map((project) {
       if (project == null) {
         return <IdeaBoardBlock>[];
       }
 
       return project.ideaBoardBlocks
-          .where((block) => block.levelId == levelId)
+          .where((block) => block.levelId.trim() == trimmedLevelId)
           .toList()
         ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
     });
@@ -1163,6 +1203,7 @@ class ProjectService {
       throw Exception('User must be logged in');
     }
 
+    final trimmedLevelId = levelId.trim();
     final allowedTypes = {'title', 'paragraph', 'file'};
     if (!allowedTypes.contains(type)) {
       throw Exception('Invalid block type');
@@ -1186,7 +1227,7 @@ class ProjectService {
 
       current.add({
         'id': blockId,
-        'levelId': levelId,
+        'levelId': trimmedLevelId,
         'type': type,
         'content': content.trim(),
         'files': <Map<String, dynamic>>[],
@@ -1472,6 +1513,13 @@ class ProjectService {
           _parseTimestampString(data['lastUpdated']) ?? 'Recently';
       final createdAt = _parseDateTime(data['createdAt']) ?? DateTime.now();
 
+      // Safe idea board sections parsing
+      final sectionsData = data['idea_board_sections'];
+      List<String> ideaBoardSections = [];
+      if (sectionsData is List) {
+        ideaBoardSections = sectionsData.whereType<String>().toList();
+      }
+
       // Safe levels parsing
       final levelsData = data['levels'];
       List<ProjectLevel> levels = [];
@@ -1511,6 +1559,7 @@ class ProjectService {
         lastUpdated: lastUpdated,
         createdAt: createdAt,
         levels: levels,
+        ideaBoardSections: ideaBoardSections,
         ideaBoardBlocks: ideaBoardBlocks,
         stats: stats,
       );
@@ -1531,6 +1580,7 @@ class ProjectService {
         lastUpdated: 'Recently',
         createdAt: DateTime.now(),
         levels: [],
+        ideaBoardSections: [],
         ideaBoardBlocks: const [],
         stats: const ProjectStats(
           tasksCompleted: 0,
@@ -1889,14 +1939,13 @@ class ProjectService {
               .collection('projects')
               .doc(projectId)
               .collection('messages')
+              .where('createdAt', isGreaterThan: Timestamp.fromDate(lastReadAt))
+              .limit(50)
               .snapshots()
               .map((snapshot) {
             return snapshot.docs.where((doc) {
               final data = doc.data();
-              final createdAt = _parseDateTime(data['createdAt']) ??
-                  DateTime.fromMillisecondsSinceEpoch(0);
-              return createdAt.isAfter(lastReadAt) &&
-                  data['senderId'] != authUser.uid;
+              return data['senderId'] != authUser.uid;
             }).length;
           });
         }),
@@ -1994,6 +2043,9 @@ class ProjectService {
 
   /// Watch all channels in a project
   Stream<List<ProjectChannel>> watchProjectChannels(String projectId) {
+    final authUser = _auth.currentUser;
+    if (authUser == null) return Stream.value([]);
+
     return _retryingStream<List<ProjectChannel>>(
       'watchProjectChannels($projectId)',
       () => _firestore
@@ -2001,10 +2053,24 @@ class ProjectService {
           .doc(projectId)
           .collection('channels')
           .orderBy('createdAt', descending: false)
+          .limit(30)
           .snapshots()
-          .map((snapshot) {
+          .asyncMap((snapshot) async {
         try {
-          return snapshot.docs.map((doc) => _parseProjectChannel(doc)).toList();
+          final channels = snapshot.docs.map((doc) => _parseProjectChannel(doc)).toList();
+
+          // Filter channels: admin sees all, others see only where they are members
+          final projectDoc = await _firestore.collection('projects').doc(projectId).get();
+          final projectData = projectDoc.data();
+          if (projectData == null) return [];
+
+          final isAdmin = _isAdminRole(projectData, authUser.uid);
+
+          return channels.where((ch) {
+            if (isAdmin) return true;
+            if (ch.id == 'general') return true; // Everyone sees general
+            return ch.members.contains(authUser.uid);
+          }).toList();
         } catch (e) {
           print('❌ Error parsing channels: $e');
           return [];
@@ -2280,7 +2346,7 @@ class ProjectService {
   Stream<List<ProjectChatMessage>> watchChannelMessages(
     String projectId,
     String channelId, {
-    int limit = 30,
+    int limit = 50,
   }) {
     return _auth.authStateChanges().asyncExpand((authUser) {
       if (authUser == null) {
@@ -2300,11 +2366,10 @@ class ProjectService {
             .snapshots()
             .map((snapshot) {
           try {
-            return snapshot.docs
+            final messages = snapshot.docs
                 .map((doc) => _parseProjectChatMessage(doc))
-                .toList()
-                .reversed
                 .toList();
+            return messages.reversed.toList();
           } catch (e) {
             print('❌ Error parsing channel messages: $e');
             return [];
@@ -3014,6 +3079,7 @@ class ProjectService {
           .doc(projectId)
           .collection('callSessions')
           .where('active', isEqualTo: true)
+          .limit(1)
           .snapshots()
           .map((snapshot) {
         try {
@@ -3539,6 +3605,7 @@ class ProjectService {
           .doc(projectId)
           .collection('callSchedules')
           .orderBy('scheduledAt', descending: true)
+          .limit(30)
           .snapshots()
           .map((snapshot) {
         try {
@@ -3634,6 +3701,65 @@ class ProjectService {
     }
   }
 
+  Future<void> updateProjectDetails({
+    required String projectId,
+    required String title,
+    required String description,
+    required List<String> requiredSkills,
+  }) async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) throw Exception('User must be logged in');
+
+    final projectRef = _firestore.collection('projects').doc(projectId);
+    final projectDoc = await projectRef.get();
+    if (!projectDoc.exists) throw Exception('Project not found');
+
+    if (!_isAdminRole(projectDoc.data()!, authUser.uid)) {
+      throw Exception('Only project admin can update project details');
+    }
+
+    await projectRef.update({
+      'title': title.trim(),
+      'name': title.trim(),
+      'description': description.trim(),
+      'requiredSkills': requiredSkills,
+      'skills': requiredSkills,
+      'lastUpdated': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> deleteProject(String projectId) async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) throw Exception('User must be logged in');
+
+    final projectRef = _firestore.collection('projects').doc(projectId);
+    final projectDoc = await projectRef.get();
+    if (!projectDoc.exists) throw Exception('Project not found');
+
+    if (!_isAdminRole(projectDoc.data()!, authUser.uid)) {
+      throw Exception('Only project admin can delete the project');
+    }
+
+    // This is a simplified delete. In production, we'd use a cloud function
+    // to delete all subcollections (messages, channels, calls, etc.)
+    await projectRef.delete();
+  }
+
+  Future<void> joinScheduledMeeting(String projectId, String meetingId) async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) throw Exception('User must be logged in');
+
+    final meetingRef = _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('callSchedules')
+        .doc(meetingId);
+
+    await meetingRef.update({
+      'joined_uids': FieldValue.arrayUnion([authUser.uid]),
+    });
+  }
+
   // ============ PARSER METHODS ============
 
   ProjectChatMessage _parseProjectChatMessage(
@@ -3700,7 +3826,13 @@ class ProjectService {
             if (project == null) continue;
             for (final schedule in entry.value) {
               if (schedule.status != 'scheduled') continue;
-              if (schedule.scheduledAt.isBefore(now)) continue;
+              if (schedule.scheduledAt.isBefore(now.subtract(const Duration(hours: 1)))) continue;
+
+              // Only show if user is invited or creator
+              if (schedule.createdBy != authUser.uid && !schedule.invitedParticipants.contains(authUser.uid)) {
+                continue;
+              }
+
               meetings.add(ProjectMeetingItem(
                 id: schedule.id,
                 projectId: project.id,

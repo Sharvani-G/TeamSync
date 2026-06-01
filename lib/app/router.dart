@@ -30,7 +30,7 @@ Route<dynamic> generateRoute(RouteSettings settings) {
 
   // /project/:id/idea-board/:levelId
   final ideaBoardDocMatch =
-      RegExp(r'^/project/(\w+)/idea-board/(\w+)$').firstMatch(name);
+      RegExp(r'^/project/(\w+)/idea-board/(.+)$').firstMatch(name);
   if (ideaBoardDocMatch != null) {
     return slideRoute(
         IdeaBoardDocumentScreen(

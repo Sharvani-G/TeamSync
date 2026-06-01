@@ -570,7 +570,7 @@ class AttachmentService {
   }) async {
     final gatewayResponse = await http
         .post(
-          _storageGatewayBaseUri.resolve('/api/storage/cloudinary-signature'),
+          _storageGatewayBaseUri.resolve('api/storage/cloudinary-signature'),
           headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer $authToken',
@@ -661,6 +661,25 @@ class AttachmentService {
     }
 
     return body.trim();
+  }
+
+  Future<void> deleteFile({required String publicId}) async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) throw Exception('User must be logged in to delete files');
+
+    final token = await authUser.getIdToken();
+    final response = await http.post(
+      _storageGatewayBaseUri.resolve('api/storage/delete'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({'publicId': publicId}),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to delete file: ${response.body}');
+    }
   }
 }
 
