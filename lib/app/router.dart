@@ -12,12 +12,18 @@ import '../screens/ai_report_screen.dart';
 import '../screens/chat_home_screen.dart';
 import '../screens/chat_channel_screen.dart';
 import '../screens/project_call_screen.dart';
-import '../screens/notifications_screen.dart';
-import '../screens/profile_screen.dart';
+import '../screens/notifications/notifications_page.dart';
+import '../screens/profile/my_profile_page.dart';
+import '../screens/settings/settings_page.dart';
+import '../screens/settings/privacy_settings_page.dart';
+import '../screens/transactions/transaction_history_page.dart';
+import '../screens/faq/faq_page.dart';
+import '../screens/about/about_page.dart';
 import '../screens/learning_app_ui_screen.dart';
 // entry_screen is referenced indirectly by the auth gate route
 import '../screens/forgot_password_screen.dart';
 import '../screens/check_email_screen.dart';
+import '../widgets/slide_route.dart';
 
 Route<dynamic> generateRoute(RouteSettings settings) {
   final name = settings.name ?? '/';
@@ -26,7 +32,7 @@ Route<dynamic> generateRoute(RouteSettings settings) {
   final ideaBoardDocMatch =
       RegExp(r'^/project/(\w+)/idea-board/(\w+)$').firstMatch(name);
   if (ideaBoardDocMatch != null) {
-    return _slide(
+    return slideRoute(
         IdeaBoardDocumentScreen(
           projectId: ideaBoardDocMatch.group(1)!,
           levelId: ideaBoardDocMatch.group(2)!,
@@ -34,12 +40,11 @@ Route<dynamic> generateRoute(RouteSettings settings) {
         settings);
   }
 
-    // /project/:id/idea-board
-    final ideaBoardMatch =
+  // /project/:id/idea-board
+  final ideaBoardMatch =
       RegExp(r'^/project/(\w+)/idea-board$').firstMatch(name);
   if (ideaBoardMatch != null) {
-    return _slide(
-        IdeaBoardScreen(projectId: ideaBoardMatch.group(1)!), settings);
+    return slideRoute(IdeaBoardScreen(projectId: ideaBoardMatch.group(1)!), settings);
   }
 
   // /project/:id/workspace or /project/:id/workspace/:tab
@@ -54,7 +59,7 @@ Route<dynamic> generateRoute(RouteSettings settings) {
       _ => 0,
     };
 
-    return _slide(
+    return slideRoute(
         ProjectWorkspaceScreen(
           projectId: workspaceMatch.group(1)!,
           initialTabIndex: initialTabIndex,
@@ -65,20 +70,20 @@ Route<dynamic> generateRoute(RouteSettings settings) {
   // /project/:id/track
   final trackMatch = RegExp(r'^/project/(\w+)/track$').firstMatch(name);
   if (trackMatch != null) {
-    return _slide(TrackScreen(projectId: trackMatch.group(1)!), settings);
+    return slideRoute(TrackScreen(projectId: trackMatch.group(1)!), settings);
   }
 
   // /project/:id/ai-report
   final aiMatch = RegExp(r'^/project/(\w+)/ai-report$').firstMatch(name);
   if (aiMatch != null) {
-    return _slide(const AIReportScreen(), settings);
+    return slideRoute(const AIReportScreen(), settings);
   }
 
-    // /project/:id/chat/:channelId and /projects/:id/chat/:channelId
+  // /project/:id/chat/:channelId and /projects/:id/chat/:channelId
   final chatChannelMatch =
       RegExp(r'^/projects?/(\w+)/chat/([\w-]+)$').firstMatch(name);
   if (chatChannelMatch != null) {
-    return _slide(
+    return slideRoute(
         ChatChannelScreen(
           projectId: chatChannelMatch.group(1)!,
           channelId: chatChannelMatch.group(2)!,
@@ -89,69 +94,53 @@ Route<dynamic> generateRoute(RouteSettings settings) {
   // /project/:id/call
   final callMatch = RegExp(r'^/project/(\w+)/call$').firstMatch(name);
   if (callMatch != null) {
-    return _slide(ProjectCallScreen(projectId: callMatch.group(1)!), settings);
+    return slideRoute(ProjectCallScreen(projectId: callMatch.group(1)!), settings);
   }
 
   // /project/:id/chat
   final chatMatch = RegExp(r'^/projects?/(\w+)/chat$').firstMatch(name);
   if (chatMatch != null) {
-    return _slide(ChatHomeScreen(projectId: chatMatch.group(1)!), settings);
+    return slideRoute(ChatHomeScreen(projectId: chatMatch.group(1)!), settings);
   }
 
   // /project/:id
   final projectMatch = RegExp(r'^/project/(\w+)$').firstMatch(name);
   if (projectMatch != null) {
-    return _slide(
+    return slideRoute(
         ProjectOverviewScreen(projectId: projectMatch.group(1)!), settings);
   }
 
   switch (name) {
     case '/':
-      return _fade(const AuthGateScreen(), settings);
+      return fadeRoute(const AuthGateScreen(), settings);
     case '/main':
-      return _fade(const MainShell(), settings);
+      return fadeRoute(const MainShell(), settings);
     case '/forgot-password':
-      return _slide(const ForgotPasswordScreen(), settings);
+      return slideRoute(const ForgotPasswordScreen(), settings);
     case '/check-email':
       final email = settings.arguments as String? ?? '';
-      return _slide(CheckEmailScreen(email: email), settings);
+      return slideRoute(CheckEmailScreen(email: email), settings);
     case '/create-project':
-      return _slide(const CreateProjectScreen(), settings);
+      return slideRoute(const CreateProjectScreen(), settings);
     case '/debug/workspace':
-      return _slide(const DemoWorkspaceScreen(), settings);
+      return slideRoute(const DemoWorkspaceScreen(), settings);
     case '/notifications':
-      return _slide(const NotificationsScreen(), settings);
+      return slideRoute(const NotificationsPage(), settings);
     case '/profile':
-      return _slide(const ProfileScreen(), settings);
+      return slideRoute(const MyProfilePage(), settings);
+    case '/settings':
+      return slideRoute(const SettingsPage(), settings);
+    case '/settings/privacy':
+      return slideRoute(const PrivacySettingsPage(), settings);
+    case '/transactions':
+      return slideRoute(const TransactionHistoryPage(), settings);
+    case '/faq':
+      return slideRoute(const FaqPage(), settings);
+    case '/about':
+      return slideRoute(const AboutPage(), settings);
     case '/learning-ui':
-      return _fade(const LearningAppUiScreen(), settings);
+      return fadeRoute(const LearningAppUiScreen(), settings);
     default:
-      return _fade(const MainShell(), settings);
+      return fadeRoute(const MainShell(), settings);
   }
-}
-
-PageRouteBuilder _slide(Widget page, RouteSettings settings) {
-  return PageRouteBuilder(
-    settings: settings,
-    pageBuilder: (_, __, ___) => page,
-    transitionsBuilder: (_, animation, __, child) {
-      return SlideTransition(
-        position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
-            .animate(
-                CurvedAnimation(parent: animation, curve: Curves.easeInOut)),
-        child: child,
-      );
-    },
-    transitionDuration: const Duration(milliseconds: 220),
-  );
-}
-
-PageRouteBuilder _fade(Widget page, RouteSettings settings) {
-  return PageRouteBuilder(
-    settings: settings,
-    pageBuilder: (_, __, ___) => page,
-    transitionsBuilder: (_, animation, __, child) =>
-        FadeTransition(opacity: animation, child: child),
-    transitionDuration: const Duration(milliseconds: 180),
-  );
 }

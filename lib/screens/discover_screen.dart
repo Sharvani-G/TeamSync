@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/models.dart';
 import '../services/project_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_colors.dart';
 import '../widgets/shared_widgets.dart';
 
 class DiscoverScreen extends StatefulWidget {
@@ -107,6 +108,9 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                   final requestStatus = requestStatusByProject[project.id];
 
                   return Card(
+                    color: AppColors.kBgCard,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     child: Padding(
                       padding: const EdgeInsets.all(14),
                       child: Column(
@@ -252,9 +256,9 @@ class _RequestToJoinButtonState extends State<_RequestToJoinButton> {
             return Padding(
               padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
               child: Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                decoration: BoxDecoration(
+                  color: AppColors.kBgCard,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                 ),
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
@@ -292,7 +296,7 @@ class _RequestToJoinButtonState extends State<_RequestToJoinButton> {
                           width: double.infinity,
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF8FAFC),
+                            color: AppColors.kBgInput,
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(color: AppTheme.border),
                           ),
@@ -365,6 +369,8 @@ class _RequestToJoinButtonState extends State<_RequestToJoinButton> {
                               onPressed: isSending ? null : submit,
                               style: ElevatedButton.styleFrom(
                                 padding: const EdgeInsets.symmetric(vertical: 12),
+                                backgroundColor: AppTheme.primary,
+                                foregroundColor: AppTheme.textPrimary,
                               ),
                               child: isSending
                                   ? const SizedBox(

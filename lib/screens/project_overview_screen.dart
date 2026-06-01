@@ -79,33 +79,32 @@ class ProjectOverviewScreen extends StatelessWidget {
                 child: Row(
                   children: [
                     if (project.collaborators.isNotEmpty)
-                      ...project.collaborators.entries
-                          .take(3)
-                          .map((entry) => _CollaboratorAvatar(
-                                userId: entry.key,
-                                role: entry.value,
-                              ))
-                          .toList(),
-                    if (project.collaborators.length > 3)
-                      Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[300],
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 1.5),
-                        ),
-                        child: Center(
-                          child: Text(
-                            '+${project.collaborators.length - 3}',
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.textPrimary,
+                        ...project.collaborators.entries
+                            .take(3)
+                            .map((entry) => _CollaboratorAvatar(
+                                  userId: entry.key,
+                                  role: entry.value,
+                                ))
+                            .toList(),
+                      if (project.collaborators.length > 3)
+                        Container(
+                          width: 28,
+                          height: 28,
+                          decoration: const BoxDecoration(
+                            color: AppColors.kBgCard,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Text(
+                              '+${project.collaborators.length - 3}',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.kTextPrimary,
+                              ),
                             ),
                           ),
                         ),
-                      ),
                   ],
                 ),
               ),
@@ -164,31 +163,23 @@ class ProjectOverviewScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Icon(Icons.people,
-                              size: 16, color: Colors.grey[600]),
-                          const SizedBox(width: 6),
-                          Text(
-                            '${project.collaboratorCount} members',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppTheme.textMuted,
-                            ),
-                          ),
-                          const Spacer(),
-                          Icon(Icons.calendar_today,
-                              size: 16, color: Colors.grey[600]),
-                          const SizedBox(width: 6),
-                          Text(
-                            _formatDate(project.createdAt),
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppTheme.textMuted,
-                            ),
-                          ),
-                        ],
-                      ),
+                              Row(
+                                children: [
+                                  const Icon(Icons.people, size: 16, color: AppColors.kTextSecond),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '${project.collaboratorCount} members',
+                                    style: const TextStyle(fontSize: 12, color: AppColors.kTextSecond),
+                                  ),
+                                  const Spacer(),
+                                  const Icon(Icons.calendar_today, size: 16, color: AppColors.kTextSecond),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _formatDate(project.createdAt),
+                                    style: const TextStyle(fontSize: 12, color: AppColors.kTextSecond),
+                                  ),
+                                ],
+                              ),
                       if (project.requiredSkills.isNotEmpty) ...[
                         const SizedBox(height: 12),
                         Wrap(
@@ -249,9 +240,9 @@ class ProjectOverviewScreen extends StatelessWidget {
                               margin: const EdgeInsets.only(bottom: 10),
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFF8FAFC),
+                                color: AppColors.kBgCard,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: AppTheme.border),
+                                border: Border.all(color: AppColors.kDivider),
                               ),
                               child: Row(
                                 children: [
@@ -271,7 +262,7 @@ class ProjectOverviewScreen extends StatelessWidget {
                                           style: const TextStyle(
                                             fontSize: 14,
                                             fontWeight: FontWeight.w600,
-                                            color: AppTheme.textPrimary,
+                                            color: AppColors.kTextPrimary,
                                           ),
                                         ),
                                         const SizedBox(height: 2),
@@ -279,7 +270,7 @@ class ProjectOverviewScreen extends StatelessWidget {
                                           '@${username.isNotEmpty ? username : '?'}',
                                           style: const TextStyle(
                                             fontSize: 12,
-                                            color: AppTheme.textSecondary,
+                                            color: AppColors.kTextSecond,
                                           ),
                                         ),
                                       ],
@@ -288,18 +279,18 @@ class ProjectOverviewScreen extends StatelessWidget {
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                                     decoration: BoxDecoration(
-                                      color: isAdmin ? const Color(0xFFDBEAFE) : const Color(0xFFEDE9FE),
+                                      color: isAdmin ? AppColors.kBgElevated : AppColors.kBgCard,
                                       borderRadius: BorderRadius.circular(999),
                                     ),
-                                    child: Text(
-                                      isAdmin ? 'ADMIN' : 'Collaborator',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: 0.4,
-                                        color: isAdmin ? const Color(0xFF1D4ED8) : const Color(0xFF6D28D9),
+                                      child: Text(
+                                        isAdmin ? 'ADMIN' : 'Collaborator',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: 0.4,
+                                          color: isAdmin ? AppColors.kAccentMuted : AppColors.kTextSecond,
+                                        ),
                                       ),
-                                    ),
                                   ),
                                 ],
                               ),

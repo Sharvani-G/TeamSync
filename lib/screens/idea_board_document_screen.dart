@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart' as picker;
 
 import '../models/models.dart';
@@ -330,20 +331,20 @@ class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
               SizedBox(
                 width: double.infinity,
                 height: double.infinity,
-                child: InteractiveViewer(
-                  minScale: 0.5,
-                  maxScale: 4.0,
-                  child: Image.network(
-                    url,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Center(
-                      child: Text(
-                        'Unable to preview this file.',
-                        style: TextStyle(color: Colors.white),
+                  child: InteractiveViewer(
+                    minScale: 0.5,
+                    maxScale: 4.0,
+                    child: CachedNetworkImage(
+                      imageUrl: url,
+                      fit: BoxFit.contain,
+                      errorWidget: (_, __, ___) => const Center(
+                        child: Text(
+                          'Unable to preview this file.',
+                          style: TextStyle(color: Colors.white),
+                        ),
                       ),
                     ),
                   ),
-                ),
               ),
               Positioned(
                 top: 12,
@@ -812,19 +813,19 @@ class _IdeaBlockCardState extends State<_IdeaBlockCard> {
                           onTap: () => widget.onPreviewFile(file),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(10),
-                            child: AspectRatio(
-                              aspectRatio: 16 / 10,
-                              child: Image.network(
-                                file.fileUrl.trim(),
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
-                                  color: Colors.black12,
-                                  child: const Center(
-                                    child: Icon(Icons.image_not_supported_outlined),
+                              child: AspectRatio(
+                                aspectRatio: 16 / 10,
+                                child: CachedNetworkImage(
+                                  imageUrl: file.fileUrl.trim(),
+                                  fit: BoxFit.cover,
+                                  errorWidget: (_, __, ___) => Container(
+                                    color: Colors.black12,
+                                    child: const Center(
+                                      child: Icon(Icons.image_not_supported_outlined),
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
                           ),
                         ),
                       )
@@ -868,7 +869,7 @@ class _IdeaBlockCardState extends State<_IdeaBlockCard> {
                                       else
                                         Text(
                                           _formatFileSize(file.fileSize),
-                                          style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary),
+                                          style: const TextStyle(fontSize: 10, color: AppColors.kTextSecond),
                                         ),
                                     ],
                                   ),
@@ -886,6 +887,7 @@ class _IdeaBlockCardState extends State<_IdeaBlockCard> {
                                       : null,
                                   icon: const Icon(Icons.open_in_new, size: 15),
                                   label: const Text('Open'),
+                                  style: TextButton.styleFrom(foregroundColor: AppColors.kAccentLight),
                                 ),
                                 TextButton.icon(
                                   onPressed: _isCloudinaryUrl(file.fileUrl.trim())
@@ -893,6 +895,7 @@ class _IdeaBlockCardState extends State<_IdeaBlockCard> {
                                       : null,
                                   icon: const Icon(Icons.download_outlined, size: 15),
                                   label: const Text('Download'),
+                                  style: TextButton.styleFrom(foregroundColor: AppColors.kAccentLight),
                                 ),
                               ],
                             ),
@@ -924,6 +927,7 @@ class _IdeaBlockCardState extends State<_IdeaBlockCard> {
                     widget.canEdit && !isUploadingThisBlock ? widget.onAttachFiles : null,
                 icon: const Icon(Icons.upload_file),
                 label: const Text('Attach File'),
+                style: TextButton.styleFrom(foregroundColor: AppColors.kAccentLight),
               ),
             ),
         ],

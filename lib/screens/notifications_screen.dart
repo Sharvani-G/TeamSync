@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/models.dart';
 import '../services/project_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_colors.dart';
 import '../widgets/shared_widgets.dart';
 
 class NotificationsScreen extends StatelessWidget {
@@ -49,15 +50,15 @@ class NotificationsScreen extends StatelessWidget {
                           child: Container(
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
-                              color: item.read ? Colors.white : const Color(0xFFF8FAFC),
+                              color: item.read ? AppColors.kBgCard : AppColors.kBgInput,
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: item.read ? AppTheme.border : const Color(0xFFBFDBFE)),
+                              border: Border.all(color: item.read ? AppColors.kDivider : AppTheme.primary.withOpacity(0.18)),
                             ),
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 CircleAvatar(
-                                  backgroundColor: item.read ? const Color(0xFFE5E7EB) : AppTheme.primary.withOpacity(0.12),
+                                  backgroundColor: item.read ? AppColors.kBgElevated : AppTheme.primary.withOpacity(0.12),
                                   child: Icon(
                                     _iconForType(item.type),
                                     size: 18,

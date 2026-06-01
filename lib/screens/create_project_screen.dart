@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/project_service.dart';
 import '../services/user_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_colors.dart';
 import '../widgets/shared_widgets.dart';
 
 class CreateProjectScreen extends StatefulWidget {
@@ -224,6 +225,8 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
             TextField(
               controller: _titleController,
               decoration: InputDecoration(
+                filled: true,
+                fillColor: AppColors.kBgInput,
                 hintText: 'Enter project name',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -239,6 +242,8 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
               controller: _descController,
               maxLines: 3,
               decoration: InputDecoration(
+                filled: true,
+                fillColor: AppColors.kBgInput,
                 hintText: 'Describe your project goals and scope',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -254,6 +259,8 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
               controller: _contactEmailController,
               keyboardType: TextInputType.emailAddress,
               decoration: InputDecoration(
+                filled: true,
+                fillColor: AppColors.kBgInput,
                 hintText: 'project@example.com',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -273,9 +280,9 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Container(
                     decoration: BoxDecoration(
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                      border: Border.all(color: AppTheme.border),
                       borderRadius: BorderRadius.circular(10),
-                      color: Colors.white,
+                      color: AppColors.kBgCard,
                     ),
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -300,7 +307,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                               : null,
                           color: _levels.length > 1
                               ? AppTheme.danger
-                              : const Color(0xFFD1D5DB),
+                              : AppTheme.textMuted,
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints.tightFor(
                             width: 32,
@@ -321,6 +328,8 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                   child: TextField(
                     controller: _customLevelController,
                     decoration: InputDecoration(
+                      filled: true,
+                      fillColor: AppColors.kBgInput,
                       hintText: 'Add custom stage',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -343,6 +352,8 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                       horizontal: 12,
                       vertical: 12,
                     ),
+                    backgroundColor: AppTheme.primary,
+                    foregroundColor: AppTheme.textPrimary,
                   ),
                 ),
               ],
@@ -384,20 +395,20 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFEF3C7),
+                  color: AppColors.kBgInput,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFDEBD47)),
+                  border: Border.all(color: AppColors.kDivider),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.info, size: 18, color: Color(0xFFB45309)),
-                    SizedBox(width: 8),
+                    Icon(Icons.info, size: 18, color: AppTheme.primary),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'Private projects are only visible to collaborators',
                         style: TextStyle(
                           fontSize: 12,
-                          color: Color(0xFFB45309),
+                          color: AppTheme.textMuted,
                         ),
                       ),
                     ),
@@ -411,6 +422,9 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
               _label('Open for Join Requests?'),
               const SizedBox(height: 8),
               Card(
+                color: AppColors.kBgCard,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Column(
@@ -440,6 +454,8 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                           controller: _requiredCollabController,
                           keyboardType: TextInputType.number,
                           decoration: InputDecoration(
+                            filled: true,
+                            fillColor: AppColors.kBgInput,
                             hintText: 'e.g., 5',
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(6),
@@ -462,6 +478,8 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                               child: TextField(
                                 controller: _skillController,
                                 decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor: AppColors.kBgInput,
                                   hintText: 'Add skill (e.g., Flutter)',
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(6),
@@ -504,14 +522,16 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                 Expanded(
                   child: TextField(
                     controller: _usernameController,
-                    enabled: !_isLoading,
-                    decoration: InputDecoration(
-                      hintText: 'e.g., john_doe',
-                      prefixText: '@',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
+                        enabled: !_isLoading,
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: AppColors.kBgInput,
+                          hintText: 'e.g., john_doe',
+                          prefixText: '@',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
                     onSubmitted: (_) => _addCollaborator(),
                   ),
                 ),
@@ -523,6 +543,8 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                       horizontal: 16,
                       vertical: 14,
                     ),
+                    backgroundColor: AppTheme.primary,
+                    foregroundColor: AppTheme.textPrimary,
                   ),
                   child: const Text('Add'),
                 ),
@@ -539,7 +561,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                       avatar: const Icon(Icons.person, size: 18),
                       label: Text('@$username'),
                       onDeleted: () => _removeCollaborator(username),
-                      backgroundColor: const Color(0xFFEFF6FF),
+                      backgroundColor: AppColors.kBgInput,
                       labelStyle: const TextStyle(
                         fontSize: 13,
                         color: AppTheme.primary,
@@ -559,17 +581,20 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
               child: ElevatedButton(
                 onPressed: _isLoading ? null : _createProject,
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  minimumSize: const Size.fromHeight(52),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  backgroundColor: AppTheme.primary,
+                  foregroundColor: AppTheme.textPrimary,
                 ),
                 child: _isLoading
-                    ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
+                    ? SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(AppTheme.textPrimary),
+                        ),
+                      )
                     : const Text('Create Project'),
               ),
             ),
@@ -611,11 +636,11 @@ class _VisibilityButton extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           border: Border.all(
-            color: selected ? AppTheme.primary : const Color(0xFFE5E7EB),
+            color: selected ? AppTheme.primary : AppColors.kDivider,
             width: selected ? 2 : 1,
           ),
           borderRadius: BorderRadius.circular(8),
-          color: selected ? const Color(0xFFEFF6FF) : Colors.white,
+          color: selected ? AppTheme.primary.withOpacity(0.08) : AppColors.kBgCard,
         ),
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
         child: Column(
@@ -623,7 +648,7 @@ class _VisibilityButton extends StatelessWidget {
             Icon(
               icon,
               size: 24,
-              color: selected ? AppTheme.primary : const Color(0xFF6B7280),
+              color: selected ? AppTheme.primary : AppTheme.textMuted,
             ),
             const SizedBox(height: 6),
             Text(
@@ -660,7 +685,7 @@ class _SkillTile extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFFE5E7EB)),
+                border: Border.all(color: AppTheme.border),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
@@ -676,10 +701,10 @@ class _SkillTile extends StatelessWidget {
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints.tightFor(width: 32, height: 32),
             style: IconButton.styleFrom(
-              backgroundColor: const Color(0xFFFEE2E2),
+              backgroundColor: AppColors.kDanger.withOpacity(0.12),
             ),
             iconSize: 16,
-            color: AppTheme.danger,
+            color: AppColors.kDanger,
           ),
         ],
       ),

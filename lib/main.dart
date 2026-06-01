@@ -16,13 +16,17 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'config/env_config.dart';
 import 'app/router.dart';
 import 'theme/app_theme.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'services/settings_service.dart';
+import 'services/notification_service.dart';
 import 'services/file_picker_web_bootstrap_stub.dart'
     if (dart.library.html) 'services/file_picker_web_bootstrap_web.dart';
 import 'services/boot_logger_stub.dart'
     if (dart.library.html) 'services/boot_logger_web.dart';
 import 'services/web_utils_stub.dart'
     if (dart.library.html) 'services/web_utils_web.dart';
+
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,6 +49,16 @@ Future<void> main() async {
   if (!kIsWeb) {
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   }
+  await NotificationService.instance.initializePushNotifications(
+    onNotificationTap: (route, data) {
+      final navigator = appNavigatorKey.currentState;
+      if (navigator == null) {
+        return;
+      }
+
+      navigator.pushNamed(route.isEmpty ? '/notifications' : route, arguments: data);
+    },
+  );
   runApp(const ProjectSyncApp());
 }
 
@@ -69,14 +83,21 @@ class _ProjectSyncAppState extends State<ProjectSyncApp> {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: _settings.themeMode,
       builder: (context, mode, _) {
-        return MaterialApp(
-          title: 'TeamSync',
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.lightTheme,
-          darkTheme: AppTheme.darkTheme,
-          themeMode: ThemeMode.dark,
-          initialRoute: _initialRoute(),
-          onGenerateRoute: generateRoute,
+        return ScreenUtilInit(
+          designSize: const Size(375, 812),
+          minTextAdapt: true,
+          builder: (context, child) {
+            return MaterialApp(
+              title: 'TeamSync',
+              debugShowCheckedModeBanner: false,
+              navigatorKey: appNavigatorKey,
+              theme: AppTheme.lightTheme,
+              darkTheme: AppTheme.darkTheme,
+              themeMode: mode,
+              initialRoute: _initialRoute(),
+              onGenerateRoute: generateRoute,
+            );
+          },
         );
       },
     );

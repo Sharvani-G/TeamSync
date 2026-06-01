@@ -321,84 +321,140 @@ if (require.main === module) {
   });
 }
 
-// Firestore trigger: when a notification doc is created under users/{userId}/notifications/{notificationId}
-// send an FCM push to the user's device tokens while ensuring the sender never receives their own notification.
-exports.sendNotificationOnUserNotification = functions.firestore
-  .document('users/{userId}/notifications/{notificationId}')
+function buildNotificationRoute(notification) {
+  const data = notification?.data || {};
+  const explicitRoute = String(data.route || notification.route || '').trim();
+  if (explicitRoute) {
+    return explicitRoute;
+  }
+
+  const projectId = String(notification.projectId || data.projectId || '').trim();
+  const type = String(notification.type || data.type || '').trim();
+  if (projectId) {
+    if (type === 'chat_message') {
+      return `/project/${projectId}/workspace/chat`;
+    }
+    return `/project/${projectId}`;
+  }
+
+  return '/notifications';
+}
+
+function normalizeTokens(userData) {
+  const tokenValues = [userData.fcm_token, userData.deviceToken, userData.token]
+    .filter(Boolean)
+    .map((token) => String(token).trim())
+    .filter(Boolean);
+
+  const arrayValues = [userData.fcmTokens, userData.deviceTokens, userData.tokens]
+    .flatMap((value) => (Array.isArray(value) ? value : []))
+    .filter(Boolean)
+    .map((token) => String(token).trim())
+    .filter(Boolean);
+
+  return Array.from(new Set([...tokenValues, ...arrayValues]));
+}
+
+async function sendNotificationPush(recipientId, notification, notificationId) {
+  const userDoc = await admin.firestore().collection('users').doc(recipientId).get();
+  if (!userDoc.exists) {
+    return null;
+  }
+
+  const userData = userDoc.data() || {};
+  if (userData.pushNotificationsEnabled === false) {
+    console.log(`Skipping FCM send for ${recipientId}: push notifications disabled`);
+    return null;
+  }
+
+  const tokens = normalizeTokens(userData);
+  if (!tokens.length) {
+    console.log('No device tokens to send to for user', recipientId);
+    return null;
+  }
+
+  const route = buildNotificationRoute(notification);
+  const payloadData = Object.fromEntries(
+    Object.entries(Object.assign({}, notification.data || {}, {
+      notificationId,
+      userId: recipientId,
+      projectId: String(notification.projectId || notification?.data?.projectId || ''),
+      type: String(notification.type || notification?.data?.type || ''),
+      route,
+    })).map(([key, value]) => [key, String(value ?? '')]),
+  );
+
+  const message = {
+    tokens,
+    notification: {
+      title: notification.title || 'TeamSync',
+      body: notification.body || '',
+    },
+    data: payloadData,
+  };
+
+  const response = await admin.messaging().sendEachForMulticast(message);
+  const invalidTokens = [];
+
+  response.responses.forEach((result, index) => {
+    if (!result.success) {
+      const errorCode = result.error?.code || '';
+      const token = tokens[index];
+      console.warn('FCM send error for token', token, errorCode || result.error?.message || result.error);
+      if (
+        errorCode === 'messaging/registration-token-not-registered' ||
+        errorCode === 'messaging/invalid-registration-token'
+      ) {
+        invalidTokens.push(token);
+      }
+    }
+  });
+
+  if (invalidTokens.length) {
+    const remainingTokens = tokens.filter((token) => !invalidTokens.includes(token));
+    await admin.firestore().collection('users').doc(recipientId).update({
+      fcm_token: remainingTokens[0] || null,
+      fcmTokens: remainingTokens,
+      deviceTokens: remainingTokens,
+      tokens: remainingTokens,
+    });
+  }
+
+  return null;
+}
+
+// Firestore trigger: send push when a root notification document is created.
+exports.sendNotificationOnNotificationCreate = functions.firestore
+  .document('notifications/{notificationId}')
   .onCreate(async (snap, ctx) => {
     try {
       const notification = snap.data() || {};
-      const recipientId = ctx.params.userId;
+      const recipientId = notification.userId || '';
+      if (!recipientId) {
+        return null;
+      }
 
-      // If notification data explicitly indicates a sender, and it's the same as the recipient, skip.
       const senderId = notification?.data?.senderId || notification?.senderId || null;
       if (senderId && senderId === recipientId) {
         console.log('Skipping FCM send: recipient is the sender');
         return null;
       }
 
-      // Load recipient user document to obtain device tokens (field names may vary)
-      const userDoc = await admin.firestore().collection('users').doc(recipientId).get();
-      if (!userDoc.exists) return null;
-      const userData = userDoc.data() || {};
-
-      // Common token fields: deviceTokens, fcmTokens, tokens
-      const tokensRaw = userData.deviceTokens || userData.fcmTokens || userData.tokens || [];
-      const tokens = Array.isArray(tokensRaw) ? tokensRaw.filter(Boolean) : [];
-
-      // Optionally the notification may carry the sender's device token; exclude it
-      const senderToken = notification?.senderToken || notification?.data?.senderToken || null;
-      const senderUid = notification?.senderUid || notification?.data?.senderUid || notification?.data?.senderId || null;
-
-      const filteredTokens = tokens.filter((t) => {
-        if (!t) return false;
-        if (t === senderToken) return false;
-        if (t === senderUid) return false;
-        return true;
-      });
-      if (!filteredTokens.length) {
-        console.log('No device tokens to send to for user', recipientId);
-        return null;
-      }
-
-      // Build payload
-      const payload = {
-        notification: {
-          title: notification.title || 'TeamSync',
-          body: notification.body || '',
-        },
-        data: Object.assign({}, notification.data || {}, {
-          notificationId: snap.id,
-        }),
-      };
-
-      const response = await admin.messaging().sendToDevice(filteredTokens, payload);
-
-      // Clean up invalid tokens
-      const tokensToRemove = [];
-      if (response && response.results) {
-        response.results.forEach((result, idx) => {
-          if (result.error) {
-            const err = result.error;
-            const token = filteredTokens[idx];
-            // Remove unregistered or invalid tokens from user doc
-            if (err.code === 'messaging/registration-token-not-registered' || err.code === 'messaging/invalid-registration-token') {
-              tokensToRemove.push(token);
-            }
-            console.warn('FCM send error for token', token, err.code || err.message || err);
-          }
-        });
-      }
-
-      if (tokensToRemove.length) {
-        const remaining = tokens.filter((t) => !tokensToRemove.includes(t));
-        await admin.firestore().collection('users').doc(recipientId).update({
-          deviceTokens: remaining,
-          fcmTokens: remaining,
-        });
-      }
-
+      return await sendNotificationPush(recipientId, notification, snap.id);
+    } catch (e) {
+      console.error('Error in sendNotificationOnNotificationCreate:', e);
       return null;
+    }
+  });
+
+// Backwards-compatible trigger for older user-scoped notification docs.
+exports.sendNotificationOnUserNotification = functions.firestore
+  .document('users/{userId}/notifications/{notificationId}')
+  .onCreate(async (snap, ctx) => {
+    try {
+      const notification = snap.data() || {};
+      const recipientId = ctx.params.userId;
+      return await sendNotificationPush(recipientId, notification, snap.id);
     } catch (e) {
       console.error('Error in sendNotificationOnUserNotification:', e);
       return null;

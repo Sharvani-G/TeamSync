@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../theme/app_colors.dart';
 
 import '../models/models.dart';
 import '../services/project_service.dart';
@@ -8,21 +9,20 @@ import '../services/project_service.dart';
 class HomeDashboardScreen extends StatelessWidget {
   const HomeDashboardScreen({super.key});
 
-  static const _canvasColor = Color(0xFF0F172A);
-  static const _cardColor = Color(0xFF1E293B);
-  // high-contrast body / subtitle per spec
-  static const _subtitleColor = Color(0xFFE2E8F0);
+  static final _cardColor = AppColors.kBgCard;
+  static final _subtitleColor = AppColors.kTextSecond;
 
-  static const _headerStyle = TextStyle(
-    color: Colors.white,
+  static final _headerStyle = TextStyle(
+    color: AppColors.kTextPrimary,
     fontSize: 18,
     fontWeight: FontWeight.bold,
+    fontFamily: 'Poppins',
   );
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _canvasColor,
+      backgroundColor: AppColors.kBgDeep,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -34,12 +34,16 @@ class HomeDashboardScreen extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Project Buckets', style: _headerStyle),
+                    Row(children: [
+                      const Icon(Icons.folder, color: Colors.white),
+                      const SizedBox(width: 8),
+                      const Text('Project Buckets', style: _headerStyle),
+                    ]),
                     TextButton.icon(
                       onPressed: () async {
                         // create project
                         if (!context.mounted) return;
-                        Navigator.pushNamed(context, '/create_project');
+                        Navigator.pushNamed(context, '/create-project');
                       },
                       icon: const Icon(Icons.add, color: Colors.white),
                       label: const Text('New', style: TextStyle(color: Colors.white)),
@@ -48,7 +52,6 @@ class HomeDashboardScreen extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 6),
-                const Text('Your active workspaces', style: TextStyle(color: _subtitleColor)),
                 const SizedBox(height: 12),
 
                 // Projects grid
@@ -91,49 +94,60 @@ class HomeDashboardScreen extends StatelessWidget {
                 const Text('Upcoming calls and invites', style: TextStyle(color: _subtitleColor)),
                 const SizedBox(height: 12),
 
-                // Scheduled meetings horizontal rail (simplified & balanced)
+                // Scheduled meetings from service
                 SizedBox(
-                  height: 140,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: 3,
-                    separatorBuilder: (_, __) => const SizedBox(width: 12),
-                    itemBuilder: (c, i) {
-                      return SizedBox(
-                        width: 360,
-                        child: Container(
-                          decoration: BoxDecoration(color: _cardColor, borderRadius: BorderRadius.circular(12)),
-                          padding: const EdgeInsets.all(12),
-                          child: Row(
-                            children: [
-                              CircleAvatar(backgroundColor: Colors.blue.shade700, child: const Icon(Icons.video_call, color: Colors.white)),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Text(
-                                      'Project Sync',
-                                      style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                  height: 160,
+                  child: StreamBuilder<List<ProjectMeetingItem>>(
+                    stream: ProjectService.instance.watchMyScheduledMeetings(),
+                    builder: (context, snap) {
+                      if (snap.hasError) return _errorBox('Error loading meetings');
+                      if (snap.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+                      final meetings = snap.data ?? const <ProjectMeetingItem>[];
+                      if (meetings.isEmpty) return _emptyBox('No meetings scheduled');
+
+                      return ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: meetings.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 12),
+                        itemBuilder: (c, i) {
+                          final m = meetings[i];
+                          return SizedBox(
+                            width: 360,
+                            child: Container(
+                              decoration: BoxDecoration(color: _cardColor, borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.all(12),
+                              child: Row(
+                                children: [
+                                  CircleAvatar(backgroundColor: AppColors.kAccentMuted, child: const Icon(Icons.video_call, color: Colors.white)),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          m.projectTitle,
+                                          style: const TextStyle(color: AppColors.kTextPrimary, fontSize: 14, fontWeight: FontWeight.w700),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          DateFormat.yMMMd().add_jm().format(m.scheduledAt),
+                                          style: TextStyle(color: _subtitleColor),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
                                     ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      'Today • 3:00 PM',
-                                      style: TextStyle(color: _subtitleColor),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(width: 10, height: 10, decoration: BoxDecoration(color: Colors.amber, shape: BoxShape.circle)),
+                                ],
                               ),
-                              const SizedBox(width: 8),
-                              Container(width: 10, height: 10, decoration: BoxDecoration(color: Colors.amber, shape: BoxShape.circle)),
-                            ],
-                          ),
-                        ),
+                            ),
+                          );
+                        },
                       );
                     },
                   ),
@@ -214,9 +228,30 @@ class _ProjectCard extends StatelessWidget {
         child: Stack(
           children: [
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(project.displayTitle, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis),
+              Row(children: [
+                Expanded(
+                  child: Text(project.displayTitle,
+                      style: const TextStyle(color: AppColors.kTextPrimary, fontSize: 16, fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis),
+                ),
+                const SizedBox(width: 8),
+                Row(children: [
+                  const Icon(Icons.person, size: 14, color: AppColors.kTextSecond),
+                  const SizedBox(width: 4),
+                  Text('${project.safeCollaboratorCount}', style: const TextStyle(color: AppColors.kTextSecond, fontSize: 12)),
+                ])
+              ]),
               const SizedBox(height: 6),
-              Text(project.description, style: TextStyle(color: HomeDashboardScreen._subtitleColor), maxLines: 2, overflow: TextOverflow.ellipsis),
+              Text(project.displayDescription, style: TextStyle(color: HomeDashboardScreen._subtitleColor), maxLines: 2, overflow: TextOverflow.ellipsis),
+              if ((project.description).length > 120) ...[
+                const SizedBox(height: 6),
+                GestureDetector(
+                  onTap: () {
+                    if (!context.mounted) return;
+                    Navigator.pushNamed(context, '/project/${project.id}');
+                  },
+                  child: Text('Show more', style: TextStyle(color: AppColors.kAccentLight, fontSize: 12)),
+                ),
+              ],
               const Spacer(),
               Text('Created • $created', style: TextStyle(color: HomeDashboardScreen._subtitleColor, fontSize: 12)),
             ]),

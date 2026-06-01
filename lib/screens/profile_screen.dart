@@ -4,6 +4,7 @@ import '../models/models.dart';
 import '../services/auth_service.dart';
 import '../services/user_profile_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_colors.dart';
 import '../widgets/shared_widgets.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -37,7 +38,7 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.kBgDeep,
       appBar: AppBar(
         centerTitle: true,
         title: const Text('Profile'),
@@ -51,7 +52,7 @@ class ProfileScreen extends StatelessWidget {
             onPressed: () => _showAction(context, 'Settings'),
           ),
         ],
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.kBgElevated,
         elevation: 0,
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
@@ -77,9 +78,9 @@ class ProfileScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppColors.kBgCard,
                   borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                  border: Border.all(color: AppColors.kDivider),
                 ),
                 child: Row(
                   children: [
@@ -297,7 +298,7 @@ class _MyProfileDetailsScreenState extends State<MyProfileDetailsScreen> {
           icon: const Icon(Icons.arrow_back_ios_new, size: 18),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.kBgElevated,
         elevation: 0,
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
@@ -333,12 +334,12 @@ class _MyProfileDetailsScreenState extends State<MyProfileDetailsScreen> {
                             shape: BoxShape.circle,
                             gradient: _isPhotoVisible
                                 ? const LinearGradient(
-                                    colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+                                    colors: [AppColors.kAccentBlue, AppColors.kAccentLight],
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
                                   )
                                 : const LinearGradient(
-                                    colors: [Color(0xFFE5E7EB), Color(0xFFF3F4F6)],
+                                    colors: [AppColors.kBgCard, AppColors.kBgElevated],
                                   ),
                           ),
                           child: Center(
@@ -349,17 +350,17 @@ class _MyProfileDetailsScreenState extends State<MyProfileDetailsScreen> {
                                         username: user.username,
                                         size: 64,
                                         imageUrl: user.photoUrl,
-                                        color: Colors.white,
+                                        color: AppTheme.textPrimary,
                                       )
                                     : const Icon(
                                         Icons.person_outline,
                                         size: 34,
-                                        color: Colors.white,
+                                        color: AppTheme.textPrimary,
                                       ))
                                 : const Icon(
                                     Icons.visibility_off_outlined,
                                     size: 30,
-                                    color: Colors.grey,
+                                    color: AppTheme.textMuted,
                                   ),
                           ),
                         ),
@@ -371,9 +372,9 @@ class _MyProfileDetailsScreenState extends State<MyProfileDetailsScreen> {
                             decoration: BoxDecoration(
                               color: AppTheme.primary,
                               shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 2),
+                              border: Border.all(color: AppTheme.border, width: 2),
                             ),
-                            child: const Icon(Icons.camera_alt_outlined, size: 12, color: Colors.white),
+                            child: const Icon(Icons.camera_alt_outlined, size: 12, color: AppTheme.textPrimary),
                           ),
                         ),
                       ],
@@ -554,7 +555,7 @@ class _GenderOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? AppTheme.primary.withOpacity(0.08) : Colors.white,
+      color: selected ? AppTheme.primary.withOpacity(0.08) : AppColors.kBgCard,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
@@ -572,7 +573,7 @@ class _GenderOption extends StatelessWidget {
               Icon(
                 selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
                 size: 18,
-                color: selected ? AppTheme.primary : Colors.grey[400],
+                color: selected ? AppTheme.primary : AppTheme.textMuted,
               ),
               const SizedBox(width: 10),
               Text(
@@ -605,7 +606,7 @@ class _ActionChipButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
+      color: AppColors.kBgCard,
       borderRadius: BorderRadius.circular(999),
       child: InkWell(
         onTap: onTap,
@@ -614,7 +615,7 @@ class _ActionChipButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
+            border: Border.all(color: AppColors.kDivider),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -666,7 +667,7 @@ class _ProfileMenuItem extends StatelessWidget {
               Icon(
                 icon,
                 size: 22,
-                color: iconColor ?? Colors.grey[700],
+                color: iconColor ?? AppTheme.textMuted,
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -682,7 +683,7 @@ class _ProfileMenuItem extends StatelessWidget {
               Icon(
                 Icons.chevron_right,
                 size: 20,
-                color: Colors.grey[400],
+                color: AppTheme.textMuted,
               ),
             ],
           ),

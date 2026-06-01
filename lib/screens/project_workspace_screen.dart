@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/models.dart';
@@ -84,6 +85,34 @@ class _ProjectWorkspaceScreenState extends State<ProjectWorkspaceScreen> {
           CallsScreen(projectId: widget.projectId),
         ];
 
+        final isMobile = MediaQuery.of(context).size.width < 600;
+
+        if (isMobile) {
+          // On mobile we show three full-width entry buttons and do not auto-open tabs
+          return Scaffold(
+            appBar: SimpleAppBar(title: project.title),
+            backgroundColor: AppTheme.darkTheme.scaffoldBackgroundColor,
+            body: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  _EntryButton(label: 'Idea Board', icon: Icons.space_dashboard_outlined, onTap: () {
+                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => IdeaBoardScreen(projectId: widget.projectId)));
+                  }),
+                  const SizedBox(height: 12),
+                  _EntryButton(label: 'Chat', icon: Icons.chat_bubble_outline, onTap: () {
+                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatHomeScreen(projectId: widget.projectId)));
+                  }),
+                  const SizedBox(height: 12),
+                  _EntryButton(label: 'Calls', icon: Icons.call_outlined, onTap: () {
+                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => CallsScreen(projectId: widget.projectId)));
+                  }),
+                ],
+              ),
+            ),
+          );
+        }
+
         return Scaffold(
           body: SafeArea(
             child: Column(
@@ -128,7 +157,7 @@ class _ProjectWorkspaceScreenState extends State<ProjectWorkspaceScreen> {
                         ),
                       ),
                       const SizedBox(height: 14),
-                      Row(
+                        Row(
                           children: List.generate(sections.length, (index) {
                           final section = sections[index];
                           final selected = _currentIndex == index;
@@ -213,4 +242,29 @@ class _WorkspaceSection {
   final IconData icon;
 
   const _WorkspaceSection({required this.label, required this.icon});
+}
+
+class _EntryButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _EntryButton({required this.label, required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: ElevatedButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 20, color: Colors.white),
+        label: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppTheme.primary,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      ),
+    );
+  }
 }

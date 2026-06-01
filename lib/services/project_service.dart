@@ -14,6 +14,7 @@ import 'package:intl/intl.dart';
 import '../models/models.dart';
 import 'browser_timezone.dart';
 import 'file_service.dart';
+import 'notification_service.dart';
 import 'user_service.dart';
 import 'webrtc_socket_service.dart';
 import 'webrtc_signaling_service.dart';
@@ -37,9 +38,6 @@ class ProjectService {
   final UserService _userService = UserService.instance;
   final WebRtcSignalingService _webrtcSignalingService =
       WebRtcSignalingService();
-  final Map<String, Stream<List<ProjectNotificationItem>>>
-      _notificationStreams = {};
-  final Map<String, Stream<int>> _unreadNotificationStreams = {};
 
   String _generateRoomToken() {
     final random = Random.secure();
@@ -2516,14 +2514,6 @@ class ProjectService {
       messageData['fileSize'] = primaryAttachment['fileSize'] ?? 0;
     }
 
-    messageData.forEach((fieldName, fieldValue) {
-      if (fieldValue == null) {
-        debugPrint(
-          '[FIRESTORE NULL WARNING] Field "$fieldName" is null. This will cause an invalid-argument rejection.',
-        );
-      }
-    });
-
     try {
       await messageRef.set(messageData);
 
@@ -3525,144 +3515,19 @@ class ProjectService {
   // ============ NOTIFICATION SYSTEM ============
 
   Stream<List<ProjectNotificationItem>> watchMyNotifications() {
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    if (currentUserId == null) {
-      return Stream.value(<ProjectNotificationItem>[]).asBroadcastStream();
-    }
-
-    final cached = _notificationStreams[currentUserId];
-    if (cached != null) {
-      return cached;
-    }
-
-    final stream = _retryingStream<List<ProjectNotificationItem>>(
-      'watchMyNotifications($currentUserId)',
-      () => _firestore
-          .collection('users')
-          .doc(currentUserId)
-          .collection('notifications')
-          .orderBy('createdAt', descending: true)
-          .snapshots()
-          .map((snapshot) {
-        try {
-          final items = <ProjectNotificationItem>[];
-          for (final doc in snapshot.docs) {
-            final data = doc.data();
-            // CRITICAL: sender is always excluded from their own notifications and unread counts. Do not remove this check. This has been a recurring bug.
-            if (data['senderId'] == currentUserId ||
-                data['senderUid'] == currentUserId) {
-              continue;
-            }
-
-            final item = _parseNotificationItem(doc);
-            if (item.deliverAt != null &&
-                item.deliverAt!.isAfter(DateTime.now())) {
-              continue;
-            }
-
-            items.add(item);
-          }
-          return items;
-        } catch (e) {
-          print('❌ Error parsing notifications: $e');
-          return [];
-        }
-      }),
-    ).asBroadcastStream();
-    _notificationStreams[currentUserId] = stream;
-    return stream;
+    return NotificationService.instance.watchMyNotifications();
   }
 
   Future<void> markNotificationRead(String notificationId) async {
-    final authUser = _auth.currentUser;
-    if (authUser == null) {
-      return;
-    }
-
-    try {
-      await _firestore
-          .collection('users')
-          .doc(authUser.uid)
-          .collection('notifications')
-          .doc(notificationId)
-          .update({'read': true});
-    } catch (e) {
-      print('⚠️  Error marking notification read: $e');
-    }
+    await NotificationService.instance.markNotificationRead(notificationId);
   }
 
   Future<void> markAllNotificationsRead() async {
-    final authUser = _auth.currentUser;
-    if (authUser == null) {
-      return;
-    }
-
-    try {
-      final snapshot = await _firestore
-          .collection('users')
-          .doc(authUser.uid)
-          .collection('notifications')
-          .where('read', isEqualTo: false)
-          .get();
-
-      final batch = _firestore.batch();
-      for (final doc in snapshot.docs) {
-        batch.update(doc.reference, {'read': true});
-      }
-      await batch.commit();
-    } catch (e) {
-      print('❌ Error marking all notifications read: $e');
-    }
+    await NotificationService.instance.markAllNotificationsRead();
   }
 
   Stream<int> watchUnreadNotificationCount() {
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    if (currentUserId == null) {
-      return Stream.value(0).asBroadcastStream();
-    }
-
-    final cached = _unreadNotificationStreams[currentUserId];
-    if (cached != null) {
-      return cached;
-    }
-
-    final stream = _retryingStream<int>(
-      'watchUnreadNotificationCount($currentUserId)',
-      () => _firestore
-          .collection('users')
-          .doc(currentUserId)
-          .collection('notifications')
-          .snapshots()
-          .map((snapshot) {
-        var unreadCount = 0;
-        for (final doc in snapshot.docs) {
-          final data = doc.data();
-          // CRITICAL: sender is always excluded from their own notifications and unread counts. Do not remove this check. This has been a recurring bug.
-          if (data['senderId'] == currentUserId ||
-              data['senderUid'] == currentUserId) {
-            continue;
-          }
-
-          final payload = Map<String, dynamic>.from(data['data'] as Map? ?? {});
-          final payloadSenderId = payload['senderId'] as String?;
-          final payloadSenderUid = payload['senderUid'] as String?;
-          if (payloadSenderId == currentUserId ||
-              payloadSenderUid == currentUserId) {
-            continue;
-          }
-
-          final deliverAt = _parseDateTime(data['deliverAt']);
-          final isDeliverable =
-              deliverAt == null || !deliverAt.isAfter(DateTime.now());
-          if (isDeliverable && data['read'] != true) {
-            unreadCount += 1;
-          }
-        }
-        return unreadCount;
-      }),
-    ).asBroadcastStream();
-    _unreadNotificationStreams[currentUserId] = stream;
-    return stream;
+    return NotificationService.instance.watchUnreadNotificationCount();
   }
 
   Stream<List<ProjectCallSchedule>> watchProjectCallSchedules(
@@ -3734,62 +3599,35 @@ class ProjectService {
           continue;
         }
 
-        final notificationsRef = _firestore
-            .collection('users')
-            .doc(userId)
-            .collection('notifications');
-
         if (type == 'chat_message') {
           final channelId = data?['channelId']?.toString() ?? '';
-          final notificationId = 'chat_message_$channelId';
-          final notificationRef = notificationsRef.doc(notificationId);
-          final existingDoc = await notificationRef.get();
-
-          final notificationData = <String, dynamic>{
-            if (data != null) ...data,
-            'channelId': channelId,
-          };
-
-          final condensedTitle = 'Unread messages in this channel';
-          final condensedBody = 'You have unread messages in this channel';
-          final payload = <String, dynamic>{
-            'id': notificationRef.id,
-            'userId': userId,
-            'projectId': projectId,
-            'type': type,
-            'title': condensedTitle,
-            'body': condensedBody,
-            'read': false,
-            'deliverAt':
-                deliverAt != null ? Timestamp.fromDate(deliverAt) : null,
-            'data': notificationData,
-            'createdAt': FieldValue.serverTimestamp(),
-          };
-
-          await _firestore.runTransaction((transaction) async {
-            if (existingDoc.exists) {
-              transaction.update(notificationRef, payload);
-              return;
-            }
-
-            transaction.set(notificationRef, payload);
-          });
+          final notificationId = 'chat_message_${projectId}_$channelId';
+          await NotificationService.instance.createNotification(
+            userId: userId,
+            type: type,
+            title: 'Unread messages in this channel',
+            body: 'You have unread messages in this channel',
+            projectId: projectId,
+            deliverAt: deliverAt,
+            data: <String, dynamic>{
+              if (data != null) ...data,
+              'channelId': channelId,
+            },
+            dedupe: true,
+            documentId: notificationId,
+          );
           continue;
         }
 
-        final notificationRef = notificationsRef.doc();
-        await notificationRef.set({
-          'id': notificationRef.id,
-          'userId': userId,
-          'projectId': projectId,
-          'type': type,
-          'title': title,
-          'body': body,
-          'read': false,
-          'createdAt': FieldValue.serverTimestamp(),
-          'deliverAt': deliverAt != null ? Timestamp.fromDate(deliverAt) : null,
-          'data': data,
-        });
+        await NotificationService.instance.createNotification(
+          userId: userId,
+          type: type,
+          title: title,
+          body: body,
+          projectId: projectId,
+          deliverAt: deliverAt,
+          data: data,
+        );
       }
     } catch (e) {
       print('⚠️  Error fanning out notifications: $e');
@@ -4037,21 +3875,4 @@ class ProjectService {
     );
   }
 
-  ProjectNotificationItem _parseNotificationItem(
-    DocumentSnapshot<Map<String, dynamic>> doc,
-  ) {
-    final data = doc.data()!;
-    return ProjectNotificationItem(
-      id: doc.id,
-      userId: data['userId'] as String? ?? '',
-      projectId: data['projectId'] as String? ?? '',
-      type: data['type'] as String? ?? 'new_message',
-      title: data['title'] as String? ?? '',
-      body: data['body'] as String? ?? '',
-      read: data['read'] as bool? ?? false,
-      createdAt: _parseDateTime(data['createdAt']) ?? DateTime.now(),
-      deliverAt: _parseDateTime(data['deliverAt']),
-      data: Map<String, dynamic>.from(data['data'] as Map? ?? {}),
-    );
-  }
 }

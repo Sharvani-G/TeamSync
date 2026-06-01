@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../theme/app_theme.dart';
 
 class SimpleAppBar extends StatelessWidget implements PreferredSizeWidget {
@@ -179,18 +180,19 @@ class UserAvatar extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
-      child: ClipOval(
+            child: ClipOval(
         child: imageUrl != null && imageUrl!.trim().isNotEmpty
-            ? Image.network(
-                imageUrl!,
+            ? CachedNetworkImage(
+                imageUrl: imageUrl!,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Center(
+                placeholder: (_, __) => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                errorWidget: (_, __, ___) => Center(
                   child: Text(
                     initials,
                     style: TextStyle(
                       fontSize: size * 0.35,
                       fontWeight: FontWeight.w600,
-                      color: color != null ? Colors.white : AppTheme.primary,
+                      color: color != null ? AppTheme.textPrimary : AppTheme.primary,
                     ),
                   ),
                 ),
@@ -201,7 +203,7 @@ class UserAvatar extends StatelessWidget {
                   style: TextStyle(
                     fontSize: size * 0.35,
                     fontWeight: FontWeight.w600,
-                    color: color != null ? Colors.white : AppTheme.primary,
+                    color: color != null ? AppTheme.textPrimary : AppTheme.primary,
                   ),
                 ),
               ),

@@ -171,7 +171,8 @@ class _EntryScreenState extends State<EntryScreen>
                       ? const NeverScrollableScrollPhysics()
                       : const BouncingScrollPhysics(),
                   itemCount: _pages.length,
-                  onPageChanged: (index) => setState(() => _currentPage = index),
+                  onPageChanged: (index) =>
+                      setState(() => _currentPage = index),
                   itemBuilder: (context, index) {
                     final page = _pages[index];
                     if (index == _pages.length - 2) {
@@ -244,94 +245,109 @@ class _OnboardingPane extends StatelessWidget {
         ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 14, 12, 18),
-          child: Column(
-            children: [
-              const SizedBox(height: 8),
-              Expanded(
-                child: Center(
-                  child: AnimatedBuilder(
-                    animation: floatAnimation,
-                    builder: (context, child) {
-                      return Transform.translate(
-                        offset: Offset(0, floatAnimation.value),
-                        child: child,
-                      );
-                    },
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(24),
-                      child: Image.asset(
-                        page.imagePath,
-                        fit: BoxFit.contain,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  page.title,
-                  style: GoogleFonts.dmSans(
-                    fontSize: 42,
-                    height: 1.06,
-                    color: page.titleColor,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  page.subtitle,
-                  style: GoogleFonts.dmSans(
-                    fontSize: 18,
-                    color: page.subtitleColor,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: Row(
-                      children: List.generate(totalPages, (index) {
-                        final active = currentPage == index;
-                        return AnimatedContainer(
-                          duration: const Duration(milliseconds: 250),
-                          margin: const EdgeInsets.only(right: 8),
-                          height: 8,
-                          width: active ? 24 : 8,
-                          decoration: BoxDecoration(
-                            color: active
-                                ? page.accent
-                                : page.accent.withOpacity(0.35),
-                            borderRadius: BorderRadius.circular(999),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final imageHeight =
+                  (constraints.maxHeight * 0.42).clamp(96.0, 170.0).toDouble();
+
+              return SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        height: imageHeight,
+                        child: Center(
+                          child: AnimatedBuilder(
+                            animation: floatAnimation,
+                            builder: (context, child) {
+                              return Transform.translate(
+                                offset: Offset(0, floatAnimation.value),
+                                child: child,
+                              );
+                            },
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(24),
+                              child: Image.asset(
+                                page.imagePath,
+                                fit: BoxFit.contain,
+                              ),
+                            ),
                           ),
-                        );
-                      }),
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: onNext,
-                    child: Container(
-                      width: 54,
-                      height: 54,
-                      decoration: BoxDecoration(
-                        color: page.button,
-                        shape: BoxShape.circle,
+                        ),
                       ),
-                      child: const Icon(
-                        Icons.arrow_forward_ios_rounded,
-                        color: Colors.white,
-                        size: 20,
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          page.title,
+                          style: GoogleFonts.dmSans(
+                            fontSize: 42,
+                            height: 1.06,
+                            color: page.titleColor,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          page.subtitle,
+                          style: GoogleFonts.dmSans(
+                            fontSize: 18,
+                            color: page.subtitleColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Row(
+                              children: List.generate(totalPages, (index) {
+                                final active = currentPage == index;
+                                return AnimatedContainer(
+                                  duration: const Duration(milliseconds: 250),
+                                  margin: const EdgeInsets.only(right: 8),
+                                  height: 8,
+                                  width: active ? 24 : 8,
+                                  decoration: BoxDecoration(
+                                    color: active
+                                        ? page.accent
+                                        : page.accent.withOpacity(0.35),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                );
+                              }),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: onNext,
+                            child: Container(
+                              width: 54,
+                              height: 54,
+                              decoration: BoxDecoration(
+                                color: page.button,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.arrow_forward_ios_rounded,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ],
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -612,7 +628,8 @@ class _SignInPaneState extends State<_SignInPane>
                             borderRadius: BorderRadius.circular(10),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFFEF4444).withOpacity(0.25),
+                                color:
+                                    const Color(0xFFEF4444).withOpacity(0.25),
                                 blurRadius: 12,
                                 offset: const Offset(0, 4),
                               ),
@@ -707,7 +724,8 @@ class _SignInPaneState extends State<_SignInPane>
             : null,
         filled: true,
         fillColor: const Color(0xFFF9FAFB),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFFE5E7EB), width: 1),
@@ -802,19 +820,21 @@ class _RegisterPaneState extends State<_RegisterPane>
       final password = _passwordController.text.trim();
 
       if (!UserService.isValidUsernameFormat(username)) {
-        throw Exception('Username must start with a letter and use only letters, numbers, or underscores');
+        throw Exception(
+            'Username must start with a letter and use only letters, numbers, or underscores');
       }
 
-      final usernameAvailable = await UserService.instance.isUsernameAvailable(username);
+      final usernameAvailable =
+          await UserService.instance.isUsernameAvailable(username);
       if (!usernameAvailable) {
         throw Exception('Username is already taken');
       }
 
-      final credential = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
-            email: email,
-            password: password,
-          );
+      final credential =
+          await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
 
       debugPrint(
         'Signup success: uid=${credential.user?.uid}, email=${credential.user?.email}',
@@ -826,19 +846,18 @@ class _RegisterPaneState extends State<_RegisterPane>
           .collection('users')
           .doc(credential.user!.uid)
           .set({
-            'uid': credential.user!.uid,
-            'username': username,
-            'usernameLower': username.toLowerCase(),
-            'name': _nameController.text.trim(),
-            'email': _emailController.text.trim().toLowerCase(),
-            'phone': _phoneController.text.trim(),
-            'createdAt': FieldValue.serverTimestamp(),
-            'projectsJoined': 0,
-            'tasksCompleted': 0,
-            'lastUpdated': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
+        'uid': credential.user!.uid,
+        'username': username,
+        'usernameLower': username.toLowerCase(),
+        'name': _nameController.text.trim(),
+        'email': _emailController.text.trim().toLowerCase(),
+        'phone': _phoneController.text.trim(),
+        'createdAt': FieldValue.serverTimestamp(),
+        'projectsJoined': 0,
+        'tasksCompleted': 0,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
-      
       if (!mounted) return;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -1059,7 +1078,8 @@ class _RegisterPaneState extends State<_RegisterPane>
                                 ),
                                 children: [
                                   const TextSpan(
-                                    text: 'By checking the box you agree to our ',
+                                    text:
+                                        'By checking the box you agree to our ',
                                   ),
                                   TextSpan(
                                     text: 'Terms and Conditions',
@@ -1086,7 +1106,8 @@ class _RegisterPaneState extends State<_RegisterPane>
                             borderRadius: BorderRadius.circular(10),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFFEF4444).withOpacity(0.25),
+                                color:
+                                    const Color(0xFFEF4444).withOpacity(0.25),
                                 blurRadius: 12,
                                 offset: const Offset(0, 4),
                               ),

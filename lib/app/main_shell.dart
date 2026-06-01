@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../screens/home_dashboard_screen.dart';
 import '../screens/discover_screen.dart';
-import '../screens/notifications_screen.dart';
-import '../screens/profile_screen.dart';
+import '../screens/notifications/notifications_page.dart';
+import '../screens/profile/my_profile_page.dart';
 import '../screens/incoming_call_overlay_screen.dart';
 import '../services/project_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
-import '../services/user_service.dart';
 import '../services/webrtc_socket_service.dart';
 import '../theme/app_theme.dart';
 import '../screens/in_call_screen.dart';
@@ -33,8 +32,8 @@ class _MainShellState extends State<MainShell> {
   static const List<Widget> _screens = [
     HomeDashboardScreen(),
     DiscoverScreen(),
-    NotificationsScreen(),
-    ProfileScreen(),
+    NotificationsPage(),
+    MyProfilePage(),
   ];
 
   @override
@@ -171,9 +170,8 @@ class _MainShellState extends State<MainShell> {
       });
 
       _inviteSub = FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
           .collection('notifications')
+          .where('userId', isEqualTo: user.uid)
           .where('read', isEqualTo: false)
           .where('type', whereIn: ['call_started', 'call_scheduled'])
           .snapshots()
@@ -193,58 +191,5 @@ class _MainShellState extends State<MainShell> {
     _incomingCallSub?.cancel();
     WebRtcSocketService.instance.unbindUser();
     super.dispose();
-  }
-
-  void _showInviteDialog(String inviteId, Map<String, dynamic> data) async {
-    final callId = (data['data'] as Map<String, dynamic>?)?['callId'] as String? ?? '';
-    final projectId = data['projectId'] as String? ?? '';
-    final senderId = (data['data'] as Map<String, dynamic>?)?['senderId'] as String? ?? 'Someone';
-    String senderDisplay = senderId;
-    try {
-      final user = await UserService.instance.getUserById(senderId);
-      if (user != null) senderDisplay = user.name.isNotEmpty ? user.name : user.username;
-    } catch (_) {}
-
-    if (!mounted) return;
-
-    Navigator.of(context, rootNavigator: true).push(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => IncomingCallOverlayScreen(
-          callerName: senderDisplay,
-          projectTitle: data['title'] as String? ?? 'Incoming call',
-          onDecline: () async {
-            await FirebaseFirestore.instance
-                .collection('users')
-                .doc(FirebaseAuth.instance.currentUser?.uid)
-                .collection('notifications')
-                .doc(inviteId)
-                .update({'read': true});
-            if (context.mounted) {
-              Navigator.of(context, rootNavigator: true).maybePop();
-            }
-          },
-          onAccept: () async {
-            await FirebaseFirestore.instance
-                .collection('users')
-                .doc(FirebaseAuth.instance.currentUser?.uid)
-                .collection('notifications')
-                .doc(inviteId)
-                .update({'read': true});
-            if (context.mounted) {
-              Navigator.of(context, rootNavigator: true).maybePop();
-            }
-            if (!context.mounted || projectId.isEmpty || callId.isEmpty) {
-              return;
-            }
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => InCallScreen(projectId: projectId, callId: callId),
-              ),
-            );
-          },
-        ),
-      ),
-    );
   }
 }
