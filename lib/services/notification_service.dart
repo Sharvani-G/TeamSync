@@ -296,13 +296,13 @@ class NotificationService {
             .collection('notifications')
             .where('userId', isEqualTo: userId)
             .where('type', isEqualTo: 'chat_message')
-            .where('data.channelId', isEqualTo: channelId)
+            .where('id', isEqualTo: 'chat_message_${projectId}_$channelId')
             .where('read', isEqualTo: false)
             .limit(1)
             .get();
 
         if (existing.docs.isNotEmpty) {
-          return; // Already have unread notification for this channel
+          return;
         }
       }
     }
