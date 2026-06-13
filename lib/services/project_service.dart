@@ -1212,6 +1212,8 @@ class ProjectService {
 
     final blockId = _firestore.collection('projects').doc().id;
 
+    String projectTitle = 'Project';
+
     await _firestore.runTransaction((transaction) async {
       final ref = _firestore.collection('projects').doc(projectId);
       final snapshot = await transaction.get(ref);
@@ -1220,6 +1222,7 @@ class ProjectService {
       }
 
       final data = snapshot.data()!;
+      projectTitle = data['title'] as String? ?? 'Project';
       if (!_canEditIdeaBoard(data, authUser.uid)) {
         throw Exception('Only collaborators can edit idea board');
       }
@@ -1241,6 +1244,18 @@ class ProjectService {
         'lastUpdated': Timestamp.now(),
       });
     });
+
+    try {
+      await _fanOutProjectNotification(
+        projectId: projectId,
+        type: 'ideaboard_updated',
+        title: 'Idea board updated in $projectTitle',
+        body: 'A block of type $type has been added to the idea board.',
+        data: {'levelId': trimmedLevelId, 'projectId': projectId},
+      );
+    } catch (e) {
+      print('⚠️ Failed to fan out idea board notification: $e');
+    }
   }
 
   Future<void> updateIdeaBoardBlock({

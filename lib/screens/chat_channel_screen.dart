@@ -278,10 +278,12 @@ class _MessageBubble extends StatelessWidget {
               ],
             ),
           ),
-          SizedBox(height: 4.h),
-          Text(
-            _formatTimestamp(message.createdAt),
-            style: TextStyle(color: AppColors.kTextSecond, fontSize: 10.sp),
+          Padding(
+            padding: EdgeInsets.only(top: 4.h, left: isMe ? 0 : 4.w, right: isMe ? 4.w : 0),
+            child: Text(
+              _formatTimestamp(message.createdAt),
+              style: TextStyle(color: AppColors.kTextSecond, fontSize: 10.sp),
+            ),
           ),
         ],
       ),
@@ -295,21 +297,88 @@ class _ChatFileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => launchUrl(Uri.parse(attachment.downloadUrl), mode: LaunchMode.externalApplication),
+    return Container(
+      margin: EdgeInsets.only(bottom: 4.h),
+      padding: EdgeInsets.all(8.w),
+      decoration: BoxDecoration(
+        color: Colors.black26,
+        borderRadius: BorderRadius.circular(8.r),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.insert_drive_file, color: Colors.white70, size: 16.sp),
+              SizedBox(width: 8.w),
+              Flexible(
+                child: Text(
+                  attachment.name,
+                  style: TextStyle(color: Colors.white, fontSize: 12.sp, fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8.h),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _ChatActionButton(
+                label: 'Open',
+                icon: Icons.visibility_outlined,
+                onTap: () => launchUrl(
+                  Uri.parse(attachment.downloadUrl.trim()),
+                  mode: LaunchMode.externalApplication,
+                ),
+              ),
+              SizedBox(width: 8.w),
+              _ChatActionButton(
+                label: 'Download',
+                icon: Icons.download_outlined,
+                onTap: () => launchUrl(
+                  Uri.parse('${attachment.downloadUrl.trim()}?fl_attachment'),
+                  mode: LaunchMode.externalApplication,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChatActionButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _ChatActionButton({required this.label, required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6.r),
       child: Container(
-        margin: EdgeInsets.only(bottom: 4.h),
-        padding: EdgeInsets.all(8.w),
+        padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
         decoration: BoxDecoration(
-          color: Colors.black12,
-          borderRadius: BorderRadius.circular(8.r),
+          color: Colors.white.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(6.r),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.insert_drive_file, color: Colors.white70, size: 16.sp),
-            SizedBox(width: 8.w),
-            Flexible(child: Text(attachment.name, style: TextStyle(color: Colors.white, fontSize: 12.sp), maxLines: 1, overflow: TextOverflow.ellipsis)),
+            Icon(icon, size: 12.sp, color: Colors.white),
+            SizedBox(width: 4.w),
+            Text(
+              label,
+              style: TextStyle(color: Colors.white, fontSize: 10.sp, fontWeight: FontWeight.w500),
+            ),
           ],
         ),
       ),

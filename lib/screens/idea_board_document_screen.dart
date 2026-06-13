@@ -380,10 +380,10 @@ class _IdeaBlockCardState extends State<_IdeaBlockCard> {
                 _timer = Timer(const Duration(milliseconds: 1500), () => widget.onSaveContent(val));
               },
               style: TextStyle(color: AppColors.kTextPrimary, fontSize: isTitle ? 20.sp : 14.sp, fontWeight: isTitle ? FontWeight.w600 : FontWeight.w400),
-              maxLines: null,
+              maxLines: isTitle ? 1 : null,
               decoration: InputDecoration(border: InputBorder.none, hintText: isTitle ? 'Section Title' : 'Start typing...'),
             ),
-          if (widget.block.files.isNotEmpty) ...[
+          if (widget.block.files.isNotEmpty && widget.block.type != 'title') ...[
             SizedBox(height: 12.h),
             ...widget.block.files.map((f) => FileAttachmentWidget(
                   file: f,
@@ -393,13 +393,13 @@ class _IdeaBlockCardState extends State<_IdeaBlockCard> {
                   onDelete: () => widget.onDeleteFile(f),
                 )),
           ],
-          if (isUploading) ...[
+          if (isUploading && widget.block.type != 'title') ...[
             SizedBox(height: 12.h),
             LinearProgressIndicator(value: widget.uploadProgress, backgroundColor: AppColors.kBgElevated, color: AppColors.kAccentBlue),
             SizedBox(height: 4.h),
             Text('Uploading...', style: TextStyle(color: AppColors.kTextSecond, fontSize: 11.sp)),
           ],
-          if (widget.uploadError != null && isUploading) ...[
+          if (widget.uploadError != null && isUploading && widget.block.type != 'title') ...[
             SizedBox(height: 8.h),
             Text(widget.uploadError!, style: TextStyle(color: AppColors.kDanger, fontSize: 12.sp)),
           ],

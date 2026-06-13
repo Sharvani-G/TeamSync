@@ -34,13 +34,6 @@ class SettingsScreen extends StatelessWidget {
             icon: Icons.notifications_none,
             onTap: () {},
           ),
-          Divider(color: AppColors.kDivider, height: 1),
-          _SettingsTile(
-            title: 'Privacy & Security',
-            subtitle: 'Visibility and data preferences',
-            icon: Icons.lock_outline,
-            onTap: () {},
-          ),
         ],
       ),
     );

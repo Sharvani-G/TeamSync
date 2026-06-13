@@ -147,6 +147,14 @@ function attachSocketServer(httpServer) {
       socket.join(`user:${userId}`);
     });
 
+    socket.on('user:register', (payload = {}) => {
+      const uid = payload.uid || payload.userId || '';
+      if (!uid) return;
+      socket.data.userId = uid;
+      socket.join(`user:${uid}`);
+      console.log(`[SOCKET] User ${uid} registered`);
+    });
+
     socket.on('webrtc:unregister-user', (payload = {}) => {
       const userId = payload.userId || payload.uid || socket.data.userId || '';
       if (!userId) return;
@@ -164,6 +172,18 @@ function attachSocketServer(httpServer) {
         userId: socket.data.userId,
         roomId,
       });
+    });
+
+    socket.on('call:join-room', (payload = {}) => {
+      const roomId = payload.roomId || '';
+      const userId = payload.userId || '';
+      const userName = payload.userName || '';
+      if (!roomId) return;
+      socket.data.roomId = roomId;
+      socket.data.userId = userId;
+      socket.join(roomId);
+      socket.to(roomId).emit('call:user-joined', { userId, userName });
+      console.log(`[CALL] ${userName || userId} joined room ${roomId}`);
     });
 
     socket.on('webrtc:leave-room', (payload = {}) => {
@@ -191,6 +211,20 @@ function attachSocketServer(httpServer) {
 
       socket.to(roomId).emit('webrtc:offer', envelope);
       socket.to(roomId).emit('signal', { type: 'offer', ...envelope });
+
+      // Relay to custom targetUids if present
+      const targetUids = payload.targetUids || [];
+      if (targetUids.length) {
+        targetUids.forEach(uid => {
+          io.to(`user:${uid}`).emit('webrtc:incoming-call', {
+            roomId,
+            offer: payload.offer || payload,
+            callerId: payload.callerId || payload.senderId || socket.data.userId,
+            callerName: payload.callerName || '',
+            projectName: payload.projectName || payload.projectTitle || ''
+          });
+        });
+      }
     });
 
     socket.on('webrtc:answer', (payload = {}) => {
@@ -207,6 +241,13 @@ function attachSocketServer(httpServer) {
 
       socket.to(roomId).emit('webrtc:answer', envelope);
       socket.to(roomId).emit('signal', { type: 'answer', ...envelope });
+
+      const targetCallerId = payload.targetCallerId || '';
+      if (targetCallerId) {
+        io.to(`user:${targetCallerId}`).emit('webrtc:answer', {
+          answer: payload.answer || payload
+        });
+      }
     });
 
     socket.on('webrtc:ice-candidate', (payload = {}) => {
@@ -223,6 +264,28 @@ function attachSocketServer(httpServer) {
 
       socket.to(roomId).emit('webrtc:ice-candidate', envelope);
       socket.to(roomId).emit('signal', { type: 'ice-candidate', ...envelope });
+
+      const targetUid = payload.targetUid || '';
+      if (targetUid) {
+        io.to(`user:${targetUid}`).emit('webrtc:ice-candidate', {
+          candidate: payload.candidate || payload
+        });
+      }
+    });
+
+    socket.on('webrtc:decline', (payload = {}) => {
+      const callerId = payload.callerId || '';
+      if (callerId) {
+        io.to(`user:${callerId}`).emit('webrtc:declined', {});
+      }
+    });
+
+    socket.on('webrtc:end', (payload = {}) => {
+      const roomId = payload.roomId || socket.data.roomId;
+      if (roomId) {
+        io.to(roomId).emit('webrtc:call-ended');
+        console.log(`[CALL] Room ${roomId} ended`);
+      }
     });
 
     socket.on('webrtc:incoming-call', (payload = {}) => {

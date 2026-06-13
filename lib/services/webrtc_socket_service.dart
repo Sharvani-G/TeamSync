@@ -23,6 +23,7 @@ class WebRtcSocketService {
     _userId = userId;
     final socket = await _ensureSocket();
     socket.emit('webrtc:register-user', {'userId': userId, 'uid': userId});
+    socket.emit('user:register', {'uid': userId});
   }
 
   Future<void> unbindUser() async {
@@ -53,6 +54,7 @@ class WebRtcSocketService {
     created.onConnect((_) {
       if (_userId.isNotEmpty) {
         created.emit('webrtc:register-user', {'userId': _userId, 'uid': _userId});
+        created.emit('user:register', {'uid': _userId});
       }
     });
 

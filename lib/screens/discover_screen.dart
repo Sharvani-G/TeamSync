@@ -15,6 +15,15 @@ class DiscoverScreen extends StatefulWidget {
 
 class _DiscoverScreenState extends State<DiscoverScreen> {
   String _query = '';
+  late final Stream<List<JoinRequest>> _requestsStream;
+  late final Stream<List<Project>> _projectsStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _requestsStream = ProjectService.instance.watchMyJoinRequests();
+    _projectsStream = ProjectService.instance.watchPublicProjects();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,13 +55,13 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           ),
           Expanded(
             child: StreamBuilder<List<JoinRequest>>(
-              stream: ProjectService.instance.watchMyJoinRequests(),
+              stream: _requestsStream,
               builder: (context, requestSnap) {
                 final myRequests = requestSnap.data ?? [];
                 final requestStatusMap = {for (var r in myRequests) r.projectId: r.status};
 
                 return StreamBuilder<List<Project>>(
-                  stream: ProjectService.instance.watchPublicProjects(),
+                  stream: _projectsStream,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
                     final projects = snapshot.data ?? [];

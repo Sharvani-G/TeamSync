@@ -172,7 +172,8 @@ class NotificationService {
       'watchMyNotifications($currentUserId)',
       () => _firestore
           .collection('notifications')
-          .where('userId', isEqualTo: currentUserId)
+          .where('recipient_uid', isEqualTo: currentUserId)
+          .orderBy('created_at', descending: true)
           .limit(30)
           .snapshots()
           .map((snapshot) {
@@ -186,12 +187,6 @@ class NotificationService {
           }
           items.add(item);
         }
-
-        items.sort((left, right) {
-          final leftCreatedAt = left.createdAt;
-          final rightCreatedAt = right.createdAt;
-          return rightCreatedAt.compareTo(leftCreatedAt);
-        });
 
         return items;
       }),
@@ -216,7 +211,7 @@ class NotificationService {
       'watchUnreadNotificationCount($currentUserId)',
       () => _firestore
           .collection('notifications')
-          .where('userId', isEqualTo: currentUserId)
+          .where('recipient_uid', isEqualTo: currentUserId)
           .where('read', isEqualTo: false)
           .limit(100)
           .snapshots()
@@ -264,7 +259,7 @@ class NotificationService {
     try {
       final snapshot = await _firestore
           .collection('notifications')
-          .where('userId', isEqualTo: authUser.uid)
+          .where('recipient_uid', isEqualTo: authUser.uid)
           .where('read', isEqualTo: false)
           .get();
 
@@ -294,7 +289,7 @@ class NotificationService {
       if (channelId.isNotEmpty) {
         final existing = await _firestore
             .collection('notifications')
-            .where('userId', isEqualTo: userId)
+            .where('recipient_uid', isEqualTo: userId)
             .where('type', isEqualTo: 'chat_message')
             .where('id', isEqualTo: 'chat_message_${projectId}_$channelId')
             .where('read', isEqualTo: false)
@@ -314,12 +309,14 @@ class NotificationService {
     final payload = <String, dynamic>{
       'id': notificationRef.id,
       'userId': userId,
+      'recipient_uid': userId,
       'projectId': projectId,
       'type': type,
       'title': title,
       'body': body,
       'read': false,
       'createdAt': FieldValue.serverTimestamp(),
+      'created_at': FieldValue.serverTimestamp(),
       'deliverAt': deliverAt != null ? Timestamp.fromDate(deliverAt) : null,
       'data': data ?? <String, dynamic>{},
       'dedupe': dedupe,
@@ -342,13 +339,13 @@ class NotificationService {
     final data = doc.data()!;
     return ProjectNotificationItem(
       id: doc.id,
-      userId: data['userId'] as String? ?? '',
+      userId: data['recipient_uid'] as String? ?? data['userId'] as String? ?? '',
       projectId: data['projectId'] as String? ?? '',
       type: data['type'] as String? ?? 'update',
       title: data['title'] as String? ?? '',
       body: data['body'] as String? ?? '',
       read: data['read'] as bool? ?? false,
-      createdAt: _parseDateTime(data['createdAt']) ?? DateTime.now(),
+      createdAt: _parseDateTime(data['created_at']) ?? _parseDateTime(data['createdAt']) ?? DateTime.now(),
       deliverAt: _parseDateTime(data['deliverAt']),
       data: Map<String, dynamic>.from(data['data'] as Map? ?? {}),
     );

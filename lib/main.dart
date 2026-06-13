@@ -32,33 +32,40 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   appendBootLog('[BOOT] app start');
   print('${DateTime.now().toIso8601String()} [BOOT] app start');
-  final envConfig = await TeamSyncEnvConfig.instance;
-  envConfig.logStartupSelection();
-  await Firebase.initializeApp(
-    options: envConfig.firebaseOptions,
-  );
-  if (kIsWeb) {
-    appendBootLog('[BOOT] using ${envConfig.storageRegion} storage profile');
-  }
-  appendBootLog('[BOOT] firebase initialized');
-  print('${DateTime.now().toIso8601String()} [BOOT] firebase initialized');
-  if (kIsWeb) {
-    await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
-    ensureFilePickerWebInitialized();
-  }
-  if (!kIsWeb) {
-    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-  }
-  await NotificationService.instance.initializePushNotifications(
-    onNotificationTap: (route, data) {
-      final navigator = appNavigatorKey.currentState;
-      if (navigator == null) {
-        return;
-      }
+  
+  try {
+    final envConfig = await TeamSyncEnvConfig.instance;
+    envConfig.logStartupSelection();
+    await Firebase.initializeApp(
+      options: envConfig.firebaseOptions,
+    );
+    if (kIsWeb) {
+      appendBootLog('[BOOT] using ${envConfig.storageRegion} storage profile');
+    }
+    appendBootLog('[BOOT] firebase initialized');
+    print('${DateTime.now().toIso8601String()} [BOOT] firebase initialized');
+    if (kIsWeb) {
+      await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+      ensureFilePickerWebInitialized();
+    }
+    if (!kIsWeb) {
+      SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    }
+    await NotificationService.instance.initializePushNotifications(
+      onNotificationTap: (route, data) {
+        final navigator = appNavigatorKey.currentState;
+        if (navigator == null) {
+          return;
+        }
 
-      navigator.pushNamed(route.isEmpty ? '/notifications' : route, arguments: data);
-    },
-  );
+        navigator.pushNamed(route.isEmpty ? '/notifications' : route, arguments: data);
+      },
+    );
+  } catch (e, stackTrace) {
+    debugPrint('CRITICAL BOOTSTRAP FAILURE: $e');
+    debugPrint('STACK TRACE: $stackTrace');
+  }
+
   runApp(const ProjectSyncApp());
 }
 

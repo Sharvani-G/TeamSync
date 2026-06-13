@@ -164,6 +164,60 @@ class AttachmentService {
     onProgress(0.0);
 
     final token = authToken?.trim() ?? '';
+    final isIdeaBoard = context['type'] == 'ideaboard';
+    if (isIdeaBoard) {
+      onProgress(0.1);
+      final cloudName = 'dkrfetmrq';
+      final uploadUrl = 'https://api.cloudinary.com/v1_1/$cloudName/auto/upload';
+
+      final projectId = (context['projectId'] as String? ?? '').trim();
+      final levelId = (context['levelId'] as String? ?? '').trim();
+      final blockId = (context['blockId'] as String? ?? '').trim();
+      final folder = 'teamsync/$projectId/idea-board/$levelId/$blockId';
+
+      final request = http.MultipartRequest('POST', Uri.parse(uploadUrl));
+      request.fields['upload_preset'] = 'ml_default';
+      request.fields['folder'] = folder;
+      request.fields['resource_type'] = 'auto';
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          fileBytes,
+          filename: fileName,
+        ),
+      );
+
+      onProgress(0.5);
+      final streamedResponse = await request.send().timeout(const Duration(minutes: 10));
+      final body = await streamedResponse.stream.bytesToString();
+      final cloudinaryResponse = http.Response(body, streamedResponse.statusCode, headers: streamedResponse.headers);
+
+      if (cloudinaryResponse.statusCode != 200 && cloudinaryResponse.statusCode != 201) {
+        final errorMessage = _extractCloudinaryError(cloudinaryResponse.body);
+        debugPrint('[UPLOAD] Cloudinary unsigned write operation rejected: ${cloudinaryResponse.body}');
+        throw Exception(errorMessage);
+      }
+
+      final responseData = jsonDecode(cloudinaryResponse.body) as Map<String, dynamic>;
+      final String permanentDownloadUrl = responseData['secure_url'] as String? ?? '';
+      final String publicId = responseData['public_id'] as String? ?? '';
+
+      if (permanentDownloadUrl.isEmpty) {
+        throw Exception('Cloudinary did not return a secure URL.');
+      }
+
+      onProgress(1.0);
+      debugPrint('[UPLOAD] Asset verified in Cloudinary (unsigned). Permanent link cached: $permanentDownloadUrl');
+      return AttachmentUploadResult(
+        downloadURL: permanentDownloadUrl,
+        storagePath: publicId,
+        fileName: fileName,
+        fileSize: totalBytes,
+        mimeType: mimeType,
+        fileId: publicId,
+      );
+    }
+
     if (token.isEmpty) {
       throw Exception('Unable to obtain Firebase auth token');
     }
@@ -568,7 +622,7 @@ class AttachmentService {
     required int fileSize,
     required Map<String, dynamic> context,
   }) async {
-    debugPrint('[DEBUG] Calling API at: ${AppConfig.apiBaseUrl}/api/storage/cloudinary-signature');
+    debugPrint('[UPLOAD URL] ${AppConfig.apiBaseUrl}/api/storage/cloudinary-signature');
     final gatewayResponse = await http
         .post(
           _storageGatewayBaseUri.resolve('api/storage/cloudinary-signature'),

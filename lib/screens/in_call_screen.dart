@@ -4,8 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../services/project_service.dart';
-import '../services/webrtc_environment.dart';
+import '../services/webrtc_client.dart';
 import '../theme/app_colors.dart';
 
 class InCallScreen extends StatefulWidget {
@@ -19,31 +18,83 @@ class InCallScreen extends StatefulWidget {
 
 class _InCallScreenState extends State<InCallScreen> {
   final _localRenderer = RTCVideoRenderer();
-  final Map<String, RTCVideoRenderer> _remoteRenderers = {};
-  MediaStream? _localStream;
+  final _remoteRenderer = RTCVideoRenderer();
+  late final WebRtcClient _client;
   bool _audioEnabled = true;
   bool _videoEnabled = false;
+  bool _initialized = false;
 
   @override
   void initState() {
     super.initState();
-    _initRenderers();
+    _client = WebRtcClient();
+    _initWebRtc();
   }
 
-  Future<void> _initRenderers() async {
+  Future<void> _initWebRtc() async {
     await _localRenderer.initialize();
-    _localStream = await navigator.mediaDevices.getUserMedia({
-      'audio': true,
-      'video': {'facingMode': 'user'},
-    });
-    _localRenderer.srcObject = _localStream;
-    setState(() {});
+    await _remoteRenderer.initialize();
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('projects')
+          .doc(widget.projectId)
+          .collection('callSessions')
+          .doc(widget.callId)
+          .get();
+
+      if (!doc.exists) {
+        throw Exception('Call session not found');
+      }
+
+      final data = doc.data()!;
+      final startedBy = data['startedBy'] as String? ?? '';
+      final roomName = data['roomName'] as String? ?? widget.callId;
+      final myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+      final isCaller = startedBy == myUid;
+
+      _client.onLocalStream.listen((stream) {
+        if (mounted) {
+          setState(() {
+            _localRenderer.srcObject = stream;
+          });
+        }
+      });
+
+      _client.onRemoteStream.listen((stream) {
+        if (mounted) {
+          setState(() {
+            _remoteRenderer.srcObject = stream;
+          });
+        }
+      });
+
+      if (isCaller) {
+        await _client.initAsCaller(roomName, audio: _audioEnabled, video: _videoEnabled);
+      } else {
+        await _client.initAsAnswerer(roomName, audio: _audioEnabled, video: _videoEnabled);
+      }
+
+      if (mounted) {
+        setState(() {
+          _initialized = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error starting WebRTC: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to connect: $e'), behavior: SnackBarBehavior.floating),
+        );
+      }
+    }
   }
 
   @override
   void dispose() {
     _localRenderer.dispose();
-    _localStream?.dispose();
+    _remoteRenderer.dispose();
+    _client.dispose();
     super.dispose();
   }
 
@@ -63,13 +114,17 @@ class _InCallScreenState extends State<InCallScreen> {
       body: Column(
         children: [
           Expanded(
-            child: GridView.count(
-              crossAxisCount: 2,
-              padding: EdgeInsets.all(16.w),
-              children: [
-                _VideoTile(label: 'You', renderer: _localRenderer),
-              ],
-            ),
+            child: !_initialized
+                ? const Center(child: CircularProgressIndicator())
+                : GridView.count(
+                    crossAxisCount: 2,
+                    padding: EdgeInsets.all(16.w),
+                    children: [
+                      _VideoTile(label: 'You', renderer: _localRenderer),
+                      if (_client.remoteStream != null)
+                        _VideoTile(label: 'Collaborator', renderer: _remoteRenderer),
+                    ],
+                  ),
           ),
           Padding(
             padding: EdgeInsets.only(bottom: 32.h, left: 16.w, right: 16.w),
@@ -79,13 +134,21 @@ class _InCallScreenState extends State<InCallScreen> {
               children: [
                 _CallAction(
                   icon: _audioEnabled ? Icons.mic : Icons.mic_off,
-                  label: 'Mute',
-                  onTap: () => setState(() => _audioEnabled = !_audioEnabled),
+                  label: _audioEnabled ? 'Mute' : 'Unmute',
+                  onTap: () {
+                    final nextVal = !_audioEnabled;
+                    _client.mute(!nextVal);
+                    setState(() => _audioEnabled = nextVal);
+                  },
                 ),
                 _CallAction(
                   icon: _videoEnabled ? Icons.videocam : Icons.videocam_off,
                   label: 'Video',
-                  onTap: () => setState(() => _videoEnabled = !_videoEnabled),
+                  onTap: () {
+                    final nextVal = !_videoEnabled;
+                    _client.toggleCamera();
+                    setState(() => _videoEnabled = nextVal);
+                  },
                 ),
                 _CallAction(
                   icon: Icons.call_end,
@@ -112,9 +175,28 @@ class _VideoTile extends StatelessWidget {
     return Container(
       margin: EdgeInsets.all(8.w),
       decoration: BoxDecoration(color: AppColors.kBlack, borderRadius: BorderRadius.circular(12.r)),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12.r),
-        child: RTCVideoView(renderer, mirror: true, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
+      child: Stack(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12.r),
+            child: RTCVideoView(renderer, mirror: label == 'You', objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
+          ),
+          Positioned(
+            bottom: 8.h,
+            left: 8.w,
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(4.r),
+              ),
+              child: Text(
+                label,
+                style: TextStyle(color: Colors.white, fontSize: 10.sp, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

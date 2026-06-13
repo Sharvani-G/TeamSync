@@ -23,7 +23,8 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
-
+  late final Stream<int> _unreadNotificationsStream;
+  StreamSubscription<User?>? _authStateSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _inviteSub;
   StreamSubscription<Map<String, dynamic>>? _incomingCallSub;
   final Set<String> _seenInvites = {};
@@ -38,8 +39,84 @@ class _MainShellState extends State<MainShell> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _unreadNotificationsStream = ProjectService.instance.watchUnreadNotificationCount();
+
+    // Start listening for incoming call notifications when user is available
+    _authStateSub = FirebaseAuth.instance.authStateChanges().listen((user) {
+      _inviteSub?.cancel();
+      _incomingCallSub?.cancel();
+      _seenInvites.clear();
+      WebRtcSocketService.instance.unbindUser();
+      if (user == null) return;
+
+      WebRtcSocketService.instance.bindUser(user.uid);
+
+      _incomingCallSub = WebRtcSocketService.instance.incomingCalls.listen((payload) {
+        final targetUserId = payload['targetUserId']?.toString() ?? '';
+        final targetUids = List<String>.from(payload['targetUids'] ?? []);
+        if (targetUserId.isNotEmpty && targetUserId != user.uid) {
+          return;
+        }
+        if (targetUids.isNotEmpty && !targetUids.contains(user.uid)) {
+          return;
+        }
+        final callId = payload['callId']?.toString() ?? '';
+        final roomId = payload['roomId']?.toString() ?? '';
+        final projectId = payload['projectId']?.toString() ?? '';
+        final callerId = payload['callerId']?.toString() ?? payload['senderId']?.toString() ?? '';
+        final callerName = payload['callerName']?.toString() ?? 'Someone';
+        final projectTitle = payload['projectName']?.toString() ?? payload['projectTitle']?.toString() ?? 'Incoming call';
+
+        if (!mounted) return;
+
+        showGeneralDialog(
+          context: context,
+          barrierDismissible: false,
+          barrierColor: Colors.black.withOpacity(0.8),
+          pageBuilder: (ctx, anim1, anim2) => IncomingCallOverlayScreen(
+            callerName: callerName,
+            projectTitle: projectTitle,
+            onDecline: () {
+              Navigator.of(ctx).pop();
+              if (roomId.isNotEmpty && callerId.isNotEmpty) {
+                WebRtcSocketService.instance.declineCall(roomId, callerId);
+              }
+            },
+            onAccept: () {
+              Navigator.of(ctx).pop();
+              if (!context.mounted || projectId.isEmpty) return;
+              final effectiveCallId = callId.isNotEmpty ? callId : roomId;
+              if (effectiveCallId.isEmpty) return;
+              try { Navigator.of(context).pushNamed('/project/$projectId/workspace/calls'); } catch (_) {}
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => InCallScreen(projectId: projectId, callId: effectiveCallId),
+              ));
+            },
+          ),
+        );
+      });
+
+      _inviteSub = FirebaseFirestore.instance
+          .collection('notifications')
+          .where('recipient_uid', isEqualTo: user.uid)
+          .where('read', isEqualTo: false)
+          .where('type', whereIn: ['call_started', 'call_scheduled'])
+          .limit(30)
+          .snapshots()
+          .listen((snap) {
+        for (final doc in snap.docs) {
+          if (_seenInvites.contains(doc.id)) continue;
+          _seenInvites.add(doc.id);
+          // Call overlays are driven by the Socket.io stream to avoid duplicate prompts.
+        }
+      });
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Listener setup is handled in initState
     // Restore persisted index asynchronously
     SharedPreferences.getInstance().then((prefs) {
       final idx = prefs.getInt(_prefKey) ?? 0;
@@ -48,7 +125,7 @@ class _MainShellState extends State<MainShell> {
       }
     }).catchError((_) {});
     return StreamBuilder<int>(
-      stream: ProjectService.instance.watchUnreadNotificationCount(),
+      stream: _unreadNotificationsStream,
       builder: (context, snapshot) {
         final unreadCount = snapshot.data ?? 0;
 
@@ -126,86 +203,10 @@ class _MainShellState extends State<MainShell> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    // Start listening for incoming call notifications when user is available
-    FirebaseAuth.instance.authStateChanges().listen((user) {
-      _inviteSub?.cancel();
-      _incomingCallSub?.cancel();
-      _seenInvites.clear();
-      WebRtcSocketService.instance.unbindUser();
-      if (user == null) return;
-
-      WebRtcSocketService.instance.bindUser(user.uid);
-
-      _incomingCallSub = WebRtcSocketService.instance.incomingCalls.listen((payload) {
-        final targetUserId = payload['targetUserId']?.toString() ?? '';
-        final targetUids = List<String>.from(payload['targetUids'] ?? []);
-        if (targetUserId.isNotEmpty && targetUserId != user.uid) {
-          return;
-        }
-        if (targetUids.isNotEmpty && !targetUids.contains(user.uid)) {
-          return;
-        }
-        final callId = payload['callId']?.toString() ?? '';
-        final roomId = payload['roomId']?.toString() ?? '';
-        final projectId = payload['projectId']?.toString() ?? '';
-        final callerId = payload['callerId']?.toString() ?? payload['senderId']?.toString() ?? '';
-        final callerName = payload['callerName']?.toString() ?? 'Someone';
-        final projectTitle = payload['projectName']?.toString() ?? payload['projectTitle']?.toString() ?? 'Incoming call';
-
-        if (!mounted) return;
-
-        showGeneralDialog(
-          context: context,
-          barrierDismissible: false,
-          barrierColor: Colors.black.withOpacity(0.8),
-          pageBuilder: (ctx, anim1, anim2) => IncomingCallOverlayScreen(
-            callerName: callerName,
-            projectTitle: projectTitle,
-            onDecline: () {
-              Navigator.of(ctx).pop();
-              if (roomId.isNotEmpty && callerId.isNotEmpty) {
-                WebRtcSocketService.instance.declineCall(roomId, callerId);
-              }
-            },
-            onAccept: () {
-              Navigator.of(ctx).pop();
-              if (!context.mounted || projectId.isEmpty || callId.isEmpty) {
-                return;
-              }
-              Navigator.of(context).pushNamed('/project/$projectId/workspace/calls');
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => InCallScreen(projectId: projectId, callId: callId),
-                ),
-              );
-            },
-          ),
-        );
-      });
-
-      _inviteSub = FirebaseFirestore.instance
-          .collection('notifications')
-          .where('userId', isEqualTo: user.uid)
-          .where('read', isEqualTo: false)
-          .where('type', whereIn: ['call_started', 'call_scheduled'])
-          .limit(30)
-          .snapshots()
-          .listen((snap) {
-        for (final doc in snap.docs) {
-          if (_seenInvites.contains(doc.id)) continue;
-          _seenInvites.add(doc.id);
-          // Call overlays are driven by the Socket.io stream to avoid duplicate prompts.
-        }
-      });
-    });
-  }
-
-  @override
   void dispose() {
     _inviteSub?.cancel();
     _incomingCallSub?.cancel();
+    _authStateSub?.cancel();
     WebRtcSocketService.instance.unbindUser();
     super.dispose();
   }

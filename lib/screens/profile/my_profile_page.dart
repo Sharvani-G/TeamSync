@@ -132,14 +132,8 @@ class MyProfilePage extends StatelessWidget {
               _ActionCard(
                 icon: Icons.settings_outlined,
                 title: 'Settings',
-                subtitle: 'Theme, language, and alert controls.',
+                subtitle: 'Alert controls and notification settings.',
                 onTap: () => Navigator.pushNamed(context, '/settings'),
-              ),
-              _ActionCard(
-                icon: Icons.receipt_long_outlined,
-                title: 'Transaction history',
-                subtitle: 'View join request and activity history.',
-                onTap: () => Navigator.pushNamed(context, '/transactions'),
               ),
               _ActionCard(
                 icon: Icons.help_outline,

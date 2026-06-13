@@ -15,6 +15,13 @@ class NotificationsPage extends StatefulWidget {
 
 class _NotificationsPageState extends State<NotificationsPage> {
   bool _showUnreadOnly = false;
+  late final Stream<List<ProjectNotificationItem>> _notificationsStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _notificationsStream = NotificationService.instance.watchMyNotifications();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,7 +64,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
               const SizedBox(height: 16),
               Expanded(
                 child: StreamBuilder<List<ProjectNotificationItem>>(
-                  stream: NotificationService.instance.watchMyNotifications(),
+                  stream: _notificationsStream,
                   builder: (context, snapshot) {
                     if (snapshot.hasError) {
                       return const Center(

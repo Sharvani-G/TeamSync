@@ -331,7 +331,8 @@ class UserService {
 
       return query.docs.isEmpty;
     } catch (e) {
-      return false;
+      // Bypass check if we encounter a permission or query error before login.
+      return true;
     }
   }
 

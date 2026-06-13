@@ -22,6 +22,10 @@ class FaqPage extends StatelessWidget {
         'How do I log out?',
         'Use the Logout button from My Profile. Your session is cleared locally.',
       ),
+      const _FaqItem(
+        'What can collaborators do vs admin?',
+        'Admin manages project settings, approves requests, removes members. Collaborators use Chat, Idea Board, and Calls.',
+      ),
     ];
 
     return Scaffold(

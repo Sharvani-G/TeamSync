@@ -25,6 +25,22 @@ class AboutPage extends StatelessWidget {
             title: 'Support',
             body: 'If something looks wrong, open Settings, review your privacy preferences, and use the notification inbox to inspect recent activity.',
           ),
+          SizedBox(height: 24),
+          Center(
+            child: Text(
+              'TeamSync is built for student teams who need a focused collaboration space.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white54, fontSize: 13),
+            ),
+          ),
+          SizedBox(height: 8),
+          Center(
+            child: Text(
+              'Stack: Flutter · Firebase · Node.js · WebRTC · Cloudinary',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white38, fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ),
         ],
       ),
     );

@@ -64,7 +64,7 @@ class WebRtcClient {
         'sdpMid': candidate.sdpMid,
         'sdpMLineIndex': candidate.sdpMLineIndex,
         'senderId': FirebaseAuth.instance.currentUser?.uid ?? '',
-        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt': DateTime.now().toIso8601String(),
       };
       _signal.addCandidate(roomId, payload);
       _socket.emitIceCandidate(roomId, payload);
@@ -153,7 +153,7 @@ class WebRtcClient {
       'sdp': answer.sdp,
       'type': answer.type,
       'senderId': FirebaseAuth.instance.currentUser?.uid ?? '',
-      'createdAt': FieldValue.serverTimestamp(),
+      'createdAt': DateTime.now().toIso8601String(),
     };
     await _signal.postAnswer(roomId, payload);
     await _socket.emitAnswer(roomId, payload);
@@ -236,7 +236,7 @@ class WebRtcClient {
       'sdp': offer.sdp,
       'type': offer.type,
       'senderId': FirebaseAuth.instance.currentUser?.uid ?? '',
-      'createdAt': FieldValue.serverTimestamp(),
+      'createdAt': DateTime.now().toIso8601String(),
     };
     await _signal.postOffer(roomId, payload);
     await _socket.emitOffer(roomId, payload);
