@@ -25,6 +25,7 @@ dependencies:
   firebase_messaging: ^16.2.2
   cached_network_image: ^3.2.3
   flutter_screenutil: ^5.7.0
+  permission_handler: ^12.0.3
 
 dev_dependencies:
   flutter_test:

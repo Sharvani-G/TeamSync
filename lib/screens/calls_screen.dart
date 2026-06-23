@@ -1,13 +1,16 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/models.dart';
 import '../services/browser_timezone.dart';
 import '../services/project_service.dart';
 import '../services/user_service.dart';
-import '../theme/app_theme.dart';
-import 'in_call_screen.dart';
+import '../services/notification_service.dart';
+
 
 class CallsScreen extends StatefulWidget {
   final String projectId;
@@ -18,7 +21,7 @@ class CallsScreen extends StatefulWidget {
   State<CallsScreen> createState() => _CallsScreenState();
 }
 
-class _CallsScreenState extends State<CallsScreen> {
+class _CallsScreenState extends State<CallsScreen> with WidgetsBindingObserver {
   final GlobalKey<FormState> _scheduleFormKey = GlobalKey<FormState>();
   final TextEditingController _meetingTitleController = TextEditingController();
   final TextEditingController _meetingAgendaController =
@@ -31,27 +34,63 @@ class _CallsScreenState extends State<CallsScreen> {
   DateTime? _scheduledAt;
   String _durationSelection = '30';
   bool _isScheduling = false;
-  bool _isStartingMeet = false;
+  bool _isStartingCall = false;
   int _historyVisibleCount = 10;
 
   late final Stream<Project?> _projectStream;
   late final Stream<List<ProjectCallSchedule>> _schedulesStream;
   late final Stream<List<ProjectCallSession>> _historyStream;
 
+  Timer? _joinTimer;
+  Timer? _backgroundTimer;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _projectStream = ProjectService.instance.watchProject(widget.projectId);
     _schedulesStream = ProjectService.instance.watchProjectCallSchedules(widget.projectId);
     _historyStream = ProjectService.instance.watchProjectCallHistory(widget.projectId);
+
+    _joinTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _joinTimer?.cancel();
+    _backgroundTimer?.cancel();
     _meetingTitleController.dispose();
     _meetingAgendaController.dispose();
     _customDurationController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    if (state == AppLifecycleState.paused) {
+      _backgroundTimer = Timer(
+        const Duration(hours: 1), () async {
+        final sessions = await FirebaseFirestore.instance
+          .collection('projects')
+          .doc(widget.projectId)
+          .collection('callSessions')
+          .where('status', isEqualTo: 'active')
+          .where('callerUid', isEqualTo: uid)
+          .get();
+        for (final doc in sessions.docs) {
+          await doc.reference.update({'status': 'ended'});
+        }
+      });
+    } else if (state == AppLifecycleState.resumed) {
+      _backgroundTimer?.cancel();
+    }
   }
 
   List<String> _participantIds(Project project) {
@@ -73,18 +112,6 @@ class _CallsScreenState extends State<CallsScreen> {
     }
 
     return int.tryParse(_customDurationController.text.trim()) ?? 0;
-  }
-
-  String _durationLabel(int minutes) {
-    if (minutes % 60 == 0) {
-      return '${minutes ~/ 60}h';
-    }
-    if (minutes > 60) {
-      final hours = minutes ~/ 60;
-      final remainder = minutes % 60;
-      return '${hours}h ${remainder}m';
-    }
-    return '${minutes}m';
   }
 
   String _timezoneLabel() {
@@ -203,51 +230,111 @@ class _CallsScreenState extends State<CallsScreen> {
     }
   }
 
-  Future<void> _startMeet(Project project, List<String> participantIds) async {
-    final selectedIds = _selectedParticipantIds(participantIds);
-    if (selectedIds.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Select at least one collaborator to start a meet.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
+  Future<void> _startInstantMeet() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
 
-    setState(() => _isStartingMeet = true);
+    // Show loading indicator using existing pattern
+    setState(() => _isStartingCall = true);
+
     try {
-      final callId = await ProjectService.instance.startProjectCall(
-        projectId: widget.projectId,
-        type: 'team',
-        invitedParticipants: selectedIds.toList(),
-        callMode: 'instant',
-        meetingTitle: _meetingTitleController.text.trim(),
-        agenda: _meetingAgendaController.text.trim(),
-        durationMinutes: 0,
-        timeZone: _timezoneLabel(),
-      );
+      // 1. Create Firestore document reference first
+      //    This gives us the doc ID before writing
+      final sessionRef = FirebaseFirestore.instance
+        .collection('projects')
+        .doc(widget.projectId)
+        .collection('callSessions')
+        .doc();
 
-      if (!mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => InCallScreen(
+      // 2. Generate Jitsi link from doc ID
+      //    ONLY done here, NEVER at display time
+      final docId = sessionRef.id;
+      final safeId = docId
+        .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '')
+        .substring(0, 12);
+      final meetLink = 
+        'https://meet.jit.si/TeamSync$safeId';
+
+      // 3. Write to Firestore BEFORE opening link
+      //    This is what makes other collaborators 
+      //    see the Join button
+      await sessionRef.set({
+        'sessionId': docId,
+        'meetLink': meetLink,
+        'callerUid': currentUser.uid,
+        'callerName': currentUser.displayName
+          ?? currentUser.email
+          ?? 'Someone',
+        'status': 'active',
+        'startedAt': FieldValue.serverTimestamp(),
+        'expiresAt': Timestamp.fromDate(
+          DateTime.now().add(
+            const Duration(hours: 1))),
+        'projectId': widget.projectId,
+      });
+
+      // 4. VERIFY write succeeded — log it
+      print('callSession written: ${sessionRef.path}');
+      print('meetLink stored: $meetLink');
+
+      // 5. Send notification to all collaborators
+      //    Use existing NotificationService
+      //    type: 'call_started'
+      //    payload: { 
+      //      'projectId': widget.projectId,
+      //      'callerName': currentUser.displayName
+      //    }
+      //    Do NOT pass meetLink in notification —
+      //    collaborators read it from Firestore
+      final projectDoc = await FirebaseFirestore.instance
+          .collection('projects')
+          .doc(widget.projectId)
+          .get();
+      if (projectDoc.exists) {
+        final projectData = projectDoc.data() ?? {};
+        final collaborators = Map<String, dynamic>.from(projectData['collaborators'] ?? {});
+        final creatorId = projectData['createdBy'] as String? ?? '';
+        final teamMembers = <String>{creatorId, ...collaborators.keys};
+        
+        final myUid = currentUser.uid;
+        for (final uid in teamMembers) {
+          if (uid == myUid || uid.isEmpty) continue;
+          await NotificationService.instance.createNotification(
+            userId: uid,
+            type: 'call_started',
+            title: 'Live Meet Started',
+            body: '${currentUser.displayName ?? "Someone"} started a live Jitsi Meet call.',
             projectId: widget.projectId,
-            callId: callId,
-          ),
-        ),
-      );
-    } catch (error) {
-      if (!mounted) return;
+            data: {
+              'projectId': widget.projectId,
+              'callerName': currentUser.displayName ?? currentUser.email ?? 'Someone',
+            },
+          );
+        }
+      }
+
+      // 6. Open Jitsi for the caller
+      //    Use externalApplication — opens browser
+      //    not the Jitsi app
+      final uri = Uri.parse(meetLink);
+      final canLaunch = await canLaunchUrl(uri);
+      if (canLaunch) {
+        await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not open meeting')));
+      }
+    } catch (e) {
+      print('Error starting meet: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error.toString()),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+        SnackBar(content: Text('Error: $e')));
     } finally {
       if (mounted) {
-        setState(() => _isStartingMeet = false);
+        setState(() => _isStartingCall = false);
       }
     }
   }
@@ -260,6 +347,161 @@ class _CallsScreenState extends State<CallsScreen> {
       _scheduledAt = null;
       _durationSelection = '30';
     });
+  }
+
+
+
+  Widget _buildNoLiveCalls() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade900,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade800),
+      ),
+      child: Row(children: [
+        Icon(Icons.phone_disabled, color: Colors.grey.shade600, size: 20),
+        const SizedBox(width: 12),
+        Text('No live calls right now',
+          style: TextStyle(color: Colors.grey.shade500)),
+      ]),
+    );
+  }
+
+  Widget _buildInstantCallSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Keep existing Start Meet button exactly here
+        // Do not move or change it
+        
+        const SizedBox(height: 12),
+        
+        // Live call status — reads from Firestore
+        StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+            .collection('projects')
+            .doc(widget.projectId)
+            .collection('callSessions')
+            .orderBy('startedAt', descending: true)
+            .limit(1)
+            .snapshots(),
+          builder: (context, snapshot) {
+            final currentUser =
+              FirebaseAuth.instance.currentUser;
+
+            // Still loading
+            if (snapshot.connectionState ==
+                ConnectionState.waiting) {
+              return const SizedBox.shrink();
+            }
+
+            // Firestore error — log it
+            if (snapshot.hasError) {
+              print('callSessions error: '
+                '${snapshot.error}');
+              return Text('Error: ${snapshot.error}',
+                style: const TextStyle(
+                  color: Colors.red));
+            }
+
+            // No active call
+            if (!snapshot.hasData ||
+                snapshot.data!.docs.isEmpty) {
+              return _buildNoLiveCalls();
+            }
+
+            // Active call exists
+            final doc = snapshot.data!.docs.first;
+            final session =
+              doc.data() as Map<String, dynamic>;
+            final status = session['status'] as String? ?? '';
+
+            if (status != 'active') {
+              return _buildNoLiveCalls();
+            }
+
+            final meetLink =
+              session['meetLink'] as String? ?? '';
+            final callerName =
+              session['callerName'] 
+                as String? ?? 'Someone';
+            final callerUid =
+              session['callerUid'] as String? ?? '';
+            final expiresAt =
+              session['expiresAt'] as Timestamp?;
+            final isMe =
+              currentUser?.uid == callerUid;
+
+            // Check expiry
+            if (expiresAt != null &&
+                DateTime.now().isAfter(
+                  expiresAt.toDate())) {
+              // Auto end expired session
+              WidgetsBinding.instance
+                .addPostFrameCallback((_) {
+                doc.reference.update(
+                  {'status': 'ended'});
+              });
+              return _buildNoLiveCalls();
+            }
+
+            // Show active call banner
+            return Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.green.shade900
+                  .withValues(alpha: 0.3),
+                borderRadius:
+                  BorderRadius.circular(12),
+                border: Border.all(
+                  color: Colors.green.shade700),
+              ),
+              child: Row(children: [
+                Icon(Icons.phone_in_talk,
+                  color: Colors.green.shade400,
+                  size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    isMe
+                      ? 'Your call is live'
+                      : '$callerName started a call',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500),
+                  ),
+                ),
+                if (isMe) ...[
+                  TextButton(
+                    onPressed: () =>
+                      doc.reference.update(
+                        {'status': 'ended'}),
+                    child: const Text('End',
+                      style: TextStyle(
+                        color: Colors.red)),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                ElevatedButton(
+                  onPressed: meetLink.isEmpty
+                    ? null
+                    : () => launchUrl(
+                        Uri.parse(meetLink),
+                        mode: LaunchMode
+                          .externalApplication),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green),
+                  child: const Text('Join',
+                    style: TextStyle(
+                      color: Colors.white)),
+                ),
+              ]),
+            );
+          },
+        ),
+      ],
+    );
   }
 
   @override
@@ -560,11 +802,11 @@ class _CallsScreenState extends State<CallsScreen> {
                               SizedBox(
                                 width: double.infinity,
                                 child: ElevatedButton.icon(
-                                  onPressed: _isStartingMeet
+                                  onPressed: _isStartingCall
                                       ? null
                                       : () =>
-                                          _startMeet(project, participantIds),
-                                  icon: _isStartingMeet
+                                          _startInstantMeet(),
+                                  icon: _isStartingCall
                                       ? const SizedBox(
                                           height: 16,
                                           width: 16,
@@ -584,6 +826,8 @@ class _CallsScreenState extends State<CallsScreen> {
                                   ),
                                 ),
                               ),
+                              const SizedBox(height: 12),
+                              _buildInstantCallSection(),
                             ],
                           ),
                         ),
@@ -634,12 +878,53 @@ class _CallsScreenState extends State<CallsScreen> {
                                     itemBuilder: (context, index) {
                                       final s = upcoming[index];
                                       final now = DateTime.now();
-                                      final meetTime = s.scheduledAt;
-                                      final windowEnd = meetTime.add(Duration(minutes: s.durationMinutes * 2));
+                                      final scheduledAt = s.scheduledAt;
+                                      final durationMin = s.durationMinutes;
+                                      final meetLink = s.meetLink;
 
-                                      final bool canJoin = now.isAfter(meetTime) && now.isBefore(windowEnd);
-                                      final bool isUpcoming = now.isBefore(meetTime);
-                                      final bool isExpired = now.isAfter(windowEnd);
+                                      final joinableFrom = scheduledAt.subtract(const Duration(minutes: 5));
+                                      final joinableUntil = scheduledAt.add(Duration(minutes: durationMin * 2));
+
+                                      final bool canJoin = now.isAfter(joinableFrom) && now.isBefore(joinableUntil);
+                                      final bool isExpired = now.isAfter(joinableUntil);
+
+                                      Widget joinButton;
+                                      if (isExpired) {
+                                        joinButton = Text(
+                                          'Meeting ended',
+                                          style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+                                        );
+                                      } else if (canJoin && meetLink.isNotEmpty) {
+                                        joinButton = ElevatedButton.icon(
+                                          onPressed: () async {
+                                            final uri = Uri.parse(meetLink);
+                                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                          },
+                                          icon: const Icon(Icons.video_call, size: 18, color: Colors.white),
+                                          label: const Text('Join Meet', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                                        );
+                                      } else if (canJoin && meetLink.isEmpty) {
+                                        joinButton = Text(
+                                          'Link unavailable',
+                                          style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+                                        );
+                                      } else {
+                                        final timeLeft = joinableFrom.difference(now);
+                                        final minutesLeft = timeLeft.inMinutes + 1;
+                                        joinButton = ElevatedButton(
+                                          onPressed: null,
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.grey.shade800,
+                                            disabledBackgroundColor: Colors.grey.shade800,
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                          ),
+                                          child: Text(
+                                            'Opens in ${minutesLeft}m',
+                                            style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+                                          ),
+                                        );
+                                      }
 
                                       return Container(
                                         padding: const EdgeInsets.all(12),
@@ -662,39 +947,7 @@ class _CallsScreenState extends State<CallsScreen> {
                                                 ],
                                               ),
                                             ),
-                                            if (isUpcoming)
-                                              ElevatedButton(
-                                                onPressed: null,
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.grey.shade800,
-                                                  disabledBackgroundColor: Colors.grey.shade800,
-                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                                ),
-                                                child: Text('Join at ${DateFormat.jm().format(s.scheduledAt)}', style: const TextStyle(color: Colors.white38, fontSize: 10)),
-                                              ),
-                                            if (canJoin)
-                                              ElevatedButton(
-                                                onPressed: () async {
-                                                  await ProjectService.instance.joinScheduledMeeting(widget.projectId, s.id);
-                                                  if (context.mounted) {
-                                                    Navigator.of(context).push(
-                                                      MaterialPageRoute(
-                                                        builder: (_) => InCallScreen(
-                                                          projectId: widget.projectId,
-                                                          callId: s.sessionId,
-                                                        ),
-                                                      ),
-                                                    );
-                                                  }
-                                                },
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.green,
-                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                                ),
-                                                child: const Text('Join Now', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                              ),
-                                            if (isExpired)
-                                              const Text('Ended', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                                            joinButton,
                                           ],
                                         ),
                                       );

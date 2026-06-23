@@ -54,6 +54,11 @@ class _MainShellState extends State<MainShell> {
       WebRtcSocketService.instance.bindUser(user.uid);
 
       _incomingCallSub = WebRtcSocketService.instance.incomingCalls.listen((payload) {
+        final myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+        final callerId = payload['callerId']?.toString() ?? 
+                         payload['senderId']?.toString() ?? '';
+        if (callerId.isNotEmpty && callerId == myUid) return;
+
         final targetUserId = payload['targetUserId']?.toString() ?? '';
         final targetUids = List<String>.from(payload['targetUids'] ?? []);
         if (targetUserId.isNotEmpty && targetUserId != user.uid) {
@@ -65,7 +70,6 @@ class _MainShellState extends State<MainShell> {
         final callId = payload['callId']?.toString() ?? '';
         final roomId = payload['roomId']?.toString() ?? '';
         final projectId = payload['projectId']?.toString() ?? '';
-        final callerId = payload['callerId']?.toString() ?? payload['senderId']?.toString() ?? '';
         final callerName = payload['callerName']?.toString() ?? 'Someone';
         final projectTitle = payload['projectName']?.toString() ?? payload['projectTitle']?.toString() ?? 'Incoming call';
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
@@ -81,9 +82,14 @@ class WebRtcSocketService {
 
   Future<void> joinRoom(String roomId, {String? userId}) async {
     final socket = await _ensureSocket();
+    final uid = userId ?? _userId;
     socket.emit('webrtc:join-room', {
       'roomId': roomId,
-      'userId': userId ?? _userId,
+      'userId': uid,
+    });
+    socket.emit('call:join-room', {
+      'roomId': roomId,
+      'userId': uid,
     });
   }
 
@@ -120,9 +126,13 @@ class WebRtcSocketService {
     required String senderDisplayName,
     required Set<String> invitedUserIds,
   }) async {
-    final socket = await _ensureSocket();
-    final targets = invitedUserIds.isEmpty ? <String>{} : invitedUserIds;
+    final targets = invitedUserIds.where((uid) => uid != senderId).toSet();
+    if (targets.isEmpty) {
+      debugPrint('[CALL] No other collaborators available to call.');
+      throw Exception('No other collaborators available to call.');
+    }
 
+    final socket = await _ensureSocket();
     for (final targetId in targets) {
       socket.emit('webrtc:incoming-call', {
         'roomId': roomId,
@@ -153,6 +163,14 @@ class WebRtcSocketService {
     socket.emit('webrtc:hangup', {
       'roomId': roomId,
       if (targetSocketId != null && targetSocketId.isNotEmpty) 'targetSocketId': targetSocketId,
+      'senderId': FirebaseAuth.instance.currentUser?.uid ?? _userId,
+    });
+  }
+
+  Future<void> emitEndCall(String roomId) async {
+    final socket = await _ensureSocket();
+    socket.emit('webrtc:end', {
+      'roomId': roomId,
       'senderId': FirebaseAuth.instance.currentUser?.uid ?? _userId,
     });
   }

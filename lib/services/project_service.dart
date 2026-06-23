@@ -3200,12 +3200,26 @@ class ProjectService {
       'startedAt': Timestamp.now(),
       'endedAt': null,
       'audioEnabled': true,
-      'videoEnabled': false,
+      'videoEnabled': true,
       'screenSharing': false,
     };
 
     try {
       await callRef.set(callData);
+      await _firestore
+          .collection('projects')
+          .doc(projectId)
+          .collection('callSessions')
+          .doc(roomName)
+          .set({
+        'roomId': roomName,
+        'callId': callRef.id,
+        'callerUid': authUser.uid,
+        'callerName': hostDisplayName,
+        'status': 'active',
+        'startedAt': FieldValue.serverTimestamp(),
+        'projectId': projectId,
+      });
       await _webrtcSignalingService.createRoom(roomName, {
         'roomToken': roomToken,
         'projectId': projectId,
@@ -3294,6 +3308,13 @@ class ProjectService {
         .collection('callSessions')
         .doc();
 
+    final docId = scheduleRef.id;
+    final safeId = docId
+        .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '')
+        .substring(0, 12);
+    final meetLink = 'https://meet.jit.si/TeamSync$safeId';
+    print('Scheduled meeting link: $meetLink');
+
     final reminderAt = scheduledAt.subtract(const Duration(minutes: 15));
     final hostProfile = await _userService.getUserById(authUser.uid);
     final hostDisplayName =
@@ -3324,6 +3345,7 @@ class ProjectService {
       'reminderAt': Timestamp.fromDate(reminderAt),
       'status': 'scheduled',
       'sessionId': sessionRef.id,
+      'meet_link': meetLink,
     };
 
     final sessionData = {
@@ -3566,6 +3588,14 @@ class ProjectService {
     }
 
     if (roomName.isNotEmpty) {
+      await _firestore
+          .collection('projects')
+          .doc(projectId)
+          .collection('callSessions')
+          .doc(roomName)
+          .update({'status': 'ended'})
+          .catchError((_) {});
+
       await _firestore
           .collection('webrtc_rooms')
           .doc(roomName)
@@ -4034,6 +4064,7 @@ class ProjectService {
       attendeeUids: List<String>.from(
         (data['attendee_uids'] as List? ?? data['attendeeUids'] as List? ?? data['invitedParticipants'] as List? ?? []).cast<String>(),
       ),
+      meetLink: data['meet_link'] as String? ?? data['meetLink'] as String? ?? '',
     );
   }
 

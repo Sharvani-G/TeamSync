@@ -10,7 +10,7 @@ import 'calls_screen.dart';
 import 'project_admin_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-class ProjectWorkspaceScreen extends StatelessWidget {
+class ProjectWorkspaceScreen extends StatefulWidget {
   final String projectId;
   final int initialTabIndex;
 
@@ -21,9 +21,36 @@ class ProjectWorkspaceScreen extends StatelessWidget {
   });
 
   @override
+  State<ProjectWorkspaceScreen> createState() => _ProjectWorkspaceScreenState();
+}
+
+class _ProjectWorkspaceScreenState extends State<ProjectWorkspaceScreen> {
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialTabIndex == 1) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => ChatHomeScreen(projectId: widget.projectId)),
+          );
+        }
+      });
+    } else if (widget.initialTabIndex == 2) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => CallsScreen(projectId: widget.projectId)),
+          );
+        }
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return StreamBuilder<Project?>(
-      stream: ProjectService.instance.watchProject(projectId),
+      stream: ProjectService.instance.watchProject(widget.projectId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
@@ -74,7 +101,7 @@ class ProjectWorkspaceScreen extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => ProjectAdminScreen(projectId: projectId, project: project),
+                        builder: (_) => ProjectAdminScreen(projectId: widget.projectId, project: project),
                       ),
                     );
                   },
@@ -90,7 +117,7 @@ class ProjectWorkspaceScreen extends StatelessWidget {
                   label: 'Idea Board',
                   icon: Icons.lightbulb_outline,
                   onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => IdeaBoardScreen(projectId: projectId)),
+                    MaterialPageRoute(builder: (_) => IdeaBoardScreen(projectId: widget.projectId)),
                   ),
                 ),
                 SizedBox(height: 16.h),
@@ -98,7 +125,7 @@ class ProjectWorkspaceScreen extends StatelessWidget {
                   label: 'Chat',
                   icon: Icons.chat_bubble_outline,
                   onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => ChatHomeScreen(projectId: projectId)),
+                    MaterialPageRoute(builder: (_) => ChatHomeScreen(projectId: widget.projectId)),
                   ),
                 ),
                 SizedBox(height: 16.h),
@@ -106,7 +133,7 @@ class ProjectWorkspaceScreen extends StatelessWidget {
                   label: 'Calls',
                   icon: Icons.call_outlined,
                   onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => CallsScreen(projectId: projectId)),
+                    MaterialPageRoute(builder: (_) => CallsScreen(projectId: widget.projectId)),
                   ),
                 ),
               ],

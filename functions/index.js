@@ -175,14 +175,17 @@ function attachSocketServer(httpServer) {
     });
 
     socket.on('call:join-room', (payload = {}) => {
-      const roomId = payload.roomId || '';
-      const userId = payload.userId || '';
+      const roomId = payload.roomId || payload.room || '';
+      const userId = payload.userId || socket.data.userId || '';
       const userName = payload.userName || '';
       if (!roomId) return;
       socket.data.roomId = roomId;
       socket.data.userId = userId;
       socket.join(roomId);
-      socket.to(roomId).emit('call:user-joined', { userId, userName });
+      socket.to(roomId).emit('call:user-joined', {
+        userId: userId,
+        userName: userName
+      });
       console.log(`[CALL] ${userName || userId} joined room ${roomId}`);
     });
 

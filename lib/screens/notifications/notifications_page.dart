@@ -102,8 +102,15 @@ class _NotificationsPageState extends State<NotificationsPage> {
                             await NotificationService.instance.markNotificationRead(item.id);
                             if (!context.mounted) return;
                             final projectId = item.projectId;
-                            if (projectId.isNotEmpty && (item.type == 'call_started' || item.type == 'meeting_scheduled')) {
-                              Navigator.pushNamed(context, '/project/$projectId');
+                            if (projectId.isNotEmpty) {
+                              if (item.type == 'call_started' ||
+                                  item.type == 'incoming_call' ||
+                                  item.type == 'webrtc:incoming-call' ||
+                                  item.type == 'meeting_scheduled') {
+                                Navigator.pushNamed(context, '/project/$projectId/workspace/calls');
+                              } else {
+                                Navigator.pushNamed(context, '/project/$projectId');
+                              }
                             }
                           },
                           onDismissed: () async {

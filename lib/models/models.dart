@@ -589,6 +589,7 @@ class ProjectCallSchedule {
   final String status;
   final List<String> joinedUids;
   final List<String> attendeeUids;
+  final String meetLink;
 
   const ProjectCallSchedule({
     required this.id,
@@ -608,7 +609,113 @@ class ProjectCallSchedule {
     required this.status,
     this.joinedUids = const [],
     this.attendeeUids = const [],
+    this.meetLink = '',
   });
+
+  ProjectCallSchedule copyWith({
+    String? id,
+    String? projectId,
+    String? title,
+    String? agenda,
+    String? description,
+    DateTime? scheduledAt,
+    int? durationMinutes,
+    List<String>? invitedParticipants,
+    String? createdBy,
+    String? hostDisplayName,
+    String? timeZone,
+    String? sessionId,
+    DateTime? createdAt,
+    DateTime? reminderAt,
+    String? status,
+    List<String>? joinedUids,
+    List<String>? attendeeUids,
+    String? meetLink,
+  }) {
+    return ProjectCallSchedule(
+      id: id ?? this.id,
+      projectId: projectId ?? this.projectId,
+      title: title ?? this.title,
+      agenda: agenda ?? this.agenda,
+      description: description ?? this.description,
+      scheduledAt: scheduledAt ?? this.scheduledAt,
+      durationMinutes: durationMinutes ?? this.durationMinutes,
+      invitedParticipants: invitedParticipants ?? this.invitedParticipants,
+      createdBy: createdBy ?? this.createdBy,
+      hostDisplayName: hostDisplayName ?? this.hostDisplayName,
+      timeZone: timeZone ?? this.timeZone,
+      sessionId: sessionId ?? this.sessionId,
+      createdAt: createdAt ?? this.createdAt,
+      reminderAt: reminderAt ?? this.reminderAt,
+      status: status ?? this.status,
+      joinedUids: joinedUids ?? this.joinedUids,
+      attendeeUids: attendeeUids ?? this.attendeeUids,
+      meetLink: meetLink ?? this.meetLink,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'projectId': projectId,
+      'title': title,
+      'agenda': agenda,
+      'description': description,
+      'scheduledAt': scheduledAt.toIso8601String(),
+      'durationMinutes': durationMinutes,
+      'invitedParticipants': invitedParticipants,
+      'createdBy': createdBy,
+      'hostDisplayName': hostDisplayName,
+      'timeZone': timeZone,
+      'sessionId': sessionId,
+      'createdAt': createdAt.toIso8601String(),
+      'reminderAt': reminderAt.toIso8601String(),
+      'status': status,
+      'joined_uids': joinedUids,
+      'attendee_uids': attendeeUids,
+      'meet_link': meetLink,
+    };
+  }
+
+  factory ProjectCallSchedule.fromMap(Map<String, dynamic> map, String docId) {
+    DateTime parseDateTime(dynamic value) {
+      if (value == null) return DateTime.now();
+      if (value is DateTime) return value;
+      if (value is Timestamp) return value.toDate();
+      if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
+      return DateTime.now();
+    }
+    return ProjectCallSchedule(
+      id: docId,
+      projectId: map['projectId'] as String? ?? map['project_id'] as String? ?? '',
+      title: map['title'] as String? ?? '',
+      agenda: map['agenda'] as String? ?? '',
+      description: map['description'] as String? ?? '',
+      scheduledAt: parseDateTime(map['scheduledAt'] ?? map['scheduled_at']),
+      durationMinutes: map['durationMinutes'] as int? ?? map['duration_minutes'] as int? ?? 30,
+      invitedParticipants: List<String>.from(
+        (map['invitedParticipants'] as List? ?? []).cast<String>(),
+      ),
+      createdBy: map['createdBy'] as String? ?? map['created_by'] as String? ?? '',
+      hostDisplayName: map['hostDisplayName'] as String? ?? '',
+      timeZone: map['timeZone'] as String? ?? map['timezone'] as String? ?? '',
+      sessionId: map['sessionId'] as String? ?? map['room_id'] as String? ?? '',
+      createdAt: parseDateTime(map['createdAt'] ?? map['created_at']),
+      reminderAt: parseDateTime(map['reminderAt'] ?? map['reminder_at']),
+      status: map['status'] as String? ?? 'scheduled',
+      joinedUids: List<String>.from(
+        (map['joined_uids'] as List? ?? map['joinedUids'] as List? ?? []).cast<String>(),
+      ),
+      attendeeUids: List<String>.from(
+        (map['attendee_uids'] as List? ?? map['attendeeUids'] as List? ?? []).cast<String>(),
+      ),
+      meetLink: map['meet_link'] as String? ?? map['meetLink'] as String? ?? '',
+    );
+  }
+
+  factory ProjectCallSchedule.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
+    return ProjectCallSchedule.fromMap(doc.data() ?? {}, doc.id);
+  }
 }
 
 class ProjectMeetingItem {

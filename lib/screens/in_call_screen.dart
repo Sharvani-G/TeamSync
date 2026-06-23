@@ -4,7 +4,9 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../services/webrtc_client.dart';
+import '../services/webrtc_socket_service.dart';
 import '../theme/app_colors.dart';
 
 class InCallScreen extends StatefulWidget {
@@ -21,8 +23,11 @@ class _InCallScreenState extends State<InCallScreen> {
   final _remoteRenderer = RTCVideoRenderer();
   late final WebRtcClient _client;
   bool _audioEnabled = true;
-  bool _videoEnabled = false;
+  bool _videoEnabled = true;
   bool _initialized = false;
+  bool _cameraOn = true;
+  bool _micOn = true;
+  String? _roomName;
 
   @override
   void initState() {
@@ -50,6 +55,7 @@ class _InCallScreenState extends State<InCallScreen> {
       final data = doc.data()!;
       final startedBy = data['startedBy'] as String? ?? '';
       final roomName = data['roomName'] as String? ?? widget.callId;
+      _roomName = roomName;
       final myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
       final isCaller = startedBy == myUid;
 
@@ -62,17 +68,50 @@ class _InCallScreenState extends State<InCallScreen> {
       });
 
       _client.onRemoteStream.listen((stream) {
-        if (mounted) {
-          setState(() {
-            _remoteRenderer.srcObject = stream;
-          });
-        }
+        if (!mounted) return;
+        setState(() {
+          _remoteRenderer.srcObject = stream;
+        });
       });
 
+      final projectDoc = await FirebaseFirestore.instance
+          .collection('projects')
+          .doc(widget.projectId)
+          .get();
+      final projectData = projectDoc.data() ?? {};
+      final projectTitle = projectData['title'] as String? ?? 'Project';
+      final collaboratorsMap = projectData['collaborators'] as Map<dynamic, dynamic>? ?? {};
+      final createdBy = projectData['createdBy'] as String? ?? '';
+      final teamMembers = <String>{
+        createdBy,
+        ...collaboratorsMap.keys.map((k) => k.toString()),
+      };
+
+      final invitedParticipantsRaw = data['invitedParticipants'] as List<dynamic>? ?? [];
+      final List<String> invitedParticipants = invitedParticipantsRaw.isNotEmpty
+          ? invitedParticipantsRaw.map((e) => e.toString()).toList()
+          : teamMembers.toList();
+
+      final targets = invitedParticipants
+          .where((uid) => uid != myUid)
+          .toList();
+
       if (isCaller) {
-        await _client.initAsCaller(roomName, audio: _audioEnabled, video: _videoEnabled);
+        await _client.initAsCaller(
+          roomName,
+          audio: _audioEnabled,
+          video: _videoEnabled,
+          targetUserIds: targets,
+          projectId: widget.projectId,
+          projectTitle: projectTitle,
+        );
       } else {
-        await _client.initAsAnswerer(roomName, audio: _audioEnabled, video: _videoEnabled);
+        await _client.initAsAnswerer(
+          roomName,
+          audio: _audioEnabled,
+          video: _videoEnabled,
+          projectId: widget.projectId,
+        );
       }
 
       if (mounted) {
@@ -83,10 +122,50 @@ class _InCallScreenState extends State<InCallScreen> {
     } catch (e) {
       debugPrint('Error starting WebRTC: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to connect: $e'), behavior: SnackBarBehavior.floating),
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => AlertDialog(
+            title: const Text('Permission Required'),
+            content: Text('$e'),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context); // close dialog
+                  Navigator.pop(context); // go back
+                  openAppSettings(); // from permission_handler
+                },
+                child: const Text('Open Settings'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context); // close dialog
+                  Navigator.pop(context); // go back
+                },
+                child: const Text('Cancel'),
+              ),
+            ],
+          ),
         );
       }
+    }
+  }
+
+  Future<void> _endCall() async {
+    try {
+      _client.localStream?.getTracks().forEach((t) => t.stop());
+    } catch (_) {}
+    final rName = _roomName;
+    if (rName != null) {
+      try {
+        await WebRtcSocketService.instance.emitEndCall(rName);
+      } catch (_) {}
+    }
+    try {
+      await _client.dispose();
+    } catch (_) {}
+    if (mounted) {
+      Navigator.pop(context);
     }
   }
 
@@ -107,7 +186,7 @@ class _InCallScreenState extends State<InCallScreen> {
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios_new, color: AppColors.kTextPrimary, size: 20.sp),
-          onPressed: () => Navigator.pop(context),
+          onPressed: _endCall,
         ),
         title: Text('Video Call', style: TextStyle(color: AppColors.kTextPrimary, fontSize: 18.sp, fontWeight: FontWeight.w600)),
       ),
@@ -116,13 +195,43 @@ class _InCallScreenState extends State<InCallScreen> {
           Expanded(
             child: !_initialized
                 ? const Center(child: CircularProgressIndicator())
-                : GridView.count(
-                    crossAxisCount: 2,
-                    padding: EdgeInsets.all(16.w),
+                : Stack(
                     children: [
-                      _VideoTile(label: 'You', renderer: _localRenderer),
-                      if (_client.remoteStream != null)
-                        _VideoTile(label: 'Collaborator', renderer: _remoteRenderer),
+                      // Remote Stream (Full Screen Tile)
+                      Positioned.fill(
+                        child: RTCVideoView(
+                          _remoteRenderer,
+                          objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                        ),
+                      ),
+                      // Local Stream (Small Floating Preview Tile)
+                      if (_cameraOn && _client.localStream != null)
+                        Positioned(
+                          bottom: 16,
+                          right: 16,
+                          width: 100,
+                          height: 140,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.5),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: RTCVideoView(
+                                _localRenderer,
+                                mirror: true,
+                                objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
           ),
@@ -130,31 +239,54 @@ class _InCallScreenState extends State<InCallScreen> {
             padding: EdgeInsets.only(bottom: 32.h, left: 16.w, right: 16.w),
             child: Wrap(
               alignment: WrapAlignment.center,
-              spacing: 24.w,
+              spacing: 20.w,
               children: [
                 _CallAction(
-                  icon: _audioEnabled ? Icons.mic : Icons.mic_off,
-                  label: _audioEnabled ? 'Mute' : 'Unmute',
+                  icon: _micOn ? Icons.mic : Icons.mic_off,
+                  label: _micOn ? 'Mute' : 'Unmute',
                   onTap: () {
-                    final nextVal = !_audioEnabled;
-                    _client.mute(!nextVal);
-                    setState(() => _audioEnabled = nextVal);
+                    final audioTrack = _client.localStream
+                        ?.getAudioTracks().isNotEmpty == true
+                        ? _client.localStream!.getAudioTracks().first
+                        : null;
+                    if (audioTrack != null) {
+                      audioTrack.enabled = !audioTrack.enabled;
+                      setState(() => _micOn = audioTrack.enabled);
+                    }
                   },
                 ),
                 _CallAction(
-                  icon: _videoEnabled ? Icons.videocam : Icons.videocam_off,
+                  icon: _cameraOn ? Icons.videocam : Icons.videocam_off,
                   label: 'Video',
                   onTap: () {
-                    final nextVal = !_videoEnabled;
-                    _client.toggleCamera();
-                    setState(() => _videoEnabled = nextVal);
+                    final videoTrack = _client.localStream
+                        ?.getVideoTracks().isNotEmpty == true
+                        ? _client.localStream!.getVideoTracks().first
+                        : null;
+                    if (videoTrack != null) {
+                      videoTrack.enabled = !videoTrack.enabled;
+                      setState(() => _cameraOn = videoTrack.enabled);
+                    }
+                  },
+                ),
+                _CallAction(
+                  icon: Icons.flip_camera_ios,
+                  label: 'Switch',
+                  onTap: () async {
+                    final videoTrack = _client.localStream
+                        ?.getVideoTracks().isNotEmpty == true
+                        ? _client.localStream!.getVideoTracks().first
+                        : null;
+                    if (videoTrack != null) {
+                      await Helper.switchCamera(videoTrack);
+                    }
                   },
                 ),
                 _CallAction(
                   icon: Icons.call_end,
                   label: 'End',
                   color: AppColors.kDanger,
-                  onTap: () => Navigator.pop(context),
+                  onTap: _endCall,
                 ),
               ],
             ),

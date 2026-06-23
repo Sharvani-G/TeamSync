@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'webrtc_environment.dart';
 import 'webrtc_signaling_service.dart';
@@ -26,6 +27,7 @@ class WebRtcClient {
   MediaStream? remoteStream;
   String? _roomId;
   String? _role;
+  String? _projectId;
 
   final _localStreamController = StreamController<MediaStream?>.broadcast();
   final _remoteStreamController = StreamController<MediaStream?>.broadcast();
@@ -37,8 +39,38 @@ class WebRtcClient {
   Stream<MediaStream?> get onLocalStream => _localStreamController.stream;
   Stream<MediaStream?> get onRemoteStream => _remoteStreamController.stream;
 
+  Future<bool> _requestMediaPermissions({required bool video}) async {
+    final statuses = await [
+      Permission.microphone,
+      if (video) Permission.camera,
+    ].request();
+
+    final micGranted = statuses[Permission.microphone]?.isGranted ?? false;
+    final camGranted = !video || (statuses[Permission.camera]?.isGranted ?? false);
+
+    if (!micGranted) {
+      debugPrint('[PERMISSIONS] Microphone permission denied');
+    }
+    if (video && !camGranted) {
+      debugPrint('[PERMISSIONS] Camera permission denied');
+    }
+
+    return micGranted && camGranted;
+  }
+
   Future<void> _ensureLocalStream(
       {required bool audio, required bool video}) async {
+    final micStatus = await Permission.microphone.status;
+    debugPrint('[PERMISSIONS] Mic status: $micStatus');
+
+    final granted = await _requestMediaPermissions(video: video);
+    if (!granted) {
+      throw Exception(
+        'Microphone/camera permission denied. Please enable permissions '
+        'in your phone settings to use calls.'
+      );
+    }
+
     if (localStream != null) return;
     final constraints = <String, dynamic>{
       'audio': audio,
@@ -49,6 +81,7 @@ class WebRtcClient {
           : false,
     };
     localStream = await navigator.mediaDevices.getUserMedia(constraints);
+    debugPrint('[STREAM] tracks: ${localStream?.getTracks().map((t) => t.kind).toList()}');
     _localStreamController.add(localStream);
   }
 
@@ -72,8 +105,14 @@ class WebRtcClient {
 
     pc.onTrack = (event) {
       if (event.streams.isEmpty) return;
+      debugPrint('[REMOTE TRACK] kind=${event.track.kind} streams=${event.streams.length}');
+      debugPrint('[REMOTE] tracks: ${event.streams.first.getTracks().map((t) => t.kind).toList()}');
       remoteStream = event.streams.first;
       _remoteStreamController.add(remoteStream);
+    };
+
+    pc.onIceConnectionState = (state) {
+      debugPrint('ICE Connection State Changed: $state');
     };
 
     return pc;
@@ -137,15 +176,30 @@ class WebRtcClient {
     }
     if (_pc == null || _remoteDescriptionSet) return;
 
-    final description = RTCSessionDescription(
-      offer['sdp'] as String?,
-      offer['type'] as String? ?? 'offer',
-    );
+    // Handle both flat {sdp, type} and nested {offer: {sdp, type}}
+    final sdpData = offer.containsKey('sdp')
+        ? offer
+        : (offer['offer'] as Map<dynamic, dynamic>? ?? offer).cast<String, dynamic>();
+    final sdpString = sdpData['sdp'] as String?;
+    final sdpType = sdpData['type'] as String? ?? 'offer';
+
+    if (sdpString == null || sdpString.isEmpty) {
+      debugPrint('[WebRTC] _handleOffer: SDP is null or empty, aborting');
+      return;
+    }
+
+    if (sdpData.containsKey('projectId')) {
+      _projectId = sdpData['projectId'] as String?;
+    } else if (offer.containsKey('projectId')) {
+      _projectId = offer['projectId'] as String?;
+    }
+
+    final description = RTCSessionDescription(sdpString, sdpType);
     await _pc!.setRemoteDescription(description);
     _remoteDescriptionSet = true;
 
     final answer = await _pc!
-        .createAnswer({'offerToReceiveAudio': 1, 'offerToReceiveVideo': 0});
+        .createAnswer({'offerToReceiveAudio': 1, 'offerToReceiveVideo': 1});
     await _pc!.setLocalDescription(answer);
     final roomId = _roomId;
     if (roomId == null) return;
@@ -169,9 +223,17 @@ class WebRtcClient {
     }
     if (_pc == null || _remoteDescriptionSet) return;
 
+    final answerData = answer.containsKey('sdp')
+        ? answer
+        : (answer['answer'] as Map<dynamic, dynamic>? ?? answer).cast<String, dynamic>();
+    final sdpString = answerData['sdp'] as String?;
+    if (sdpString == null || sdpString.isEmpty) {
+      debugPrint('[WebRTC] _handleAnswer: SDP null/empty, aborting');
+      return;
+    }
     final description = RTCSessionDescription(
-      answer['sdp'] as String?,
-      answer['type'] as String? ?? 'answer',
+      sdpString,
+      answerData['type'] as String? ?? 'answer',
     );
     await _pc!.setRemoteDescription(description);
     _remoteDescriptionSet = true;
@@ -209,9 +271,13 @@ class WebRtcClient {
     String roomId, {
     bool audio = true,
     bool video = false,
+    required List<String> targetUserIds,
+    required String projectId,
+    required String projectTitle,
   }) async {
     _roomId = roomId;
     _role = 'caller';
+    _projectId = projectId;
     await _signal.createRoom(roomId, {
       'active': true,
       'role': 'caller',
@@ -230,13 +296,21 @@ class WebRtcClient {
     }
 
     final offer = await _pc!.createOffer(
-        {'offerToReceiveAudio': 1, 'offerToReceiveVideo': video ? 1 : 0});
+        {'offerToReceiveAudio': 1, 'offerToReceiveVideo': 1});
     await _pc!.setLocalDescription(offer);
+
+    final currentUser = FirebaseAuth.instance.currentUser;
     final payload = {
       'sdp': offer.sdp,
       'type': offer.type,
-      'senderId': FirebaseAuth.instance.currentUser?.uid ?? '',
+      'senderId': currentUser?.uid ?? '',
+      'callerId': currentUser?.uid ?? '',
+      'callerName': currentUser?.displayName ?? 'Someone',
       'createdAt': DateTime.now().toIso8601String(),
+      'targetUids': targetUserIds, // pass in from caller, exclude self
+      'projectId': projectId,
+      'projectName': projectTitle,
+      'roomId': roomId,
     };
     await _signal.postOffer(roomId, payload);
     await _socket.emitOffer(roomId, payload);
@@ -246,16 +320,17 @@ class WebRtcClient {
     String roomId, {
     bool audio = true,
     bool video = false,
+    String? projectId,
   }) async {
     _roomId = roomId;
     _role = 'answerer';
+    _projectId = projectId;
     await _signal.createRoom(roomId, {
       'active': false,
       'role': 'answerer',
       'answererId': FirebaseAuth.instance.currentUser?.uid ?? '',
     });
     await _socket.bindUser(FirebaseAuth.instance.currentUser?.uid ?? '');
-    await _socket.joinRoom(roomId);
     _bindSignals();
     await _ensureLocalStream(audio: audio, video: video);
     _pc = await _createPeerConnection();
@@ -265,6 +340,11 @@ class WebRtcClient {
         await _pc!.addTrack(track, localStream!);
       }
     }
+
+    // Join the signaling room FIRST so ICE candidates and answers 
+    // can flow back to the caller
+    await _socket.joinRoom(roomId);
+    await Future.delayed(const Duration(milliseconds: 300));
 
     await _primeRoomState(roomId);
   }
@@ -287,7 +367,16 @@ class WebRtcClient {
 
   Future<void> hangup() async {
     final roomId = _roomId;
+    final projectId = _projectId;
     if (roomId != null) {
+      if (projectId != null) {
+        await _db
+            .collection('projects')
+            .doc(projectId)
+            .collection('callSessions')
+            .doc(roomId)
+            .update({'status': 'ended'}).catchError((_) {});
+      }
       await _socket.hangup(roomId);
       await _socket.leaveRoom(roomId);
       await _signal.leaveRoom(roomId).catchError((_) {});

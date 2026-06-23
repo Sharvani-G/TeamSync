@@ -194,11 +194,12 @@ class _ScheduledMeetingCardState extends State<_ScheduledMeetingCard> {
     final m = widget.meeting;
     final now = DateTime.now();
     final meetingTime = m.scheduledAt;
-    final windowEnd = meetingTime.add(Duration(minutes: m.durationMinutes * 2));
+    final enableAt = meetingTime.subtract(const Duration(minutes: 5));
+    final disableAt = meetingTime.add(Duration(minutes: m.durationMinutes * 2));
 
-    final bool canJoin = now.isAfter(meetingTime) && now.isBefore(windowEnd);
-    final bool isUpcoming = now.isBefore(meetingTime);
-    final bool isExpired = now.isAfter(windowEnd);
+    final bool canJoin = now.isAfter(enableAt) && now.isBefore(disableAt);
+    final bool isUpcoming = now.isBefore(enableAt);
+    final bool isExpired = now.isAfter(disableAt);
 
     return StreamBuilder<DocumentSnapshot>(
       stream: _stream,

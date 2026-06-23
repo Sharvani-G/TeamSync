@@ -151,6 +151,9 @@ class NotificationService {
       if (type == 'chat_message') {
         return '/project/$projectId/workspace/chat';
       }
+      if (type == 'call_started' || type == 'incoming_call' || type == 'webrtc:incoming-call') {
+        return '/project/$projectId/workspace/calls';
+      }
       return '/project/$projectId';
     }
 
