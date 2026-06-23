@@ -25,6 +25,8 @@ class ProjectWorkspaceScreen extends StatefulWidget {
 }
 
 class _ProjectWorkspaceScreenState extends State<ProjectWorkspaceScreen> {
+  bool _hasAutoNavigated = false;
+
   @override
   void initState() {
     super.initState();
@@ -65,6 +67,31 @@ class _ProjectWorkspaceScreenState extends State<ProjectWorkspaceScreen> {
             backgroundColor: AppColors.kBgDeep,
             body: Center(child: Text('Project not found', style: TextStyle(color: AppColors.kTextPrimary))),
           );
+        }
+
+        if (!_hasAutoNavigated) {
+          final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+          if (args != null && args['type'] == 'join_request') {
+            _hasAutoNavigated = true;
+            final currentUser = FirebaseAuth.instance.currentUser;
+            final isAdmin = project.createdBy == currentUser?.uid;
+            if (isAdmin) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ProjectAdminScreen(
+                        projectId: widget.projectId,
+                        project: project,
+                        initialTab: 'join_requests',
+                      ),
+                    ),
+                  );
+                }
+              });
+            }
+          }
         }
 
         final currentUser = FirebaseAuth.instance.currentUser;

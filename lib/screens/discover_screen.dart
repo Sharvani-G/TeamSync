@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/models.dart';
 import '../services/project_service.dart';
+import '../services/user_service.dart';
 import '../theme/app_colors.dart';
 
 class DiscoverScreen extends StatefulWidget {
@@ -112,14 +113,80 @@ class _DiscoverCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(project.title, style: TextStyle(color: AppColors.kTextPrimary, fontSize: 15.sp, fontWeight: FontWeight.w600)),
-          SizedBox(height: 8.h),
-          Text(project.description, style: TextStyle(color: AppColors.kTextSecond, fontSize: 13.sp), maxLines: 2, overflow: TextOverflow.ellipsis),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      project.title,
+                      style: TextStyle(
+                        color: AppColors.kTextPrimary,
+                        fontSize: 16.sp,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 4.h),
+                    FutureBuilder<AppUser?>(
+                      future: UserService.instance.getUserById(project.createdBy),
+                      builder: (context, userSnap) {
+                        final adminName = userSnap.data?.name ?? 'Admin';
+                        return Text(
+                          'Created by: $adminName',
+                          style: TextStyle(
+                            color: AppColors.kTextSecond,
+                            fontSize: 12.sp,
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (project.requiredSkills.isNotEmpty) ...[
+            SizedBox(height: 8.h),
+            Wrap(
+              spacing: 6.w,
+              runSpacing: 4.h,
+              children: project.requiredSkills
+                  .map((skill) => Container(
+                        padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+                        decoration: BoxDecoration(
+                          color: AppColors.kBgElevated,
+                          borderRadius: BorderRadius.circular(4.r),
+                          border: Border.all(color: AppColors.kDivider),
+                        ),
+                        child: Text(
+                          skill,
+                          style: TextStyle(
+                            color: AppColors.kAccentLight,
+                            fontSize: 10.sp,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ))
+                  .toList(),
+            ),
+          ],
           SizedBox(height: 12.h),
+          Text(
+            project.description,
+            style: TextStyle(color: AppColors.kTextSecond, fontSize: 13.sp),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          SizedBox(height: 16.h),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Members: ${project.currentCollaborators}/${project.collaboratorsRequired}', style: TextStyle(color: AppColors.kTextHint, fontSize: 12.sp)),
+              Text(
+                '${project.currentCollaborators}/${project.collaboratorsRequired} members',
+                style: TextStyle(color: AppColors.kTextSecond, fontSize: 12.sp),
+              ),
               _buildActionButton(context),
             ],
           ),
@@ -130,33 +197,77 @@ class _DiscoverCard extends StatelessWidget {
 
   Widget _buildActionButton(BuildContext context) {
     if (project.createdBy == currentUid) {
-      return Text('Your project', style: TextStyle(color: AppColors.kAccentLight, fontWeight: FontWeight.w600, fontSize: 12.sp));
-    }
-
-    if (project.collaborators.containsKey(currentUid)) {
       return Container(
         padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
-        decoration: BoxDecoration(color: AppColors.kSuccess.withOpacity(0.1), borderRadius: BorderRadius.circular(12.r)),
-        child: Text('Member', style: TextStyle(color: AppColors.kSuccess, fontWeight: FontWeight.bold, fontSize: 12.sp)),
-      );
-    }
-
-    if (requestStatus == 'pending') {
-      return GestureDetector(
-        onTap: () => _showAdminContact(context),
-        child: Container(
-          padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
-          decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(12.r)),
-          child: Text('Waiting for approval', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 12.sp)),
+        decoration: BoxDecoration(
+          color: Colors.grey.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12.r),
+        ),
+        child: Text(
+          'Your Project',
+          style: TextStyle(
+            color: Colors.grey,
+            fontWeight: FontWeight.bold,
+            fontSize: 12.sp,
+          ),
         ),
       );
     }
 
-    if (!project.isOpenForRequests || project.currentCollaborators >= project.collaboratorsRequired) {
+    if (project.collaborators.containsKey(currentUid) ||
+        requestStatus == 'accepted' ||
+        requestStatus == 'approved') {
       return Container(
         padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
-        decoration: BoxDecoration(color: Colors.grey.withOpacity(0.1), borderRadius: BorderRadius.circular(12.r)),
-        child: Text('Not accepting requests', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 12.sp)),
+        decoration: BoxDecoration(
+          color: AppColors.kSuccess.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12.r),
+        ),
+        child: Text(
+          'Member',
+          style: TextStyle(
+            color: AppColors.kSuccess,
+            fontWeight: FontWeight.bold,
+            fontSize: 12.sp,
+          ),
+        ),
+      );
+    }
+
+    if (requestStatus == 'pending') {
+      return Container(
+        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
+        decoration: BoxDecoration(
+          color: Colors.amber.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12.r),
+        ),
+        child: Text(
+          'Request Sent',
+          style: TextStyle(
+            color: Colors.amber,
+            fontWeight: FontWeight.bold,
+            fontSize: 12.sp,
+          ),
+        ),
+      );
+    }
+
+    final isFull = project.currentCollaborators >= project.collaboratorsRequired;
+    if (!project.isOpenForRequests || isFull) {
+      return Container(
+        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
+        decoration: BoxDecoration(
+          color: Colors.grey.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12.r),
+        ),
+        child: Text(
+          'Not Accepting',
+          style: TextStyle(
+            color: Colors.grey,
+            fontWeight: FontWeight.bold,
+            fontSize: 12.sp,
+          ),
+        ),
       );
     }
 
@@ -167,32 +278,13 @@ class _DiscoverCard extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
         padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
       ),
-      child: Text('Request to Join', style: TextStyle(color: AppColors.kWhite, fontSize: 12.sp)),
-    );
-  }
-
-  void _showAdminContact(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.kBgElevated,
-        title: Text('Pending Request', style: TextStyle(color: AppColors.kTextPrimary)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Your request is still pending approval.', style: TextStyle(color: AppColors.kTextSecond)),
-            SizedBox(height: 16.h),
-            Text('Contact admin:', style: TextStyle(color: AppColors.kTextSecond, fontWeight: FontWeight.bold)),
-            InkWell(
-              onTap: () => launchUrl(Uri.parse('mailto:${project.contactEmail}')),
-              child: Text(project.contactEmail, style: TextStyle(color: AppColors.kAccentLight, decoration: TextDecoration.underline)),
-            ),
-          ],
+      child: Text(
+        'Send Request',
+        style: TextStyle(
+          color: AppColors.kWhite,
+          fontSize: 12.sp,
+          fontWeight: FontWeight.w600,
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text('Close')),
-        ],
       ),
     );
   }
@@ -277,8 +369,15 @@ class _JoinRequestSheetState extends State<_JoinRequestSheet> {
                         projectId: widget.project.id,
                         message: _controller.text.trim(),
                       );
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Request sent')));
+                      if (mounted) {
+                        Navigator.pop(context);
+                      }
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Request sent! Waiting for admin approval.'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
                     } catch (e) {
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
                     }

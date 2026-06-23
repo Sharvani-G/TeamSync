@@ -1,17 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../services/project_service.dart';
 import '../services/user_service.dart';
 import '../theme/app_colors.dart';
 import '../models/models.dart';
-import 'package:intl/intl.dart';
 
 class ProjectAdminScreen extends StatefulWidget {
   final String projectId;
   final Project project;
+  final String? initialTab;
 
-  const ProjectAdminScreen({super.key, required this.projectId, required this.project});
+  const ProjectAdminScreen({super.key, required this.projectId, required this.project, this.initialTab});
 
   @override
   State<ProjectAdminScreen> createState() => _ProjectAdminScreenState();
@@ -32,6 +31,19 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> with SingleTick
 
   late Stream<Project?> _projectStream;
 
+  void _updateTabController() {
+    final int targetLength = _isOpenForRequests ? 4 : 3;
+    if (_tabController.length != targetLength) {
+      final oldIndex = _tabController.index;
+      _tabController.dispose();
+      _tabController = TabController(
+        length: targetLength,
+        vsync: this,
+        initialIndex: oldIndex.clamp(0, targetLength - 1),
+      );
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -40,8 +52,13 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> with SingleTick
     // Explicitly use your core data mapping to determine if the tab should render
     _isOpenForRequests = widget.project.isOpenForRequests;
     
+    int initialIndex = 0;
+    if (widget.initialTab == 'join_requests' && _isOpenForRequests) {
+      initialIndex = 2; // Join Requests is at index 2
+    }
+    
     // Ensure the tab controller matches the total tabs rendered below
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: _isOpenForRequests ? 4 : 3, vsync: this, initialIndex: initialIndex);
     
     _nameController.text = widget.project.title;
     _descController.text = widget.project.description;
@@ -74,6 +91,20 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> with SingleTick
 
   @override
   Widget build(BuildContext context) {
+    final tabs = [
+      const Tab(text: 'Edit Project'),
+      const Tab(text: 'Collaborators'),
+      if (_isOpenForRequests) const Tab(text: 'Join Requests'),
+      const Tab(text: 'Settings'),
+    ];
+
+    final tabViews = [
+      _buildEditProjectTab(),
+      _buildCollaboratorsTab(),
+      if (_isOpenForRequests) _buildJoinRequestsTab(),
+      _buildSettingsTab(),
+    ];
+
     return Scaffold(
       backgroundColor: AppColors.kBgDeep,
       appBar: AppBar(
@@ -86,22 +117,12 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> with SingleTick
           labelColor: AppColors.kAccentLight,
           unselectedLabelColor: AppColors.kTextSecond,
           indicatorColor: AppColors.kAccentLight,
-          tabs: const [
-            Tab(text: 'Edit Project'),
-            Tab(text: 'Collaborators'),
-            Tab(text: 'Join Requests'),
-            Tab(text: 'Settings'),
-          ],
+          tabs: tabs,
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
-          _buildEditProjectTab(),
-          _buildCollaboratorsTab(),
-          _buildJoinRequestsTab(),
-          _buildSettingsTab(),
-        ],
+        children: tabViews,
       ),
     );
   }
@@ -197,26 +218,72 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> with SingleTick
             stream: _projectStream,
             builder: (context, snapshot) {
               if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+              final adminUid = snapshot.data!.createdBy;
               final collaborators = snapshot.data!.collaborators;
-              final memberIds = collaborators.keys.where((id) => id != snapshot.data!.createdBy).toList();
+              final allUids = [
+                adminUid,
+                ...collaborators.keys.where((uid) => uid != adminUid),
+              ];
 
               return ListView.builder(
-                itemCount: memberIds.length,
+                itemCount: allUids.length,
                 itemBuilder: (context, index) {
-                  final uid = memberIds[index];
+                  final uid = allUids[index];
                   return FutureBuilder<AppUser?>(
                     future: UserService.instance.getUserById(uid),
                     builder: (context, userSnap) {
                       if (!userSnap.hasData) return const ListTile(title: Text('Loading...'));
                       final user = userSnap.data!;
+                      final isCreator = uid == adminUid;
                       return ListTile(
-                        leading: CircleAvatar(backgroundImage: NetworkImage(user.photoUrl.isNotEmpty ? user.photoUrl : 'https://ui-avatars.com/api/?name=${user.name}')),
-                        title: Text(user.name, style: const TextStyle(color: AppColors.kTextPrimary)),
-                        subtitle: Text('@${user.username}', style: const TextStyle(color: AppColors.kTextSecond)),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.remove_circle_outline, color: AppColors.kDanger),
-                          onPressed: () => _confirmRemoveCollaborator(uid),
+                        leading: CircleAvatar(
+                          backgroundImage: user.photoUrl.isNotEmpty
+                              ? NetworkImage(user.photoUrl)
+                              : null,
+                          child: user.photoUrl.isEmpty
+                              ? Text(user.username.isNotEmpty
+                                  ? user.username[0].toUpperCase()
+                                  : 'U')
+                              : null,
                         ),
+                        title: Text(
+                          user.username.isNotEmpty ? '@${user.username}' : 'User',
+                          style: const TextStyle(color: AppColors.kTextPrimary),
+                        ),
+                        subtitle: Text(
+                          user.name,
+                          style: const TextStyle(color: AppColors.kTextSecond),
+                        ),
+                        trailing: isCreator
+                            ? Container(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 8.w, vertical: 4.h),
+                                decoration: BoxDecoration(
+                                  color: AppColors.kBgElevated,
+                                  borderRadius: BorderRadius.circular(4.r),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.workspace_premium,
+                                        color: Colors.amber, size: 14.sp),
+                                    SizedBox(width: 4.w),
+                                    Text(
+                                      'Admin',
+                                      style: TextStyle(
+                                        color: AppColors.kAccentLight,
+                                        fontSize: 10.sp,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : IconButton(
+                                icon: const Icon(Icons.remove_circle_outline,
+                                    color: AppColors.kDanger),
+                                onPressed: () => _confirmRemoveCollaborator(uid),
+                              ),
                       );
                     },
                   );
@@ -251,6 +318,27 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> with SingleTick
     }
   }
 
+  String _timeAgo(DateTime dt) {
+    final now = DateTime.now();
+    final difference = now.difference(dt);
+    
+    if (difference.inDays >= 365) {
+      return '${(difference.inDays / 365).floor()} years ago';
+    } else if (difference.inDays >= 30) {
+      return '${(difference.inDays / 30).floor()} months ago';
+    } else if (difference.inDays >= 7) {
+      return '${(difference.inDays / 7).floor()} weeks ago';
+    } else if (difference.inDays >= 1) {
+      return '${difference.inDays} days ago';
+    } else if (difference.inHours >= 1) {
+      return '${difference.inHours} hours ago';
+    } else if (difference.inMinutes >= 1) {
+      return '${difference.inMinutes} minutes ago';
+    } else {
+      return 'just now';
+    }
+  }
+
   Widget _buildJoinRequestsTab() {
     return StreamBuilder<List<JoinRequest>>(
       stream: ProjectService.instance.watchPendingJoinRequests(widget.projectId),
@@ -263,9 +351,9 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> with SingleTick
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.assignment_ind_outlined, color: AppColors.kTextHint, size: 48.sp),
+                Icon(Icons.inbox, color: AppColors.kTextHint, size: 48.sp),
                 SizedBox(height: 12.h),
-                const Text('No pending requests for this project', style: TextStyle(color: AppColors.kTextSecond)),
+                const Text('No pending join requests', style: TextStyle(color: AppColors.kTextSecond)),
               ],
             ),
           );
@@ -276,6 +364,7 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> with SingleTick
           itemCount: requests.length,
           itemBuilder: (context, index) {
             final req = requests[index];
+            final requesterUsername = req.requestedByUsername.isNotEmpty ? '@${req.requestedByUsername}' : 'User';
             return Card(
               color: AppColors.kBgCard,
               margin: EdgeInsets.only(bottom: 12.h),
@@ -292,8 +381,9 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> with SingleTick
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(req.requestedByName, style: const TextStyle(color: AppColors.kTextPrimary, fontWeight: FontWeight.bold)),
-                              Text(DateFormat.yMMMd().format(req.createdAt), style: TextStyle(color: AppColors.kTextSecond, fontSize: 12.sp)),
+                              Text(requesterUsername, style: const TextStyle(color: AppColors.kTextPrimary, fontWeight: FontWeight.bold)),
+                              Text(req.requestedByName, style: const TextStyle(color: AppColors.kTextSecond)),
+                              Text('Requested ${_timeAgo(req.createdAt)}', style: TextStyle(color: AppColors.kTextHint, fontSize: 12.sp)),
                             ],
                           ),
                         ),
@@ -308,15 +398,40 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> with SingleTick
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         OutlinedButton(
-                          onPressed: () => ProjectService.instance.rejectJoinRequest(req.id),
+                          onPressed: () async {
+                            try {
+                              await ProjectService.instance.rejectJoinRequest(req.id);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Request denied.')),
+                              );
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(e.toString())),
+                              );
+                            }
+                          },
                           style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.kDanger), foregroundColor: AppColors.kDanger),
-                          child: const Text('Reject'),
+                          child: const Text('Deny'),
                         ),
                         SizedBox(width: 8.w),
                         ElevatedButton(
-                          onPressed: () => ProjectService.instance.acceptJoinRequest(req.id, projectId: widget.projectId),
+                          onPressed: () async {
+                            try {
+                              await ProjectService.instance.acceptJoinRequest(req.id, projectId: widget.projectId);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Request accepted. User added as collaborator.'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(e.toString())),
+                              );
+                            }
+                          },
                           style: ElevatedButton.styleFrom(backgroundColor: AppColors.kSuccess),
-                          child: const Text('Approve'),
+                          child: const Text('Accept'),
                         ),
                       ],
                     ),
@@ -339,10 +454,24 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> with SingleTick
           _Label('Visibility'),
           Row(
             children: [
-              Radio<String>(value: 'private', groupValue: _visibility, onChanged: (v) => setState(() => _visibility = v!), activeColor: AppColors.kAccentLight),
+              Radio<String>(
+                value: 'private',
+                groupValue: _visibility,
+                onChanged: (v) => setState(() {
+                  _visibility = v!;
+                  _isOpenForRequests = false;
+                  _updateTabController();
+                }),
+                activeColor: AppColors.kAccentLight,
+              ),
               const Text('Private', style: TextStyle(color: AppColors.kTextPrimary)),
               SizedBox(width: 20.w),
-              Radio<String>(value: 'public', groupValue: _visibility, onChanged: (v) => setState(() => _visibility = v!), activeColor: AppColors.kAccentLight),
+              Radio<String>(
+                value: 'public',
+                groupValue: _visibility,
+                onChanged: (v) => setState(() => _visibility = v!),
+                activeColor: AppColors.kAccentLight,
+              ),
               const Text('Public', style: TextStyle(color: AppColors.kTextPrimary)),
             ],
           ),
@@ -350,7 +479,12 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> with SingleTick
             SwitchListTile(
               title: const Text('Open to join requests', style: TextStyle(color: AppColors.kTextPrimary)),
               value: _isOpenForRequests,
-              onChanged: (v) => setState(() => _isOpenForRequests = v),
+              onChanged: (v) {
+                setState(() {
+                  _isOpenForRequests = v;
+                  _updateTabController();
+                });
+              },
               activeColor: AppColors.kAccentLight,
             ),
             if (_isOpenForRequests) ...[

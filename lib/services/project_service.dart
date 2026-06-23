@@ -753,35 +753,72 @@ class ProjectService {
       final userDoc = await transaction
           .get(_firestore.collection('users').doc(authUser.uid));
       final userData = userDoc.data() ?? <String, dynamic>{};
+      final projectTitle = projectData['title'] as String? ?? 'Project';
 
       transaction.set(requestRef, {
         'id': requestRef.id,
+        'requestId': requestRef.id,
         'projectId': projectId,
+        'projectName': projectTitle,
+        'projectTitle': projectTitle,
         'requestedBy': authUser.uid,
         'requestedByEmail':
             authUser.email ?? userData['email'] as String? ?? '',
         'requestedByName':
             userData['name'] as String? ?? authUser.displayName ?? 'Unknown',
         'requestedByUsername': userData['username'] as String? ?? '',
+        'requesterUsername': userData['username'] as String? ?? authUser.displayName ?? authUser.email ?? 'Unknown',
+        'requesterDisplayName': userData['name'] as String? ?? authUser.displayName ?? '',
         'requestedByPhoto': userData['photoUrl'] as String? ?? '',
+        'adminUid': createdBy,
         'message': message.trim(),
         'status': 'pending',
-        'createdAt': Timestamp.now(),
+        'createdAt': FieldValue.serverTimestamp(),
+        'reviewedAt': null,
         'respondedAt': null,
       });
     });
 
     final projectSnap = await projectRef.get();
-    final adminId = projectSnap.data()?['createdBy'] as String? ?? '';
+    final projectData = projectSnap.data() ?? {};
+    final projectTitle = projectData['title'] as String? ?? 'Project';
+    final adminId = projectData['createdBy'] as String? ?? '';
 
-    await _fanOutProjectNotification(
-      projectId: projectId,
-      type: 'n3',
-      title: 'New join request',
-      body: 'A new user wants to join your project.',
-      onlyUserIds: {adminId},
-      data: {'projectId': projectId},
-    );
+    final userDoc = await _firestore.collection('users').doc(authUser.uid).get();
+    final userData = userDoc.data() ?? {};
+    final requesterDisplayName = userData['name'] as String? ?? authUser.displayName ?? 'A user';
+    final requesterUsername = userData['username'] as String? ?? authUser.displayName ?? '';
+
+    try {
+      await NotificationService.instance.createNotification(
+        userId: adminId,
+        type: 'join_request',
+        title: '$requesterDisplayName wants to join $projectTitle',
+        body: 'Tap to review the join request',
+        projectId: projectId,
+        data: {
+          'projectId': projectId,
+          'requestId': requestRef.id,
+          'requesterUid': authUser.uid,
+          'requesterUsername': requesterUsername,
+        },
+      );
+    } catch (e) {
+      print('⚠️ Failed to send join_request notification: $e');
+    }
+
+    try {
+      await _fanOutProjectNotification(
+        projectId: projectId,
+        type: 'n3',
+        title: 'New join request',
+        body: 'A new user wants to join your project.',
+        onlyUserIds: {adminId},
+        data: {'projectId': projectId},
+      );
+    } catch (e) {
+      print('⚠️ Failed to send legacy n3 notification: $e');
+    }
 
     return requestRef.id;
   }
@@ -930,12 +967,15 @@ class ProjectService {
       () => _firestore
           .collection('joinRequests')
           .where('projectId', isEqualTo: projectId)
-          .where('status', isEqualTo: 'pending')
-          .orderBy('createdAt', descending: true)
-          .limit(30)
           .snapshots()
-          .map((snapshot) =>
-              snapshot.docs.map((doc) => _parseJoinRequest(doc)).toList()),
+          .map((snapshot) {
+        final requests = snapshot.docs
+            .map((doc) => _parseJoinRequest(doc))
+            .where((req) => req.status == 'pending')
+            .toList();
+        requests.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return requests;
+      }),
     );
   }
 
@@ -1059,8 +1099,9 @@ class ProjectService {
 
         // Update accepted request status
         transaction.update(requestRef, {
-          'status': 'approved',
-          'respondedAt': Timestamp.now(),
+          'status': 'accepted',
+          'reviewedAt': FieldValue.serverTimestamp(),
+          'respondedAt': FieldValue.serverTimestamp(),
         });
 
         // Close other pending join requests for this project
@@ -1068,7 +1109,8 @@ class ProjectService {
           final otherRef = _firestore.collection('joinRequests').doc(doc.id);
           transaction.update(otherRef, {
             'status': 'closed',
-            'respondedAt': Timestamp.now(),
+            'reviewedAt': FieldValue.serverTimestamp(),
+            'respondedAt': FieldValue.serverTimestamp(),
           });
         }
       });
@@ -1082,6 +1124,22 @@ class ProjectService {
     }
 
     // Send notification to the approved requester
+    try {
+      await NotificationService.instance.createNotification(
+        userId: requestedBy,
+        type: 'request_accepted',
+        title: 'Request Accepted!',
+        body: 'You are now a collaborator on $projectNameForMessage',
+        projectId: resolvedProjectId,
+        data: {
+          'projectId': resolvedProjectId,
+          'projectName': projectNameForMessage,
+        },
+      );
+    } catch (e) {
+      print('⚠️ Failed to send request_accepted notification: $e');
+    }
+
     try {
       await _fanOutProjectNotification(
         projectId: resolvedProjectId,
@@ -1153,12 +1211,29 @@ class ProjectService {
     try {
       await _firestore.runTransaction((transaction) async {
         transaction.update(requestRef, {
-          'status': 'rejected',
-          'respondedAt': Timestamp.now(),
+          'status': 'denied',
+          'reviewedAt': FieldValue.serverTimestamp(),
+          'respondedAt': FieldValue.serverTimestamp(),
         });
       });
 
       // Notify the candidate about the rejection
+      try {
+        await NotificationService.instance.createNotification(
+          userId: requestedBy,
+          type: 'request_rejected',
+          title: 'Request rejected',
+          body: 'Your request to join the project was rejected by the admin.',
+          projectId: projectId,
+          data: {
+            'projectId': projectId,
+            'requestId': requestId,
+          },
+        );
+      } catch (e) {
+        print('⚠️ Failed to send request_rejected notification: $e');
+      }
+
       await _fanOutProjectNotification(
         projectId: projectId,
         type: 'request_rejected',
@@ -1682,19 +1757,16 @@ class ProjectService {
       projectId: data['projectId'] as String? ?? '',
       requestedBy: data['requestedBy'] as String? ?? '',
       requestedByEmail: data['requestedByEmail'] as String? ?? '',
-      requestedByName: data['requestedByName'] as String? ?? '',
-      requestedByUsername: data['requestedByUsername'] as String? ?? '',
+      requestedByName: data['requestedByName'] as String? ?? data['requesterDisplayName'] as String? ?? '',
+      requestedByUsername: data['requestedByUsername'] as String? ?? data['requesterUsername'] as String? ?? '',
       skills: List<String>.from(data['skills'] as List? ?? []),
       message: data['message'] as String? ?? '',
       githubLink: data['githubLink'] as String?,
       linkedinLink: data['linkedinLink'] as String?,
       fileUrls: List<String>.from(data['fileUrls'] as List? ?? []),
       status: data['status'] as String? ?? 'pending',
-      createdAt: DateTime.tryParse(data['createdAt'] as String? ?? '') ??
-          DateTime.now(),
-      respondedAt: data['respondedAt'] != null
-          ? DateTime.tryParse(data['respondedAt'] as String? ?? '')
-          : null,
+      createdAt: _parseDateTime(data['createdAt']) ?? DateTime.now(),
+      respondedAt: _parseDateTime(data['respondedAt'] ?? data['reviewedAt']),
     );
   }
 

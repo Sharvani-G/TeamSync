@@ -9,6 +9,9 @@ class UserService {
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  
+  // In-memory cache for getUserById lookup to optimize rendering and reduce DB reads
+  final Map<String, AppUser?> _userCache = {};
 
   static final RegExp _usernamePattern = RegExp(r'^[a-zA-Z][a-zA-Z0-9_]{2,19}$');
   static final RegExp _usernameSearchPattern = RegExp(r'^[a-zA-Z][a-zA-Z0-9_]*$');
@@ -96,15 +99,19 @@ class UserService {
 
   /// Get user by ID
   Future<AppUser?> getUserById(String userId) async {
+    if (_userCache.containsKey(userId)) {
+      return _userCache[userId];
+    }
     try {
       final doc = await _firestore.collection('users').doc(userId).get();
 
       if (!doc.exists) {
+        _userCache[userId] = null;
         return null;
       }
 
       final data = doc.data()!;
-      return AppUser(
+      final user = AppUser(
         id: userId,
         username: data['username'] as String? ?? '',
         name: data['name'] as String? ?? 'Unknown',
@@ -114,6 +121,8 @@ class UserService {
         tasksCompleted: data['tasksCompleted'] as int? ?? 0,
         createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       );
+      _userCache[userId] = user;
+      return user;
     } catch (e) {
       throw Exception('Failed to get user: ${e.toString()}');
     }

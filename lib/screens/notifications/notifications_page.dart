@@ -4,7 +4,6 @@ import '../../models/models.dart';
 import '../../services/notification_service.dart';
 import '../../widgets/notification_item_widget.dart';
 import '../../theme/app_colors.dart';
-import '../../theme/app_theme.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -108,6 +107,12 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                   item.type == 'webrtc:incoming-call' ||
                                   item.type == 'meeting_scheduled') {
                                 Navigator.pushNamed(context, '/project/$projectId/workspace/calls');
+                              } else if (item.type == 'join_request' || item.type == 'request_accepted') {
+                                Navigator.pushNamed(
+                                  context,
+                                  '/project/$projectId/workspace',
+                                  arguments: {'type': item.type, 'projectId': projectId},
+                                );
                               } else {
                                 Navigator.pushNamed(context, '/project/$projectId');
                               }

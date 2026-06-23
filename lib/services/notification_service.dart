@@ -154,6 +154,9 @@ class NotificationService {
       if (type == 'call_started' || type == 'incoming_call' || type == 'webrtc:incoming-call') {
         return '/project/$projectId/workspace/calls';
       }
+      if (type == 'join_request' || type == 'request_accepted') {
+        return '/project/$projectId/workspace';
+      }
       return '/project/$projectId';
     }
 
