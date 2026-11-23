@@ -13,9 +13,12 @@ between multiple tools.
 
 ## 📱 Download Android APK
 
-[![Download TeamSync APK](https://img.shields.io/badge/Download-TeamSync%20APK%20(42.88%20MB)-success?style=for-the-badge&logo=android)](https://github.com/Sharvani-G/TeamSync/raw/main/dist/android/TeamSync-Android-Testing.apk)
+[![Download from GitHub Release](https://img.shields.io/badge/Download_APK-v1.0.0_(42.88_MB)-success?style=for-the-badge&logo=android)](https://github.com/Sharvani-G/TeamSync/releases/download/v1.0.0/TeamSync-Android-Testing.apk)
+[![GitHub Release](https://img.shields.io/badge/Release-v1.0.0-blue?style=for-the-badge&logo=github)](https://github.com/Sharvani-G/TeamSync/releases/tag/v1.0.0)
 
-Direct link: [**TeamSync-Android-Testing.apk** (v1.0.0)](https://github.com/Sharvani-G/TeamSync/raw/main/dist/android/TeamSync-Android-Testing.apk)
+- **Official GitHub Release**: [TeamSync v1.0.0 Release Page](https://github.com/Sharvani-G/TeamSync/releases/tag/v1.0.0)
+- **Direct APK Download**: [**TeamSync-Android-Testing.apk** (42.88 MB)](https://github.com/Sharvani-G/TeamSync/releases/download/v1.0.0/TeamSync-Android-Testing.apk)
+- **Repository Mirror**: [dist/android/TeamSync-Android-Testing.apk](https://github.com/Sharvani-G/TeamSync/raw/main/dist/android/TeamSync-Android-Testing.apk)
 
 ### APK Specifications
 | Specification | Value |
