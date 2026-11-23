@@ -20,7 +20,6 @@ class NotificationItemWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final icon = _iconForType(item.type);
-    final accent = item.read ? AppColors.kBgCard : AppTheme.primary;
     final timestamp = DateFormat('MMM d • h:mm a').format(item.createdAt);
 
     return Dismissible(
@@ -29,38 +28,57 @@ class NotificationItemWidget extends StatelessWidget {
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
+        margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: AppColors.kDanger,
-          borderRadius: BorderRadius.circular(18),
+          color: AppColors.dpDangerBg,
+          borderRadius: BorderRadius.circular(AppTheme.radiusPanel),
         ),
-        child: const Icon(Icons.delete_outline, color: Colors.white),
+        child: const Icon(Icons.delete_outline, color: AppColors.dpDanger),
       ),
       confirmDismiss: (_) async {
         onDismissed?.call();
         return true;
       },
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppTheme.radiusPanel),
         onTap: onTap,
-      child: Container(
+        child: Container(
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: item.read ? AppColors.kBgCard : AppColors.kBgElevated,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: accent.withOpacity(0.35)),
+            color: item.read ? AppTheme.panel : const Color(0xFFF8FAFF),
+            borderRadius: BorderRadius.circular(AppTheme.radiusPanel),
+            border: Border.all(
+              color: item.read ? AppTheme.rule : AppTheme.accent.withOpacity(0.35),
+              width: AppTheme.borderHairline,
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0616191F),
+                blurRadius: 6,
+                offset: Offset(0, 2),
+              ),
+            ],
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
-                  color: accent.withOpacity(0.15),
+                  color: item.read ? AppTheme.groundMuted : AppColors.dpInfoBg,
                   shape: BoxShape.circle,
+                  border: Border.all(
+                    color: item.read ? AppTheme.rule : AppTheme.accent.withOpacity(0.2),
+                    width: 1,
+                  ),
                 ),
-                child: Icon(icon, color: accent),
+                child: Icon(
+                  icon,
+                  size: 20,
+                  color: item.read ? AppTheme.inkSecondary : AppTheme.accent,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -74,42 +92,39 @@ class NotificationItemWidget extends StatelessWidget {
                             item.title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
+                            style: AppTheme.heading3.copyWith(
+                              fontSize: 14.5,
+                              color: AppTheme.ink,
                             ),
                           ),
                         ),
                         if (!item.read)
                           Container(
-                            width: 10,
-                            height: 10,
-                            margin: const EdgeInsets.only(left: 8, top: 4),
+                            width: 8,
+                            height: 8,
+                            margin: const EdgeInsets.only(left: 8),
                             decoration: const BoxDecoration(
-                              color: Color(0xFF38BDF8),
+                              color: AppTheme.accent,
                               shape: BoxShape.circle,
                             ),
                           ),
                       ],
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 5),
                     Text(
                       item.body,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFFD1D5DB),
-                        fontSize: 13,
-                        height: 1.3,
+                      style: AppTheme.bodySmall.copyWith(
+                        color: AppTheme.inkSecondary,
+                        height: 1.35,
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
                     Text(
                       timestamp,
-                      style: const TextStyle(
-                        color: Color(0xFF94A3B8),
-                        fontSize: 11,
+                      style: AppTheme.metadataText.copyWith(
+                        fontSize: 11.5,
                       ),
                     ),
                   ],

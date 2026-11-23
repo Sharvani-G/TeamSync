@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../theme/app_theme.dart';
 import '../theme/app_colors.dart';
 import '../models/models.dart';
 import '../services/project_service.dart';
+import '../widgets/shared_widgets.dart';
 
 class HomeDashboardScreen extends StatefulWidget {
   const HomeDashboardScreen({super.key});
@@ -27,103 +28,167 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.kBgDeep,
+      backgroundColor: AppTheme.ground,
       body: SafeArea(
         child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: EdgeInsets.only(top: 20.h, left: 16.w, bottom: 8.h),
-                child: Text(
-                  'TeamSync',
-                  style: TextStyle(
-                    color: AppColors.kTextPrimary,
-                    fontSize: 28.sp,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1100),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Brand Page Title
+                    Text(
+                      'TeamSync',
+                      style: AppTheme.display2.copyWith(color: AppTheme.ink),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Collaborative projects, tasks, and scheduled sessions',
+                      style: AppTheme.bodySmall.copyWith(color: AppTheme.inkSecondary),
+                    ),
+                    const SizedBox(height: 28),
+
+                    // Section 1: Project Buckets Header
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Row(
                           children: [
-                            Icon(Icons.folder_open, color: AppColors.kAccentLight, size: 20.sp),
-                            SizedBox(width: 8.w),
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: AppColors.dpInfoBg,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.folder_outlined,
+                                color: AppTheme.accent,
+                                size: 18,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
                             Text(
                               'Project Buckets',
-                              style: TextStyle(
-                                color: AppColors.kTextPrimary,
-                                fontSize: 18.sp,
-                                fontWeight: FontWeight.w600,
-                              ),
+                              style: AppTheme.heading2,
                             ),
                           ],
                         ),
                         ElevatedButton.icon(
                           onPressed: () => Navigator.pushNamed(context, '/create-project'),
-                          icon: const Icon(Icons.add, color: AppColors.kWhite),
-                          label: const Text('New', style: TextStyle(color: AppColors.kWhite)),
+                          icon: const Icon(Icons.add, size: 18, color: Colors.white),
+                          label: const Text('New Project'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.kAccentBlue,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
+                            backgroundColor: AppTheme.accent,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                            ),
                           ),
                         ),
                       ],
                     ),
-                    SizedBox(height: 16.h),
+                    const SizedBox(height: 16),
 
                     // Projects List
                     StreamBuilder<List<Project>>(
                       stream: _projectsStream,
                       builder: (context, snap) {
-                        if (snap.hasError) return _errorBox('Error loading projects');
+                        if (snap.hasError) {
+                          return _errorBox('Error loading projects: ${snap.error}');
+                        }
                         if (snap.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
+                          return const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(32),
+                              child: CircularProgressIndicator(strokeWidth: 2.5),
+                            ),
+                          );
                         }
                         final projects = snap.data ?? <Project>[];
-                        if (projects.isEmpty) return _emptyBox('No projects yet');
+                        if (projects.isEmpty) {
+                          return const EmptyState(
+                            icon: Icons.folder_open_outlined,
+                            title: 'No projects yet',
+                            subtitle: 'Create a new project or discover public teams to start collaborating.',
+                          );
+                        }
 
                         return ListView.separated(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
                           itemCount: projects.length,
-                          separatorBuilder: (_, __) => SizedBox(height: 16.h),
-                          itemBuilder: (c, i) => _ProjectCard(project: projects[i]),
+                          separatorBuilder: (_, __) => const SizedBox(height: 14),
+                          itemBuilder: (c, i) => _DashboardProjectCard(project: projects[i]),
                         );
                       },
                     ),
 
-                    SizedBox(height: 32.h),
-                    Text(
-                      'Scheduled Meetings',
-                      style: TextStyle(
-                        color: AppColors.kTextPrimary,
-                        fontSize: 18.sp,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    SizedBox(height: 16.h),
+                    const SizedBox(height: 36),
 
+                    // Section 2: Scheduled Meetings Header
+                    Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: AppColors.dpInfoBg,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.videocam_outlined,
+                            color: AppTheme.accent,
+                            size: 18,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Scheduled Meetings',
+                          style: AppTheme.heading2,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Meetings List
                     StreamBuilder<List<ProjectMeetingItem>>(
                       stream: _meetingsStream,
                       builder: (context, snap) {
-                        if (snap.hasError) return _errorBox('Error loading meetings');
+                        if (snap.hasError) {
+                          return _errorBox('Error loading meetings: ${snap.error}');
+                        }
                         if (snap.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
+                          return const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(32),
+                              child: CircularProgressIndicator(strokeWidth: 2.5),
+                            ),
+                          );
                         }
                         final meetings = snap.data ?? const <ProjectMeetingItem>[];
                         if (meetings.isEmpty) {
-                          return Center(
-                            child: Text(
-                              "No meetings scheduled",
-                              style: TextStyle(color: AppColors.kTextHint, fontSize: 14.sp),
+                          return Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                            decoration: BoxDecoration(
+                              color: AppTheme.panel,
+                              borderRadius: BorderRadius.circular(AppTheme.radiusPanel),
+                              border: Border.all(color: AppTheme.rule, width: 1),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.event_available, color: AppTheme.inkSecondary, size: 20),
+                                const SizedBox(width: 12),
+                                Text(
+                                  'No upcoming calls scheduled',
+                                  style: AppTheme.bodySmall,
+                                ),
+                              ],
                             ),
                           );
                         }
@@ -132,7 +197,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
                           itemCount: meetings.length,
-                          separatorBuilder: (_, __) => SizedBox(height: 12.h),
+                          separatorBuilder: (_, __) => const SizedBox(height: 12),
                           itemBuilder: (c, i) {
                             return _ScheduledMeetingCard(meeting: meetings[i]);
                           },
@@ -140,30 +205,26 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                       },
                     ),
 
-                    SizedBox(height: 32.h),
+                    const SizedBox(height: 36),
                   ],
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _emptyBox(String message) => Container(
-        width: double.infinity,
-        padding: EdgeInsets.all(20.w),
-        child: Center(
-          child: Text(message, style: TextStyle(color: AppColors.kTextSecond, fontSize: 14.sp)),
-        ),
-      );
-
   Widget _errorBox(String message) => Container(
         width: double.infinity,
-        padding: EdgeInsets.all(20.w),
-        decoration: BoxDecoration(color: AppColors.kDanger.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12.r)),
-        child: Text(message, style: TextStyle(color: AppColors.kDanger, fontSize: 14.sp)),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.dpDangerBg,
+          borderRadius: BorderRadius.circular(AppTheme.radiusPanel),
+          border: Border.all(color: AppColors.dpDanger.withOpacity(0.3)),
+        ),
+        child: Text(message, style: AppTheme.bodySmall.copyWith(color: AppColors.dpDanger)),
       );
 }
 
@@ -209,60 +270,88 @@ class _ScheduledMeetingCardState extends State<_ScheduledMeetingCard> {
 
         return Container(
           decoration: BoxDecoration(
-            color: AppColors.kBgCard,
-            borderRadius: BorderRadius.circular(12.r),
+            color: AppTheme.panel,
+            borderRadius: BorderRadius.circular(AppTheme.radiusPanel),
+            border: Border.all(color: AppTheme.rule, width: AppTheme.borderHairline),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0616191F),
+                blurRadius: 6,
+                offset: Offset(0, 2),
+              ),
+            ],
           ),
-          padding: EdgeInsets.all(16.w),
+          padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              CircleAvatar(
-                backgroundColor: AppColors.kBgElevated,
-                child: Icon(Icons.video_call, color: AppColors.kAccentLight),
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: canJoin ? AppColors.dpSuccessBg : AppColors.dpInfoBg,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: canJoin ? AppColors.dpSuccess.withOpacity(0.3) : AppTheme.rule,
+                  ),
+                ),
+                child: Icon(
+                  Icons.videocam_outlined,
+                  color: canJoin ? AppColors.dpSuccess : AppTheme.accent,
+                  size: 22,
+                ),
               ),
-              SizedBox(width: 12.w),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       m.title,
-                      style: TextStyle(
-                        color: AppColors.kTextPrimary,
-                        fontSize: 15.sp,
-                        fontWeight: FontWeight.w500,
-                      ),
+                      style: AppTheme.heading3.copyWith(fontSize: 15),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    SizedBox(height: 4.h),
+                    const SizedBox(height: 4),
                     Text(
                       m.projectTitle,
-                      style: TextStyle(color: AppColors.kTextSecond, fontSize: 13.sp),
+                      style: AppTheme.bodySmall.copyWith(color: AppTheme.inkSecondary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    SizedBox(height: 4.h),
-                    Text(
-                      DateFormat.yMMMd().add_jm().format(m.scheduledAt),
-                      style: TextStyle(color: AppColors.kTextSecond.withValues(alpha: 0.7), fontSize: 11.sp),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.access_time, size: 12, color: AppTheme.inkSecondary),
+                        const SizedBox(width: 4),
+                        Text(
+                          DateFormat.yMMMd().add_jm().format(m.scheduledAt),
+                          style: AppTheme.metadataText.copyWith(fontSize: 11.5),
+                        ),
+                        if (isExpired) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            '• ${joinedUids.length} attended',
+                            style: AppTheme.metadataText.copyWith(fontSize: 11.5),
+                          ),
+                        ],
+                      ],
                     ),
-                    if (isExpired) ...[
-                      SizedBox(height: 4.h),
-                      Text(
-                        '${joinedUids.length} joined',
-                        style: TextStyle(color: Colors.grey, fontSize: 11.sp),
-                      ),
-                    ],
                   ],
                 ),
               ),
+              const SizedBox(width: 12),
               if (isUpcoming)
-                ElevatedButton(
-                  onPressed: null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey.shade800,
-                    disabledBackgroundColor: Colors.grey.shade800,
-                    padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppTheme.groundMuted,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                    border: Border.all(color: AppTheme.rule),
                   ),
-                  child: Text('Join at ${DateFormat.jm().format(m.scheduledAt)}', style: TextStyle(color: Colors.white38, fontSize: 10.sp)),
+                  child: Text(
+                    DateFormat.jm().format(m.scheduledAt),
+                    style: AppTheme.labelText.copyWith(color: AppTheme.inkSecondary),
+                  ),
                 ),
               if (canJoin)
                 ElevatedButton(
@@ -273,13 +362,27 @@ class _ScheduledMeetingCardState extends State<_ScheduledMeetingCard> {
                     }
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                    backgroundColor: AppColors.dpSuccess,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                    ),
                   ),
-                  child: Text('Join Now', style: TextStyle(color: Colors.white, fontSize: 12.sp, fontWeight: FontWeight.bold)),
+                  child: const Text('Join Now', style: TextStyle(fontWeight: FontWeight.w700)),
                 ),
               if (isExpired)
-                Text('Ended', style: TextStyle(color: Colors.grey, fontSize: 12.sp)),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.groundMuted,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    'Ended',
+                    style: AppTheme.labelText.copyWith(color: AppTheme.inkSecondary),
+                  ),
+                ),
             ],
           ),
         );
@@ -288,60 +391,93 @@ class _ScheduledMeetingCardState extends State<_ScheduledMeetingCard> {
   }
 }
 
-class _ProjectCard extends StatefulWidget {
+class _DashboardProjectCard extends StatefulWidget {
   final Project project;
-  const _ProjectCard({required this.project});
+  const _DashboardProjectCard({required this.project});
 
   @override
-  State<_ProjectCard> createState() => _ProjectCardState();
+  State<_DashboardProjectCard> createState() => _DashboardProjectCardState();
 }
 
-class _ProjectCardState extends State<_ProjectCard> {
+class _DashboardProjectCardState extends State<_DashboardProjectCard> {
   bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
-    final hasLongDescription = widget.project.displayDescription.length > 100; // Simplified check
+    final hasLongDescription = widget.project.displayDescription.length > 90;
 
-    return GestureDetector(
+    return InkWell(
       onTap: () => Navigator.pushNamed(context, '/project/${widget.project.id}'),
+      borderRadius: BorderRadius.circular(AppTheme.radiusPanel),
       child: Container(
-        padding: EdgeInsets.all(16.w),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.kBgCard,
-          borderRadius: BorderRadius.circular(12.r),
-          border: Border.all(color: AppColors.kDivider),
+          color: AppTheme.panel,
+          borderRadius: BorderRadius.circular(AppTheme.radiusPanel),
+          border: Border.all(color: AppTheme.rule, width: AppTheme.borderHairline),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0616191F),
+              blurRadius: 6,
+              offset: Offset(0, 2),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Icon(Icons.folder, color: AppColors.kAccentLight, size: 20.sp),
-                    SizedBox(width: 8.w),
-                    Text(
-                      widget.project.displayTitle,
-                      style: TextStyle(
-                        color: AppColors.kTextPrimary,
-                        fontSize: 15.sp,
-                        fontWeight: FontWeight.w500,
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: AppColors.dpInfoBg,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Icon(Icons.folder, color: AppTheme.accent, size: 16),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          widget.project.displayTitle,
+                          style: AppTheme.heading3.copyWith(fontSize: 15.5),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                Text(
-                  '👥 ${widget.project.safeCollaboratorCount} collaborators',
-                  style: TextStyle(color: AppColors.kTextSecond, fontSize: 12.sp),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppTheme.groundMuted,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppTheme.rule),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.people_outline, size: 12, color: AppTheme.inkSecondary),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${widget.project.safeCollaboratorCount}',
+                        style: AppTheme.labelText.copyWith(color: AppTheme.inkSecondary),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-            SizedBox(height: 8.h),
+            const SizedBox(height: 10),
             Text(
               widget.project.displayDescription,
-              style: TextStyle(color: AppColors.kTextSecond, fontSize: 13.sp),
+              style: AppTheme.bodySmall.copyWith(color: AppTheme.inkSecondary, height: 1.45),
               maxLines: _expanded ? null : 2,
               overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
             ),
@@ -351,10 +487,10 @@ class _ProjectCardState extends State<_ProjectCard> {
                 child: GestureDetector(
                   onTap: () => setState(() => _expanded = !_expanded),
                   child: Padding(
-                    padding: EdgeInsets.only(top: 4.h),
+                    padding: const EdgeInsets.only(top: 6),
                     child: Text(
                       _expanded ? 'Show less ▲' : 'Show more ▼',
-                      style: TextStyle(color: AppColors.kAccentLight, fontSize: 12.sp),
+                      style: AppTheme.labelText.copyWith(color: AppTheme.accent),
                     ),
                   ),
                 ),

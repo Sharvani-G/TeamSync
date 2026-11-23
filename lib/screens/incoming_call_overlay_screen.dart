@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_theme.dart';
 
 class IncomingCallOverlayScreen extends StatefulWidget {
   final String callerName;
@@ -41,51 +40,79 @@ class _IncomingCallOverlayScreenState extends State<IncomingCallOverlayScreen> {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.black.withOpacity(0.85),
-      child: Container(
-        width: double.infinity,
-        height: double.infinity,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircleAvatar(
-              radius: 60.r,
-              backgroundColor: AppColors.kAccentBlue,
-              child: Text(
-                widget.callerName.isNotEmpty ? widget.callerName[0].toUpperCase() : '?',
-                style: TextStyle(color: Colors.white, fontSize: 40.sp, fontWeight: FontWeight.bold),
+      color: Colors.black.withOpacity(0.75),
+      child: Center(
+        child: Container(
+          width: 380,
+          margin: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: AppTheme.panel,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppTheme.rule, width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 30,
+                offset: const Offset(0, 10),
               ),
-            ),
-            SizedBox(height: 24.h),
-            Text(
-              '${widget.callerName} is calling',
-              style: TextStyle(color: Colors.white, fontSize: 24.sp, fontWeight: FontWeight.w600),
-            ),
-            SizedBox(height: 8.h),
-            Text(
-              'From ${widget.projectTitle}',
-              style: TextStyle(color: AppColors.kTextSecond, fontSize: 16.sp),
-            ),
-            SizedBox(height: 40.h),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _CallActionBtn(
-                  icon: Icons.call_end,
-                  color: Colors.red,
-                  label: 'Decline',
-                  onTap: widget.onDecline,
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 46,
+                backgroundColor: AppTheme.accent,
+                child: Text(
+                  widget.callerName.isNotEmpty ? widget.callerName[0].toUpperCase() : '?',
+                  style: AppTheme.displayFont(
+                    color: Colors.white,
+                    fontSize: 32,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-                SizedBox(width: 40.w),
-                _CallActionBtn(
-                  icon: Icons.phone,
-                  color: Colors.green,
-                  label: 'Join',
-                  onTap: widget.onAccept,
+              ),
+              const SizedBox(height: 20),
+              Text(
+                '${widget.callerName} is calling',
+                style: AppTheme.displayFont(
+                  color: AppTheme.ink,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
                 ),
-              ],
-            ),
-          ],
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Project: ${widget.projectTitle}',
+                style: AppTheme.bodyFont(
+                  color: AppTheme.inkSecondary,
+                  fontSize: 14,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _CallActionBtn(
+                    icon: Icons.call_end_rounded,
+                    color: AppTheme.danger,
+                    label: 'Decline',
+                    onTap: widget.onDecline,
+                  ),
+                  const SizedBox(width: 48),
+                  _CallActionBtn(
+                    icon: Icons.videocam_rounded,
+                    color: const Color(0xFF10B981),
+                    label: 'Join Call',
+                    onTap: widget.onAccept,
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -98,7 +125,12 @@ class _CallActionBtn extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
-  const _CallActionBtn({required this.icon, required this.color, required this.label, required this.onTap});
+  const _CallActionBtn({
+    required this.icon,
+    required this.color,
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -107,20 +139,31 @@ class _CallActionBtn extends StatelessWidget {
         GestureDetector(
           onTap: onTap,
           child: Container(
-            width: 70.w,
-            height: 70.w,
+            width: 58,
+            height: 58,
             decoration: BoxDecoration(
               color: color,
               shape: BoxShape.circle,
               boxShadow: [
-                BoxShadow(color: color.withOpacity(0.3), blurRadius: 15, spreadRadius: 2),
+                BoxShadow(
+                  color: color.withOpacity(0.3),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
               ],
             ),
-            child: Icon(icon, color: Colors.white, size: 32.sp),
+            child: Icon(icon, color: Colors.white, size: 28),
           ),
         ),
-        SizedBox(height: 12.h),
-        Text(label, style: TextStyle(color: Colors.white70, fontSize: 13.sp)),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: AppTheme.bodyFont(
+            color: AppTheme.ink,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ],
     );
   }

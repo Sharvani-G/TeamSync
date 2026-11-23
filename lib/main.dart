@@ -98,9 +98,9 @@ class _ProjectSyncAppState extends State<ProjectSyncApp> {
               title: 'TeamSync',
               debugShowCheckedModeBanner: false,
               navigatorKey: appNavigatorKey,
-              theme: AppTheme.darkTheme,
-              darkTheme: AppTheme.darkTheme,
-              themeMode: ThemeMode.dark,
+              theme: AppTheme.lightTheme,
+              darkTheme: AppTheme.lightTheme,
+              themeMode: ThemeMode.light,
               initialRoute: _initialRoute(),
               onGenerateRoute: generateRoute,
             );

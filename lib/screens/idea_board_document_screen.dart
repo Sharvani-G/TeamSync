@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:file_picker/file_picker.dart' as picker;
@@ -8,7 +7,9 @@ import 'package:file_picker/file_picker.dart' as picker;
 import '../models/models.dart';
 import '../services/attachment_service.dart';
 import '../services/project_service.dart';
+import '../theme/app_theme.dart';
 import '../theme/app_colors.dart';
+import '../widgets/shared_widgets.dart';
 
 bool _isCloudinaryUrl(String url) => url.trim().startsWith('https://res.cloudinary.com');
 
@@ -65,7 +66,10 @@ class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to add block: $e')),
+          SnackBar(
+            content: Text('Failed to add block: $e'),
+            backgroundColor: AppColors.dpDanger,
+          ),
         );
       }
     } finally {
@@ -79,7 +83,10 @@ class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete block: $e')),
+          SnackBar(
+            content: Text('Failed to delete block: $e'),
+            backgroundColor: AppColors.dpDanger,
+          ),
         );
       }
     }
@@ -137,11 +144,21 @@ class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Delete File'),
+        title: const Text('Delete File'),
         content: Text('Are you sure you want to delete ${file.fileName}?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: Text('Delete', style: TextStyle(color: AppColors.kDanger))),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.dpDanger,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+          ),
         ],
       ),
     );
@@ -165,7 +182,14 @@ class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
         files: updatedFiles,
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete file: $e'),
+            backgroundColor: AppColors.dpDanger,
+          ),
+        );
+      }
     }
   }
 
@@ -187,62 +211,91 @@ class _IdeaBoardDocumentScreenState extends State<IdeaBoardDocumentScreen> {
       stream: _projectStream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting && snapshot.data == null) {
-          return const Scaffold(backgroundColor: AppColors.kBgDeep, body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            backgroundColor: AppTheme.ground,
+            body: Center(child: CircularProgressIndicator(strokeWidth: 2.5)),
+          );
         }
 
         final project = snapshot.data;
-        if (project == null) return const Scaffold(backgroundColor: AppColors.kBgDeep, body: Center(child: Text('Project not found', style: TextStyle(color: Colors.white))));
+        if (project == null) {
+          return const Scaffold(
+            backgroundColor: AppTheme.ground,
+            appBar: SimpleAppBar(title: 'Idea Board'),
+            body: EmptyState(
+              icon: Icons.error_outline,
+              title: 'Project Not Found',
+              subtitle: 'This project could not be located.',
+            ),
+          );
+        }
 
         final isCollaborator = project.isCollaborator(FirebaseAuth.instance.currentUser?.uid ?? '');
         final levelTitle = widget.levelId;
 
         return Scaffold(
-          backgroundColor: AppColors.kBgDeep,
-          appBar: AppBar(
-            backgroundColor: AppColors.kBgDeep,
-            elevation: 0,
-            leading: IconButton(
-              icon: Icon(Icons.arrow_back_ios_new, color: AppColors.kTextPrimary, size: 20.sp),
-              onPressed: () => Navigator.pop(context),
-            ),
-            title: Text(levelTitle, style: TextStyle(color: AppColors.kTextPrimary, fontSize: 18.sp, fontWeight: FontWeight.w600)),
-          ),
+          backgroundColor: AppTheme.ground,
+          appBar: SimpleAppBar(title: levelTitle),
           body: Column(
             children: [
               if (!isCollaborator)
                 Container(
                   width: double.infinity,
-                  padding: EdgeInsets.all(12.w),
-                  color: AppColors.kAccentBlue.withValues(alpha: 0.1),
-                  child: Text('View only mode', style: TextStyle(color: AppColors.kAccentLight, fontWeight: FontWeight.w600, fontSize: 13.sp)),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  color: AppColors.dpInfoBg,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.visibility_outlined, size: 16, color: AppTheme.accent),
+                      const SizedBox(width: 8),
+                      Text(
+                        'View-only mode — you are not a collaborator on this project',
+                        style: AppTheme.metadataText.copyWith(color: AppTheme.accent, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
                 ),
               Expanded(
-                child: StreamBuilder<List<IdeaBoardBlock>>(
-                  stream: _blocksStream,
-                  builder: (context, blockSnap) {
-                    if (blockSnap.connectionState == ConnectionState.waiting && blockSnap.data == null) {
-                       return const Center(child: CircularProgressIndicator());
-                    }
-                    final blocks = blockSnap.data ?? [];
-                    return ListView.separated(
-                      padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 100.h),
-                      itemCount: blocks.length,
-                      separatorBuilder: (_, __) => SizedBox(height: 16.h),
-                      itemBuilder: (c, i) => _IdeaBlockCard(
-                        block: blocks[i],
-                        canEdit: isCollaborator,
-                        uploadingBlockId: _uploadingBlockId,
-                        uploadProgress: _uploadProgress,
-                        uploadError: _uploadError,
-                        onDelete: () => _deleteBlock(blocks[i].id),
-                        onSaveContent: (val) => _saveContent(blocks[i].id, val),
-                        onAttachFiles: () => _attachFiles(blocks[i]),
-                        onPreviewFile: _previewFile,
-                        onDownloadFile: _downloadFile,
-                        onDeleteFile: (file) => _deleteFile(blocks[i], file),
-                      ),
-                    );
-                  },
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 820),
+                    child: StreamBuilder<List<IdeaBoardBlock>>(
+                      stream: _blocksStream,
+                      builder: (context, blockSnap) {
+                        if (blockSnap.connectionState == ConnectionState.waiting && blockSnap.data == null) {
+                          return const Center(child: CircularProgressIndicator(strokeWidth: 2.5));
+                        }
+                        final blocks = blockSnap.data ?? [];
+                        if (blocks.isEmpty) {
+                          return EmptyState(
+                            icon: Icons.lightbulb_outline,
+                            title: 'No blocks added yet',
+                            subtitle: isCollaborator
+                                ? 'Tap "+ Add Block" to add titles, text, or file attachments.'
+                                : 'No content has been added to this section yet.',
+                          );
+                        }
+
+                        return ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+                          itemCount: blocks.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 16),
+                          itemBuilder: (c, i) => _IdeaBlockCard(
+                            block: blocks[i],
+                            canEdit: isCollaborator,
+                            uploadingBlockId: _uploadingBlockId,
+                            uploadProgress: _uploadProgress,
+                            uploadError: _uploadError,
+                            onDelete: () => _deleteBlock(blocks[i].id),
+                            onSaveContent: (val) => _saveContent(blocks[i].id, val),
+                            onAttachFiles: () => _attachFiles(blocks[i]),
+                            onPreviewFile: _previewFile,
+                            onDownloadFile: _downloadFile,
+                            onDeleteFile: (file) => _deleteFile(blocks[i], file),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -262,15 +315,72 @@ class _AddBlockFab extends StatelessWidget {
   Widget build(BuildContext context) {
     return PopupMenuButton<String>(
       onSelected: onAdd,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        side: const BorderSide(color: AppTheme.rule),
+      ),
+      color: AppTheme.panel,
+      elevation: 4,
       itemBuilder: (context) => [
-        const PopupMenuItem(value: 'title', child: Text('Add Title')),
-        const PopupMenuItem(value: 'paragraph', child: Text('Add Paragraph')),
-        const PopupMenuItem(value: 'file', child: Text('Add File')),
+        PopupMenuItem(
+          value: 'title',
+          child: Row(
+            children: [
+              const Icon(Icons.title, size: 18, color: AppTheme.accent),
+              const SizedBox(width: 10),
+              Text('Add Title Block', style: AppTheme.bodySmall.copyWith(color: AppTheme.ink)),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'paragraph',
+          child: Row(
+            children: [
+              const Icon(Icons.notes, size: 18, color: AppTheme.accent),
+              const SizedBox(width: 10),
+              Text('Add Paragraph Block', style: AppTheme.bodySmall.copyWith(color: AppTheme.ink)),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'file',
+          child: Row(
+            children: [
+              const Icon(Icons.attach_file, size: 18, color: AppTheme.accent),
+              const SizedBox(width: 10),
+              Text('Add File Attachment Block', style: AppTheme.bodySmall.copyWith(color: AppTheme.ink)),
+            ],
+          ),
+        ),
       ],
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
-        decoration: BoxDecoration(color: AppColors.kAccentBlue, borderRadius: BorderRadius.circular(999.r)),
-        child: Text('+ Add Block', style: TextStyle(color: AppColors.kWhite, fontWeight: FontWeight.w700, fontSize: 14.sp)),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppTheme.accent,
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x28074CE0),
+              blurRadius: 12,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.add, size: 18, color: Colors.white),
+            const SizedBox(width: 6),
+            Text(
+              'Add Block',
+              style: AppTheme.instrumentSans(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -331,7 +441,6 @@ class _IdeaBlockCardState extends State<_IdeaBlockCard> {
 
   void _onFocusChange() {
     if (!_focusNode.hasFocus) {
-      // Focus lost, save immediately
       _timer?.cancel();
       widget.onSaveContent(_controller.text);
     }
@@ -351,11 +460,18 @@ class _IdeaBlockCardState extends State<_IdeaBlockCard> {
     final isUploading = widget.uploadingBlockId == widget.block.id;
 
     return Container(
-      padding: EdgeInsets.all(16.w),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.kBgCard,
-        borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(color: AppColors.kDivider),
+        color: AppTheme.panel,
+        borderRadius: BorderRadius.circular(AppTheme.radiusPanel),
+        border: Border.all(color: AppTheme.rule, width: AppTheme.borderHairline),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0616191F),
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -363,28 +479,53 @@ class _IdeaBlockCardState extends State<_IdeaBlockCard> {
           Row(
             children: [
               Container(
-                padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
-                decoration: BoxDecoration(color: AppColors.kBgElevated, borderRadius: BorderRadius.circular(4.r)),
-                child: Text(widget.block.type.toUpperCase(), style: TextStyle(color: AppColors.kTextSecond, fontSize: 10.sp, fontWeight: FontWeight.w600)),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppTheme.groundMuted,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                  border: Border.all(color: AppTheme.rule),
+                ),
+                child: Text(
+                  widget.block.type.toUpperCase(),
+                  style: AppTheme.labelText.copyWith(fontSize: 10, color: AppTheme.inkSecondary),
+                ),
               ),
               const Spacer(),
-              if (widget.canEdit) IconButton(icon: Icon(Icons.delete_outline, color: AppColors.kDanger, size: 20.sp), onPressed: widget.onDelete),
+              if (widget.canEdit)
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: AppColors.dpDanger, size: 18),
+                  tooltip: 'Delete block',
+                  onPressed: widget.onDelete,
+                ),
             ],
           ),
-          if (widget.block.type != 'file')
+          if (widget.block.type != 'file') ...[
+            const SizedBox(height: 6),
             TextField(
               controller: _controller,
               focusNode: _focusNode,
+              enabled: widget.canEdit,
               onChanged: (val) {
                 _timer?.cancel();
                 _timer = Timer(const Duration(milliseconds: 1500), () => widget.onSaveContent(val));
               },
-              style: TextStyle(color: AppColors.kTextPrimary, fontSize: isTitle ? 20.sp : 14.sp, fontWeight: isTitle ? FontWeight.w600 : FontWeight.w400),
+              style: isTitle
+                  ? AppTheme.heading2.copyWith(fontSize: 20)
+                  : AppTheme.bodySmall.copyWith(color: AppTheme.ink, height: 1.5),
               maxLines: isTitle ? 1 : null,
-              decoration: InputDecoration(border: InputBorder.none, hintText: isTitle ? 'Section Title' : 'Start typing...'),
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                filled: false,
+                contentPadding: EdgeInsets.zero,
+                hintText: isTitle ? 'Section Title' : 'Start typing your notes, details or idea content...',
+                hintStyle: AppTheme.bodySmall.copyWith(color: AppTheme.textMuted),
+              ),
             ),
+          ],
           if (widget.block.files.isNotEmpty && widget.block.type != 'title') ...[
-            SizedBox(height: 12.h),
+            const SizedBox(height: 14),
             ...widget.block.files.map((f) => FileAttachmentWidget(
                   file: f,
                   canDelete: widget.canEdit,
@@ -394,21 +535,40 @@ class _IdeaBlockCardState extends State<_IdeaBlockCard> {
                 )),
           ],
           if (isUploading && widget.block.type != 'title') ...[
-            SizedBox(height: 12.h),
-            LinearProgressIndicator(value: widget.uploadProgress, backgroundColor: AppColors.kBgElevated, color: AppColors.kAccentBlue),
-            SizedBox(height: 4.h),
-            Text('Uploading...', style: TextStyle(color: AppColors.kTextSecond, fontSize: 11.sp)),
+            const SizedBox(height: 14),
+            LinearProgressIndicator(
+              value: widget.uploadProgress,
+              backgroundColor: AppTheme.groundMuted,
+              color: AppTheme.accent,
+            ),
+            const SizedBox(height: 5),
+            Text(
+              'Uploading attachment (${(widget.uploadProgress * 100).toInt()}%)...',
+              style: AppTheme.metadataText,
+            ),
           ],
           if (widget.uploadError != null && isUploading && widget.block.type != 'title') ...[
-            SizedBox(height: 8.h),
-            Text(widget.uploadError!, style: TextStyle(color: AppColors.kDanger, fontSize: 12.sp)),
+            const SizedBox(height: 8),
+            Text(
+              widget.uploadError!,
+              style: AppTheme.bodySmall.copyWith(color: AppColors.dpDanger),
+            ),
           ],
-          if (widget.canEdit && widget.block.type != 'title')
+          if (widget.canEdit && widget.block.type != 'title') ...[
+            const SizedBox(height: 8),
             TextButton.icon(
               onPressed: widget.onAttachFiles,
-              icon: Icon(Icons.add_circle_outline, color: AppColors.kAccentLight, size: 18.sp),
-              label: Text('Attach File', style: TextStyle(color: AppColors.kAccentLight, fontSize: 13.sp)),
+              icon: const Icon(Icons.attach_file, color: AppTheme.accent, size: 16),
+              label: Text(
+                'Attach File',
+                style: AppTheme.instrumentSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.accent,
+                ),
+              ),
             ),
+          ],
         ],
       ),
     );
@@ -422,44 +582,72 @@ class FileAttachmentWidget extends StatelessWidget {
   final VoidCallback onDownload;
   final VoidCallback onDelete;
 
-  const FileAttachmentWidget({super.key, required this.file, required this.canDelete, required this.onPreview, required this.onDownload, required this.onDelete});
+  const FileAttachmentWidget({
+    super.key,
+    required this.file,
+    required this.canDelete,
+    required this.onPreview,
+    required this.onDownload,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: EdgeInsets.only(bottom: 12.h),
-      padding: EdgeInsets.all(12.w),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.kBgElevated,
-        borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(color: AppColors.kDivider),
+        color: AppTheme.groundMuted,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        border: Border.all(color: AppTheme.rule, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.insert_drive_file, color: AppColors.kAccentLight, size: 24.sp),
-              SizedBox(width: 12.w),
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: AppColors.dpInfoBg,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(Icons.insert_drive_file_outlined, color: AppTheme.accent, size: 18),
+              ),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   file.fileName,
-                  style: TextStyle(color: AppColors.kTextPrimary, fontSize: 14.sp, fontWeight: FontWeight.w600),
+                  style: AppTheme.heading3.copyWith(fontSize: 13.5),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
-          SizedBox(height: 12.h),
+          const SizedBox(height: 10),
           Row(
             children: [
-              _ActionButton(icon: Icons.visibility_outlined, label: 'Open', onTap: onPreview),
-              SizedBox(width: 8.w),
-              _ActionButton(icon: Icons.download_outlined, label: 'Download', onTap: onDownload),
+              _ActionButton(
+                icon: Icons.open_in_new,
+                label: 'Open',
+                onTap: onPreview,
+              ),
+              const SizedBox(width: 8),
+              _ActionButton(
+                icon: Icons.download_outlined,
+                label: 'Download',
+                onTap: onDownload,
+              ),
               if (canDelete) ...[
                 const Spacer(),
-                _ActionButton(icon: Icons.delete_outline, label: 'Delete', color: AppColors.kDanger, onTap: onDelete),
+                _ActionButton(
+                  icon: Icons.delete_outline,
+                  label: 'Delete',
+                  color: AppColors.dpDanger,
+                  onTap: onDelete,
+                ),
               ],
             ],
           ),
@@ -475,30 +663,43 @@ class _ActionButton extends StatelessWidget {
   final VoidCallback onTap;
   final Color? color;
 
-  const _ActionButton({required this.icon, required this.label, required this.onTap, this.color});
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final finalColor = color ?? AppColors.kAccentLight;
+    final effectiveColor = color ?? AppTheme.accent;
+
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8.r),
+      borderRadius: BorderRadius.circular(6),
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 6.h),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: finalColor.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(8.r),
+          color: color != null ? AppColors.dpDangerBg : AppColors.dpInfoBg,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: effectiveColor.withOpacity(0.2)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16.sp, color: finalColor),
-            SizedBox(width: 4.w),
-            Text(label, style: TextStyle(color: finalColor, fontSize: 12.sp, fontWeight: FontWeight.w500)),
+            Icon(icon, size: 14, color: effectiveColor),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: AppTheme.labelText.copyWith(
+                color: effectiveColor,
+                fontWeight: FontWeight.w600,
+                fontSize: 11.5,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 }
-

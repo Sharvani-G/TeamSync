@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_theme.dart';
 
 class CheckEmailScreen extends StatefulWidget {
   final String email;
@@ -37,12 +37,9 @@ class _CheckEmailScreenState extends State<CheckEmailScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Reset link sent again. Please check Inbox or Spam.',
-            style: GoogleFonts.dmSans(),
-          ),
+          content: Text('Reset link resent. Please check your inbox or spam.', style: AppTheme.bodyFont(color: Colors.white)),
+          backgroundColor: AppTheme.field,
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
       );
     } on FirebaseAuthException catch (e) {
@@ -54,9 +51,9 @@ class _CheckEmailScreenState extends State<CheckEmailScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(message, style: GoogleFonts.dmSans()),
+          content: Text(message, style: AppTheme.bodyFont(color: Colors.white)),
+          backgroundColor: AppTheme.field,
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
       );
     } finally {
@@ -69,114 +66,134 @@ class _CheckEmailScreenState extends State<CheckEmailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FB),
+      backgroundColor: AppTheme.ground,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            children: [
-              const Spacer(),
-              Container(
-                width: 86,
-                height: 86,
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 460),
+              child: Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFEEF1),
-                  borderRadius: BorderRadius.circular(24),
+                  color: AppTheme.panel,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppTheme.rule, width: 1),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 18,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
                 ),
-                child: const Icon(
-                  Icons.mark_email_read_rounded,
-                  size: 42,
-                  color: Color(0xFFFF2D55),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'Check your email',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.dmSans(
-                  fontSize: 30,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF111827),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                'We\'ve sent a password reset link to\n${widget.email}\nPlease open it to reset your password.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.dmSans(
-                  fontSize: 15,
-                  height: 1.7,
-                  color: const Color(0xFF6B7280),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                'Didn\'t get it? Check Spam/Promotions and tap Resend.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.dmSans(
-                  fontSize: 13,
-                  color: const Color(0xFF9CA3AF),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextButton(
-                onPressed: _isResending ? null : _resendResetEmail,
-                child: _isResending
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text(
-                        'Resend Link',
-                        style: GoogleFonts.dmSans(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: AppTheme.accent.withOpacity(0.08),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.mark_email_read_rounded, color: AppTheme.accent, size: 28),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      'Check your email',
+                      textAlign: TextAlign.center,
+                      style: AppTheme.displayFont(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    RichText(
+                      textAlign: TextAlign.center,
+                      text: TextSpan(
+                        style: AppTheme.bodyFont(
                           fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFFFF2D55),
+                          height: 1.5,
+                          color: AppTheme.inkSecondary,
+                        ),
+                        children: [
+                          const TextSpan(text: "We've sent a password reset link to\n"),
+                          TextSpan(
+                            text: widget.email,
+                            style: AppTheme.bodyFont(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.ink,
+                            ),
+                          ),
+                          const TextSpan(text: "\nClick the link inside to set a new password."),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.accent,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: Text(
+                          'Back to Sign In',
+                          style: AppTheme.bodyFont(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
-              ),
-              const Spacer(),
-              GestureDetector(
-                onTap: () {
-                  Navigator.pushNamedAndRemoveUntil(
-                    context,
-                    '/',
-                    (route) => false,
-                  );
-                },
-                child: Container(
-                  width: double.infinity,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFFF5C78), Color(0xFFFF2D55)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
                     ),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFFF2D55).withOpacity(0.24),
-                        blurRadius: 20,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    child: Text(
-                      'Back to Login',
-                      style: GoogleFonts.dmSans(
-                        fontSize: 16,
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          "Didn't receive the email? ",
+                          style: AppTheme.bodyFont(
+                            fontSize: 13,
+                            color: AppTheme.inkSecondary,
+                          ),
+                        ),
+                        _isResending
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : GestureDetector(
+                                onTap: _resendResetEmail,
+                                child: Text(
+                                  'Resend',
+                                  style: AppTheme.bodyFont(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.accent,
+                                  ),
+                                ),
+                              ),
+                      ],
                     ),
-                  ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 22),
-            ],
+            ),
           ),
         ),
       ),

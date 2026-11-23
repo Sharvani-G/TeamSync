@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../services/project_service.dart';
 import '../services/user_service.dart';
+import '../theme/app_theme.dart';
 import '../theme/app_colors.dart';
 import '../models/models.dart';
+import '../widgets/shared_widgets.dart';
 
 class ProjectAdminScreen extends StatefulWidget {
   final String projectId;
@@ -49,15 +50,13 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> with SingleTick
     super.initState();
     _projectStream = ProjectService.instance.watchProject(widget.projectId);
     
-    // Explicitly use your core data mapping to determine if the tab should render
     _isOpenForRequests = widget.project.isOpenForRequests;
     
     int initialIndex = 0;
     if (widget.initialTab == 'join_requests' && _isOpenForRequests) {
-      initialIndex = 2; // Join Requests is at index 2
+      initialIndex = 2;
     }
     
-    // Ensure the tab controller matches the total tabs rendered below
     _tabController = TabController(length: _isOpenForRequests ? 4 : 3, vsync: this, initialIndex: initialIndex);
     
     _nameController.text = widget.project.title;
@@ -81,18 +80,29 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> with SingleTick
   InputDecoration _inputDecoration(String hint) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: TextStyle(color: AppColors.kTextHint),
+      hintStyle: AppTheme.bodySmall.copyWith(color: AppTheme.textMuted),
       filled: true,
-      fillColor: AppColors.kBgInput,
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r), borderSide: BorderSide(color: AppColors.kAccentBlue, width: 1.5)),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r), borderSide: BorderSide.none),
+      fillColor: AppTheme.panel,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        borderSide: const BorderSide(color: AppTheme.rule),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        borderSide: const BorderSide(color: AppTheme.rule),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        borderSide: const BorderSide(color: AppTheme.accent, width: 1.5),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final tabs = [
-      const Tab(text: 'Edit Project'),
+      const Tab(text: 'Edit Details'),
       const Tab(text: 'Collaborators'),
       if (_isOpenForRequests) const Tab(text: 'Join Requests'),
       const Tab(text: 'Settings'),
@@ -106,82 +116,181 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> with SingleTick
     ];
 
     return Scaffold(
-      backgroundColor: AppColors.kBgDeep,
+      backgroundColor: AppTheme.ground,
       appBar: AppBar(
-        backgroundColor: AppColors.kBgDeep,
+        title: Text('Project Administration', style: AppTheme.heading2),
+        backgroundColor: AppTheme.panel,
+        foregroundColor: AppTheme.ink,
         elevation: 0,
-        title: Text('Manage Project', style: TextStyle(color: AppColors.kTextPrimary, fontSize: 18.sp, fontWeight: FontWeight.w600)),
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          labelColor: AppColors.kAccentLight,
-          unselectedLabelColor: AppColors.kTextSecond,
-          indicatorColor: AppColors.kAccentLight,
-          tabs: tabs,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, size: 18, color: AppTheme.ink),
+          onPressed: () => Navigator.pop(context),
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: AppTheme.rule, width: 1)),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              isScrollable: true,
+              labelColor: AppTheme.accent,
+              unselectedLabelColor: AppTheme.inkSecondary,
+              labelStyle: AppTheme.labelText.copyWith(fontWeight: FontWeight.w700),
+              unselectedLabelStyle: AppTheme.labelText.copyWith(fontWeight: FontWeight.w500),
+              indicatorColor: AppTheme.accent,
+              indicatorWeight: 2.5,
+              tabs: tabs,
+            ),
+          ),
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: tabViews,
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 820),
+          child: TabBarView(
+            controller: _tabController,
+            children: tabViews,
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildEditProjectTab() {
     return SingleChildScrollView(
-      padding: EdgeInsets.all(16.w),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _Label('Project Name'),
-          SizedBox(height: 8.h),
-          TextField(controller: _nameController, style: TextStyle(color: AppColors.kTextPrimary, fontSize: 14.sp), decoration: _inputDecoration('Name')),
-          SizedBox(height: 20.h),
-          _Label('Description'),
-          SizedBox(height: 8.h),
-          TextField(controller: _descController, minLines: 3, maxLines: null, style: TextStyle(color: AppColors.kTextPrimary, fontSize: 14.sp), decoration: _inputDecoration('Description')),
-          SizedBox(height: 20.h),
-          _Label('Skills needed'),
-          SizedBox(height: 8.h),
-          Row(
-            children: [
-              Expanded(child: TextField(controller: _skillController, style: TextStyle(color: AppColors.kTextPrimary, fontSize: 14.sp), decoration: _inputDecoration('Add skill'))),
-              SizedBox(width: 8.w),
-              ElevatedButton(onPressed: () {
-                if (_skillController.text.isNotEmpty) {
-                  setState(() {
-                    _skills.add(_skillController.text.trim());
-                    _skillController.clear();
-                  });
-                }
-              }, child: const Text('Add')),
-            ],
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppTheme.panel,
+              borderRadius: BorderRadius.circular(AppTheme.radiusPanel),
+              border: Border.all(color: AppTheme.rule, width: AppTheme.borderHairline),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x0616191F),
+                  blurRadius: 6,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _Label('Project Name'),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: _nameController,
+                  style: AppTheme.bodySmall.copyWith(color: AppTheme.ink),
+                  decoration: _inputDecoration('Project title'),
+                ),
+                const SizedBox(height: 18),
+                _Label('Project Description'),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: _descController,
+                  minLines: 3,
+                  maxLines: null,
+                  style: AppTheme.bodySmall.copyWith(color: AppTheme.ink),
+                  decoration: _inputDecoration('Project description and objectives'),
+                ),
+                const SizedBox(height: 18),
+                _Label('Required Skills'),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _skillController,
+                        style: AppTheme.bodySmall.copyWith(color: AppTheme.ink),
+                        decoration: _inputDecoration('Add a skill or role (e.g. Flutter)'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    ElevatedButton(
+                      onPressed: () {
+                        if (_skillController.text.trim().isNotEmpty) {
+                          setState(() {
+                            _skills.add(_skillController.text.trim());
+                            _skillController.clear();
+                          });
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.accent,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text('Add', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ),
+                if (_skills.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _skills
+                        .map(
+                          (s) => Chip(
+                            label: Text(s, style: AppTheme.labelText.copyWith(color: AppTheme.ink)),
+                            backgroundColor: AppTheme.groundMuted,
+                            side: const BorderSide(color: AppTheme.rule),
+                            deleteIcon: const Icon(Icons.close, size: 14, color: AppTheme.inkSecondary),
+                            onDeleted: () => setState(() => _skills.remove(s)),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+              ],
+            ),
           ),
-          Wrap(
-            spacing: 8.w,
-            children: _skills.map((s) => Chip(label: Text(s), onDeleted: () => setState(() => _skills.remove(s)))).toList(),
-          ),
-          SizedBox(height: 32.h),
+          const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
+            height: 48,
             child: ElevatedButton(
-              onPressed: () async {
-                setState(() => _isLoading = true);
-                try {
-                  await ProjectService.instance.updateProjectDetails(
-                    projectId: widget.projectId,
-                    title: _nameController.text.trim(),
-                    description: _descController.text.trim(),
-                    requiredSkills: _skills,
-                  );
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Project updated')));
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-                } finally {
-                  setState(() => _isLoading = false);
-                }
-              },
-              child: _isLoading ? const CircularProgressIndicator() : const Text('Save Changes'),
+              onPressed: _isLoading
+                  ? null
+                  : () async {
+                      setState(() => _isLoading = true);
+                      try {
+                        await ProjectService.instance.updateProjectDetails(
+                          projectId: widget.projectId,
+                          title: _nameController.text.trim(),
+                          description: _descController.text.trim(),
+                          requiredSkills: _skills,
+                        );
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Project details updated successfully!'),
+                              backgroundColor: AppColors.dpSuccess,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.dpDanger),
+                          );
+                        }
+                      } finally {
+                        if (mounted) setState(() => _isLoading = false);
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.accent,
+                foregroundColor: Colors.white,
+              ),
+              child: _isLoading
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Save Changes', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
             ),
           ),
         ],
@@ -190,109 +299,126 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> with SingleTick
   }
 
   Widget _buildCollaboratorsTab() {
-    return Column(
-      children: [
-        Padding(
-          padding: EdgeInsets.all(16.w),
-          child: Row(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+      child: Column(
+        children: [
+          Row(
             children: [
-              Expanded(child: TextField(controller: _collabUsernameController, style: TextStyle(color: AppColors.kTextPrimary, fontSize: 14.sp), decoration: _inputDecoration('Enter username'))),
-              SizedBox(width: 8.w),
-              ElevatedButton(onPressed: () async {
-                final username = _collabUsernameController.text.trim();
-                if (username.isNotEmpty) {
-                  try {
-                    await ProjectService.instance.addCollaboratorByUsername(projectId: widget.projectId, collaboratorUsername: username);
-                    _collabUsernameController.clear();
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Collaborator added')));
-                  } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+              Expanded(
+                child: TextField(
+                  controller: _collabUsernameController,
+                  style: AppTheme.bodySmall.copyWith(color: AppTheme.ink),
+                  decoration: _inputDecoration('Enter username to invite').copyWith(
+                    prefixIcon: const Icon(Icons.alternate_email, size: 18, color: AppTheme.inkSecondary),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton(
+                onPressed: () async {
+                  final username = _collabUsernameController.text.trim();
+                  if (username.isNotEmpty) {
+                    try {
+                      await ProjectService.instance.addCollaboratorByUsername(
+                        projectId: widget.projectId,
+                        collaboratorUsername: username,
+                      );
+                      _collabUsernameController.clear();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Collaborator added!'), backgroundColor: AppColors.dpSuccess),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.dpDanger),
+                        );
+                      }
+                    }
                   }
-                }
-              }, child: const Text('Add')),
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.accent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+                ),
+                child: const Text('Add User', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+              ),
             ],
           ),
-        ),
-        Expanded(
-          child: StreamBuilder<Project?>(
-            stream: _projectStream,
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-              final adminUid = snapshot.data!.createdBy;
-              final collaborators = snapshot.data!.collaborators;
-              final allUids = [
-                adminUid,
-                ...collaborators.keys.where((uid) => uid != adminUid),
-              ];
+          const SizedBox(height: 18),
+          Expanded(
+            child: StreamBuilder<Project?>(
+              stream: _projectStream,
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+                final adminUid = snapshot.data!.createdBy;
+                final collaborators = snapshot.data!.collaborators;
+                final allUids = [
+                  adminUid,
+                  ...collaborators.keys.where((uid) => uid != adminUid),
+                ];
 
-              return ListView.builder(
-                itemCount: allUids.length,
-                itemBuilder: (context, index) {
-                  final uid = allUids[index];
-                  return FutureBuilder<AppUser?>(
-                    future: UserService.instance.getUserById(uid),
-                    builder: (context, userSnap) {
-                      if (!userSnap.hasData) return const ListTile(title: Text('Loading...'));
-                      final user = userSnap.data!;
-                      final isCreator = uid == adminUid;
-                      return ListTile(
-                        leading: CircleAvatar(
-                          backgroundImage: user.photoUrl.isNotEmpty
-                              ? NetworkImage(user.photoUrl)
-                              : null,
-                          child: user.photoUrl.isEmpty
-                              ? Text(user.username.isNotEmpty
-                                  ? user.username[0].toUpperCase()
-                                  : 'U')
-                              : null,
-                        ),
-                        title: Text(
-                          user.username.isNotEmpty ? '@${user.username}' : 'User',
-                          style: const TextStyle(color: AppColors.kTextPrimary),
-                        ),
-                        subtitle: Text(
-                          user.name,
-                          style: const TextStyle(color: AppColors.kTextSecond),
-                        ),
-                        trailing: isCreator
-                            ? Container(
-                                padding: EdgeInsets.symmetric(
-                                    horizontal: 8.w, vertical: 4.h),
-                                decoration: BoxDecoration(
-                                  color: AppColors.kBgElevated,
-                                  borderRadius: BorderRadius.circular(4.r),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.workspace_premium,
-                                        color: Colors.amber, size: 14.sp),
-                                    SizedBox(width: 4.w),
-                                    Text(
-                                      'Admin',
-                                      style: TextStyle(
-                                        color: AppColors.kAccentLight,
-                                        fontSize: 10.sp,
-                                        fontWeight: FontWeight.w600,
-                                      ),
+                return Container(
+                  decoration: BoxDecoration(
+                    color: AppTheme.panel,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusPanel),
+                    border: Border.all(color: AppTheme.rule, width: AppTheme.borderHairline),
+                  ),
+                  child: ListView.separated(
+                    itemCount: allUids.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1, color: AppTheme.rule),
+                    itemBuilder: (context, index) {
+                      final uid = allUids[index];
+                      return FutureBuilder<AppUser?>(
+                        future: UserService.instance.getUserById(uid),
+                        builder: (context, userSnap) {
+                          if (!userSnap.hasData) {
+                            return const ListTile(title: Text('Loading user...'));
+                          }
+                          final user = userSnap.data!;
+                          final isCreator = uid == adminUid;
+
+                          return ListTile(
+                            leading: UserAvatar(name: user.name, username: user.username, size: 36),
+                            title: Text(
+                              user.name.isNotEmpty ? user.name : user.username,
+                              style: AppTheme.heading3.copyWith(fontSize: 14.5),
+                            ),
+                            subtitle: user.username.isNotEmpty
+                                ? Text('@${user.username}', style: AppTheme.metadataText)
+                                : null,
+                            trailing: isCreator
+                                ? Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.dpInfoBg,
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: AppTheme.accent.withOpacity(0.2)),
                                     ),
-                                  ],
-                                ),
-                              )
-                            : IconButton(
-                                icon: const Icon(Icons.remove_circle_outline,
-                                    color: AppColors.kDanger),
-                                onPressed: () => _confirmRemoveCollaborator(uid),
-                              ),
+                                    child: Text(
+                                      'Owner / Admin',
+                                      style: AppTheme.labelText.copyWith(color: AppTheme.accent, fontSize: 10.5),
+                                    ),
+                                  )
+                                : IconButton(
+                                    icon: const Icon(Icons.remove_circle_outline, color: AppColors.dpDanger, size: 20),
+                                    tooltip: 'Remove collaborator',
+                                    onPressed: () => _confirmRemoveCollaborator(uid),
+                                  ),
+                          );
+                        },
                       );
                     },
-                  );
-                },
-              );
-            },
+                  ),
+                );
+              },
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -301,10 +427,17 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> with SingleTick
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Remove Collaborator'),
-        content: const Text('Are you sure you want to remove this collaborator?'),
+        content: const Text('Are you sure you want to remove this collaborator from the project?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Remove', style: TextStyle(color: AppColors.kDanger))),
+          OutlinedButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.dpDanger,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Remove', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+          ),
         ],
       ),
     );
@@ -312,30 +445,18 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> with SingleTick
     if (confirm == true) {
       try {
         await ProjectService.instance.removeCollaborator(projectId: widget.projectId, userId: uid);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Collaborator removed'), backgroundColor: AppColors.dpSuccess),
+          );
+        }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.dpDanger),
+          );
+        }
       }
-    }
-  }
-
-  String _timeAgo(DateTime dt) {
-    final now = DateTime.now();
-    final difference = now.difference(dt);
-    
-    if (difference.inDays >= 365) {
-      return '${(difference.inDays / 365).floor()} years ago';
-    } else if (difference.inDays >= 30) {
-      return '${(difference.inDays / 30).floor()} months ago';
-    } else if (difference.inDays >= 7) {
-      return '${(difference.inDays / 7).floor()} weeks ago';
-    } else if (difference.inDays >= 1) {
-      return '${difference.inDays} days ago';
-    } else if (difference.inHours >= 1) {
-      return '${difference.inHours} hours ago';
-    } else if (difference.inMinutes >= 1) {
-      return '${difference.inMinutes} minutes ago';
-    } else {
-      return 'just now';
     }
   }
 
@@ -343,100 +464,140 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> with SingleTick
     return StreamBuilder<List<JoinRequest>>(
       stream: ProjectService.instance.watchPendingJoinRequests(widget.projectId),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(strokeWidth: 2.5));
+        }
         final requests = snapshot.data ?? [];
 
         if (requests.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.inbox, color: AppColors.kTextHint, size: 48.sp),
-                SizedBox(height: 12.h),
-                const Text('No pending join requests', style: TextStyle(color: AppColors.kTextSecond)),
-              ],
-            ),
+          return const EmptyState(
+            icon: Icons.inbox_outlined,
+            title: 'No Pending Join Requests',
+            subtitle: 'When other users request to join this public project, their requests will appear here.',
           );
         }
 
-        return ListView.builder(
-          padding: EdgeInsets.all(16.w),
+        return ListView.separated(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
           itemCount: requests.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
             final req = requests[index];
-            final requesterUsername = req.requestedByUsername.isNotEmpty ? '@${req.requestedByUsername}' : 'User';
-            return Card(
-              color: AppColors.kBgCard,
-              margin: EdgeInsets.only(bottom: 12.h),
-              child: Padding(
-                padding: EdgeInsets.all(12.w),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        CircleAvatar(child: Text(req.requestedByName.isNotEmpty ? req.requestedByName[0] : 'U')),
-                        SizedBox(width: 12.w),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(requesterUsername, style: const TextStyle(color: AppColors.kTextPrimary, fontWeight: FontWeight.bold)),
-                              Text(req.requestedByName, style: const TextStyle(color: AppColors.kTextSecond)),
-                              Text('Requested ${_timeAgo(req.createdAt)}', style: TextStyle(color: AppColors.kTextHint, fontSize: 12.sp)),
-                            ],
-                          ),
+            final requesterUsername =
+                req.requestedByUsername.isNotEmpty ? '@${req.requestedByUsername}' : 'User';
+
+            return Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppTheme.panel,
+                borderRadius: BorderRadius.circular(AppTheme.radiusPanel),
+                border: Border.all(color: AppTheme.rule, width: AppTheme.borderHairline),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x0616191F),
+                    blurRadius: 6,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      UserAvatar(name: req.requestedByName, username: req.requestedByUsername, size: 36),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(req.requestedByName, style: AppTheme.heading3.copyWith(fontSize: 14.5)),
+                            Text(requesterUsername, style: AppTheme.metadataText),
+                          ],
                         ),
-                      ],
-                    ),
-                    if (req.message.isNotEmpty) ...[
-                      SizedBox(height: 8.h),
-                      Text(req.message, style: const TextStyle(color: AppColors.kTextPrimary)),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.dpWarningBg,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.dpWarning.withOpacity(0.3)),
+                        ),
+                        child: Text(
+                          'Pending',
+                          style: AppTheme.labelText.copyWith(color: AppColors.dpWarning, fontSize: 10.5),
+                        ),
+                      ),
                     ],
-                    SizedBox(height: 12.h),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        OutlinedButton(
-                          onPressed: () async {
-                            try {
-                              await ProjectService.instance.rejectJoinRequest(req.id);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Request denied.')),
-                              );
-                            } catch (e) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(e.toString())),
-                              );
-                            }
-                          },
-                          style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.kDanger), foregroundColor: AppColors.kDanger),
-                          child: const Text('Deny'),
-                        ),
-                        SizedBox(width: 8.w),
-                        ElevatedButton(
-                          onPressed: () async {
-                            try {
-                              await ProjectService.instance.acceptJoinRequest(req.id, projectId: widget.projectId);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Request accepted. User added as collaborator.'),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
-                            } catch (e) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(e.toString())),
-                              );
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.kSuccess),
-                          child: const Text('Accept'),
-                        ),
-                      ],
+                  ),
+                  if (req.message.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.groundMuted,
+                        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                      ),
+                      child: Text(
+                        req.message,
+                        style: AppTheme.bodySmall.copyWith(color: AppTheme.ink, height: 1.4),
+                      ),
                     ),
                   ],
-                ),
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      OutlinedButton(
+                        onPressed: () async {
+                          try {
+                            await ProjectService.instance.rejectJoinRequest(req.id);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Join request declined.')),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                            }
+                          }
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.dpDanger,
+                          side: const BorderSide(color: Color(0xFFFCA5A5)),
+                        ),
+                        child: const Text('Decline'),
+                      ),
+                      const SizedBox(width: 10),
+                      ElevatedButton(
+                        onPressed: () async {
+                          try {
+                            await ProjectService.instance.acceptJoinRequest(req.id, projectId: widget.projectId);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Request approved! User added as collaborator.'),
+                                  backgroundColor: AppColors.dpSuccess,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                            }
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.dpSuccess,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Approve & Add', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             );
           },
@@ -447,84 +608,151 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> with SingleTick
 
   Widget _buildSettingsTab() {
     return SingleChildScrollView(
-      padding: EdgeInsets.all(16.w),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _Label('Visibility'),
-          Row(
-            children: [
-              Radio<String>(
-                value: 'private',
-                groupValue: _visibility,
-                onChanged: (v) => setState(() {
-                  _visibility = v!;
-                  _isOpenForRequests = false;
-                  _updateTabController();
-                }),
-                activeColor: AppColors.kAccentLight,
-              ),
-              const Text('Private', style: TextStyle(color: AppColors.kTextPrimary)),
-              SizedBox(width: 20.w),
-              Radio<String>(
-                value: 'public',
-                groupValue: _visibility,
-                onChanged: (v) => setState(() => _visibility = v!),
-                activeColor: AppColors.kAccentLight,
-              ),
-              const Text('Public', style: TextStyle(color: AppColors.kTextPrimary)),
-            ],
-          ),
-          if (_visibility == 'public') ...[
-            SwitchListTile(
-              title: const Text('Open to join requests', style: TextStyle(color: AppColors.kTextPrimary)),
-              value: _isOpenForRequests,
-              onChanged: (v) {
-                setState(() {
-                  _isOpenForRequests = v;
-                  _updateTabController();
-                });
-              },
-              activeColor: AppColors.kAccentLight,
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppTheme.panel,
+              borderRadius: BorderRadius.circular(AppTheme.radiusPanel),
+              border: Border.all(color: AppTheme.rule, width: AppTheme.borderHairline),
             ),
-            if (_isOpenForRequests) ...[
-              _Label('Collaborators required'),
-              TextField(controller: _collabCountController, keyboardType: TextInputType.number, style: const TextStyle(color: AppColors.kTextPrimary)),
-            ],
-          ],
-          SizedBox(height: 40.h),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () async {
-                try {
-                  await ProjectService.instance.updateProject(
-                    projectId: widget.projectId,
-                    visibility: _visibility,
-                    isOpenForRequests: _isOpenForRequests,
-                    requiredCollaborators: int.tryParse(_collabCountController.text) ?? 0,
-                  );
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings saved')));
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-                }
-              },
-              child: const Text('Save Settings'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _Label('Visibility'),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Radio<String>(
+                      value: 'private',
+                      groupValue: _visibility,
+                      onChanged: (v) => setState(() {
+                        _visibility = v!;
+                        _isOpenForRequests = false;
+                        _updateTabController();
+                      }),
+                      activeColor: AppTheme.accent,
+                    ),
+                    Text('Private', style: AppTheme.bodySmall.copyWith(color: AppTheme.ink)),
+                    const SizedBox(width: 20),
+                    Radio<String>(
+                      value: 'public',
+                      groupValue: _visibility,
+                      onChanged: (v) => setState(() => _visibility = v!),
+                      activeColor: AppTheme.accent,
+                    ),
+                    Text('Public', style: AppTheme.bodySmall.copyWith(color: AppTheme.ink)),
+                  ],
+                ),
+                if (_visibility == 'public') ...[
+                  const SizedBox(height: 16),
+                  SwitchListTile(
+                    title: Text('Open to Join Requests', style: AppTheme.heading3.copyWith(fontSize: 14)),
+                    subtitle: Text('Allow members to request access on Discover', style: AppTheme.metadataText),
+                    value: _isOpenForRequests,
+                    onChanged: (v) {
+                      setState(() {
+                        _isOpenForRequests = v;
+                        _updateTabController();
+                      });
+                    },
+                    activeColor: AppTheme.accent,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  if (_isOpenForRequests) ...[
+                    const SizedBox(height: 10),
+                    _Label('Collaborators Required'),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _collabCountController,
+                      keyboardType: TextInputType.number,
+                      style: AppTheme.bodySmall.copyWith(color: AppTheme.ink),
+                      decoration: _inputDecoration('Number of collaborators needed'),
+                    ),
+                  ],
+                ],
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      try {
+                        await ProjectService.instance.updateProject(
+                          projectId: widget.projectId,
+                          visibility: _visibility,
+                          isOpenForRequests: _isOpenForRequests,
+                          requiredCollaborators: int.tryParse(_collabCountController.text) ?? 0,
+                        );
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Settings saved successfully!'), backgroundColor: AppColors.dpSuccess),
+                          );
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                        }
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.accent,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Save Settings', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ],
             ),
           ),
-          SizedBox(height: 20.h),
-          const Divider(color: AppColors.kDivider),
-          SizedBox(height: 20.h),
-          Text('Danger Zone', style: TextStyle(color: AppColors.kDanger, fontWeight: FontWeight.bold, fontSize: 16.sp)),
-          SizedBox(height: 12.h),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _confirmDeleteProject,
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.kDanger),
-              child: const Text('Delete Project', style: TextStyle(color: Colors.white)),
+          const SizedBox(height: 28),
+
+          // Danger Zone
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.dpDangerBg,
+              borderRadius: BorderRadius.circular(AppTheme.radiusPanel),
+              border: Border.all(color: AppColors.dpDanger.withOpacity(0.35)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: AppColors.dpDanger, size: 22),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Danger Zone',
+                      style: AppTheme.heading3.copyWith(color: AppColors.dpDanger, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Deleting a project permanently deletes its idea boards, channels, messages, and calls. This action cannot be reversed.',
+                  style: AppTheme.bodySmall.copyWith(color: AppColors.dpDanger, height: 1.4),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: ElevatedButton(
+                    onPressed: _confirmDeleteProject,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.dpDanger,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Permanently Delete Project'),
+                  ),
+                ),
+              ],
             ),
           ),
+          const SizedBox(height: 40),
         ],
       ),
     );
@@ -535,10 +763,19 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> with SingleTick
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Project'),
-        content: const Text('Are you sure you want to delete this project? This action cannot be undone.'),
+        content: const Text(
+          'Are you sure you want to permanently delete this project? All associated ideas, channels, and records will be deleted.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete', style: TextStyle(color: AppColors.kDanger))),
+          OutlinedButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.dpDanger,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Confirm Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+          ),
         ],
       ),
     );
@@ -546,10 +783,14 @@ class _ProjectAdminScreenState extends State<ProjectAdminScreen> with SingleTick
     if (confirm == true) {
       try {
         await ProjectService.instance.deleteProject(widget.projectId);
-        Navigator.pop(context); 
-        Navigator.pop(context); 
+        if (mounted) {
+          Navigator.pop(context);
+          Navigator.pop(context);
+        }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        }
       }
     }
   }
@@ -561,6 +802,9 @@ class _Label extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(text, style: TextStyle(color: AppColors.kTextSecond, fontSize: 13.sp, fontWeight: FontWeight.w600));
+    return Text(
+      text,
+      style: AppTheme.labelText.copyWith(fontWeight: FontWeight.w700, color: AppTheme.ink),
+    );
   }
 }

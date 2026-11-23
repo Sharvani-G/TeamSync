@@ -134,21 +134,30 @@ class _MainShellState extends State<MainShell> {
         final unreadCount = snapshot.data ?? 0;
 
         return Scaffold(
-          backgroundColor: AppTheme.darkBackground,
+          backgroundColor: AppTheme.ground,
           body: SizedBox.expand(
             child: IndexedStack(index: _currentIndex, children: _screens),
           ),
           bottomNavigationBar: Container(
             decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: AppTheme.border, width: 1)),
+              color: AppTheme.panel,
+              border: Border(top: BorderSide(color: AppTheme.rule, width: 1)),
             ),
             child: BottomNavigationBar(
               currentIndex: _currentIndex,
-              selectedItemColor: Theme.of(context).colorScheme.primary,
-              unselectedItemColor: Colors.grey.shade500,
-              backgroundColor: Theme.of(context).colorScheme.surface,
+              selectedItemColor: AppTheme.accent,
+              unselectedItemColor: AppTheme.inkSecondary,
+              backgroundColor: AppTheme.panel,
+              selectedLabelStyle: AppTheme.labelText.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppTheme.accent,
+              ),
+              unselectedLabelStyle: AppTheme.labelText.copyWith(
+                fontWeight: FontWeight.w500,
+                color: AppTheme.inkSecondary,
+              ),
               type: BottomNavigationBarType.fixed,
-              elevation: 8,
+              elevation: 0,
               onTap: (i) async {
                 setState(() => _currentIndex = i);
                 try {
@@ -179,12 +188,12 @@ class _MainShellState extends State<MainShell> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                             decoration: const BoxDecoration(
-                              color: Color(0xFFDC2626),
+                              color: AppColors.dpDanger,
                               shape: BoxShape.circle,
                             ),
                             child: Text(
                               unreadCount > 99 ? '99+' : '$unreadCount',
-                              style: const TextStyle(fontSize: 8, color: AppColors.kWhite, fontWeight: FontWeight.w700),
+                              style: const TextStyle(fontSize: 8, color: Colors.white, fontWeight: FontWeight.w700),
                             ),
                           ),
                         ),

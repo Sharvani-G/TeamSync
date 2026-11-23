@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../services/settings_service.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/shared_widgets.dart';
 
 class PrivacySettingsPage extends StatelessWidget {
   const PrivacySettingsPage({super.key});
@@ -8,43 +10,100 @@ class PrivacySettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B1220),
-      appBar: AppBar(title: const Text('Privacy')),
+      backgroundColor: AppTheme.ground,
+      appBar: const SimpleAppBar(title: 'Privacy'),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         children: [
-          ValueListenableBuilder<bool>(
-            valueListenable: SettingsService.instance.profilePrivate,
-            builder: (context, value, _) {
-              return SwitchListTile(
-                value: value,
-                onChanged: SettingsService.instance.setProfilePrivate,
-                title: const Text('Private profile', style: TextStyle(color: Colors.white)),
-                subtitle: const Text('Restrict profile visibility to collaborators', style: TextStyle(color: Colors.white70)),
-              );
-            },
+          Text(
+            'Presence & Visibility',
+            style: AppTheme.displayFont(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.inkSecondary,
+              letterSpacing: 0.2,
+            ),
           ),
-          ValueListenableBuilder<bool>(
-            valueListenable: SettingsService.instance.onlineStatusVisible,
-            builder: (context, value, _) {
-              return SwitchListTile(
-                value: value,
-                onChanged: SettingsService.instance.setOnlineStatusVisible,
-                title: const Text('Show online status', style: TextStyle(color: Colors.white)),
-                subtitle: const Text('Let teammates see when you are active', style: TextStyle(color: Colors.white70)),
-              );
-            },
-          ),
-          ValueListenableBuilder<bool>(
-            valueListenable: SettingsService.instance.readReceiptsEnabled,
-            builder: (context, value, _) {
-              return SwitchListTile(
-                value: value,
-                onChanged: SettingsService.instance.setReadReceiptsEnabled,
-                title: const Text('Read receipts', style: TextStyle(color: Colors.white)),
-                subtitle: const Text('Mark messages as read for collaborators', style: TextStyle(color: Colors.white70)),
-              );
-            },
+          const SizedBox(height: 8),
+
+          Container(
+            decoration: BoxDecoration(
+              color: AppTheme.panel,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppTheme.rule, width: 1),
+            ),
+            child: Column(
+              children: [
+                ValueListenableBuilder<bool>(
+                  valueListenable: SettingsService.instance.profilePrivate,
+                  builder: (context, value, _) {
+                    return SwitchListTile(
+                      value: value,
+                      activeColor: AppTheme.accent,
+                      onChanged: SettingsService.instance.setProfilePrivate,
+                      title: Text(
+                        'Private profile',
+                        style: AppTheme.bodyFont(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.ink,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Restrict profile contact information to confirmed collaborators',
+                        style: AppTheme.bodyFont(fontSize: 12, color: AppTheme.inkSecondary),
+                      ),
+                    );
+                  },
+                ),
+                const Divider(height: 1, color: AppTheme.rule),
+                ValueListenableBuilder<bool>(
+                  valueListenable: SettingsService.instance.onlineStatusVisible,
+                  builder: (context, value, _) {
+                    return SwitchListTile(
+                      value: value,
+                      activeColor: AppTheme.accent,
+                      onChanged: SettingsService.instance.setOnlineStatusVisible,
+                      title: Text(
+                        'Show online status',
+                        style: AppTheme.bodyFont(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.ink,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Let team members see an active dot when you are online in channels',
+                        style: AppTheme.bodyFont(fontSize: 12, color: AppTheme.inkSecondary),
+                      ),
+                    );
+                  },
+                ),
+                const Divider(height: 1, color: AppTheme.rule),
+                ValueListenableBuilder<bool>(
+                  valueListenable: SettingsService.instance.readReceiptsEnabled,
+                  builder: (context, value, _) {
+                    return SwitchListTile(
+                      value: value,
+                      activeColor: AppTheme.accent,
+                      onChanged: SettingsService.instance.setReadReceiptsEnabled,
+                      title: Text(
+                        'Read receipts',
+                        style: AppTheme.bodyFont(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.ink,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Send seen indicators when reading direct and channel messages',
+                        style: AppTheme.bodyFont(fontSize: 12, color: AppTheme.inkSecondary),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         ],
       ),

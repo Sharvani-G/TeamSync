@@ -1,6 +1,6 @@
 {
-    "name": "teamsync",
-    "short_name": "teamsync",
+    "name": "TeamSync",
+    "short_name": "TeamSync",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

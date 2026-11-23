@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/models.dart';
 import '../services/project_service.dart';
 import '../services/user_service.dart';
+import '../theme/app_theme.dart';
 import '../theme/app_colors.dart';
+import '../widgets/shared_widgets.dart';
 
 class DiscoverScreen extends StatefulWidget {
   const DiscoverScreen({super.key});
@@ -31,64 +32,90 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
     return Scaffold(
-      backgroundColor: AppColors.kBgDeep,
-      appBar: AppBar(
-        backgroundColor: AppColors.kBgDeep,
-        elevation: 0,
-        title: Text('Discover', style: TextStyle(color: AppColors.kTextPrimary, fontSize: 20.sp, fontWeight: FontWeight.w600)),
+      backgroundColor: AppTheme.ground,
+      appBar: const SimpleAppBar(
+        title: 'Discover',
+        showBack: false,
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.all(16.w),
-            child: TextField(
-              onChanged: (v) => setState(() => _query = v),
-              style: TextStyle(color: AppColors.kTextPrimary, fontSize: 14.sp),
-              decoration: InputDecoration(
-                hintText: 'Search public projects...',
-                hintStyle: TextStyle(color: AppColors.kTextHint),
-                prefixIcon: Icon(Icons.search, color: AppColors.kTextHint, size: 20.sp),
-                filled: true,
-                fillColor: AppColors.kBgInput,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: BorderSide.none),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1100),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: TextField(
+                  onChanged: (v) => setState(() => _query = v),
+                  style: AppTheme.bodySmall.copyWith(color: AppTheme.ink),
+                  decoration: InputDecoration(
+                    hintText: 'Search public projects by title...',
+                    hintStyle: AppTheme.bodySmall.copyWith(color: AppTheme.textMuted),
+                    prefixIcon: const Icon(Icons.search, color: AppTheme.inkSecondary, size: 20),
+                    filled: true,
+                    fillColor: AppTheme.panel,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                      borderSide: const BorderSide(color: AppTheme.rule, width: 1),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                      borderSide: const BorderSide(color: AppTheme.rule, width: 1),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                      borderSide: const BorderSide(color: AppTheme.accent, width: 1.5),
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
-          Expanded(
-            child: StreamBuilder<List<JoinRequest>>(
-              stream: _requestsStream,
-              builder: (context, requestSnap) {
-                final myRequests = requestSnap.data ?? [];
-                final requestStatusMap = {for (var r in myRequests) r.projectId: r.status};
+              Expanded(
+                child: StreamBuilder<List<JoinRequest>>(
+                  stream: _requestsStream,
+                  builder: (context, requestSnap) {
+                    final myRequests = requestSnap.data ?? [];
+                    final requestStatusMap = {for (var r in myRequests) r.projectId: r.status};
 
-                return StreamBuilder<List<Project>>(
-                  stream: _projectsStream,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-                    final projects = snapshot.data ?? [];
-                    final filtered = projects.where((p) => p.title.toLowerCase().contains(_query.toLowerCase())).toList();
+                    return StreamBuilder<List<Project>>(
+                      stream: _projectsStream,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator(strokeWidth: 2.5));
+                        }
+                        final projects = snapshot.data ?? [];
+                        final filtered = projects
+                            .where((p) => p.title.toLowerCase().contains(_query.toLowerCase()))
+                            .toList();
 
-                    if (filtered.isEmpty) return Center(child: Text('No projects found', style: TextStyle(color: AppColors.kTextSecond, fontSize: 14.sp)));
+                        if (filtered.isEmpty) {
+                          return const EmptyState(
+                            icon: Icons.search_off_outlined,
+                            title: 'No public projects found',
+                            subtitle: 'Try a different search keyword or check back later.',
+                          );
+                        }
 
-                    return ListView.separated(
-                      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-                      itemCount: filtered.length,
-                      separatorBuilder: (_, __) => SizedBox(height: 16.h),
-                      itemBuilder: (context, index) {
-                        final project = filtered[index];
-                        return _DiscoverCard(
-                          project: project,
-                          currentUid: uid,
-                          requestStatus: requestStatusMap[project.id],
+                        return ListView.separated(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          itemCount: filtered.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 14),
+                          itemBuilder: (context, index) {
+                            final project = filtered[index];
+                            return _DiscoverCard(
+                              project: project,
+                              currentUid: uid,
+                              requestStatus: requestStatusMap[project.id],
+                            );
+                          },
                         );
                       },
                     );
                   },
-                );
-              },
-            ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -99,16 +126,27 @@ class _DiscoverCard extends StatelessWidget {
   final String currentUid;
   final String? requestStatus;
 
-  const _DiscoverCard({required this.project, required this.currentUid, this.requestStatus});
+  const _DiscoverCard({
+    required this.project,
+    required this.currentUid,
+    this.requestStatus,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.all(16.w),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.kBgCard,
-        borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(color: AppColors.kDivider),
+        color: AppTheme.panel,
+        borderRadius: BorderRadius.circular(AppTheme.radiusPanel),
+        border: Border.all(color: AppTheme.rule, width: AppTheme.borderHairline),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0616191F),
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -122,23 +160,16 @@ class _DiscoverCard extends StatelessWidget {
                   children: [
                     Text(
                       project.title,
-                      style: TextStyle(
-                        color: AppColors.kTextPrimary,
-                        fontSize: 16.sp,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: AppTheme.heading3.copyWith(fontSize: 16.5),
                     ),
-                    SizedBox(height: 4.h),
+                    const SizedBox(height: 4),
                     FutureBuilder<AppUser?>(
                       future: UserService.instance.getUserById(project.createdBy),
                       builder: (context, userSnap) {
                         final adminName = userSnap.data?.name ?? 'Admin';
                         return Text(
-                          'Created by: $adminName',
-                          style: TextStyle(
-                            color: AppColors.kTextSecond,
-                            fontSize: 12.sp,
-                          ),
+                          'Created by $adminName',
+                          style: AppTheme.metadataText,
                         );
                       },
                     ),
@@ -148,44 +179,51 @@ class _DiscoverCard extends StatelessWidget {
             ],
           ),
           if (project.requiredSkills.isNotEmpty) ...[
-            SizedBox(height: 8.h),
+            const SizedBox(height: 10),
             Wrap(
-              spacing: 6.w,
-              runSpacing: 4.h,
+              spacing: 6,
+              runSpacing: 6,
               children: project.requiredSkills
-                  .map((skill) => Container(
-                        padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
-                        decoration: BoxDecoration(
-                          color: AppColors.kBgElevated,
-                          borderRadius: BorderRadius.circular(4.r),
-                          border: Border.all(color: AppColors.kDivider),
+                  .map(
+                    (skill) => Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppTheme.groundMuted,
+                        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                        border: Border.all(color: AppTheme.rule),
+                      ),
+                      child: Text(
+                        skill,
+                        style: AppTheme.labelText.copyWith(
+                          color: AppTheme.inkSecondary,
+                          fontSize: 11,
                         ),
-                        child: Text(
-                          skill,
-                          style: TextStyle(
-                            color: AppColors.kAccentLight,
-                            fontSize: 10.sp,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ))
+                      ),
+                    ),
+                  )
                   .toList(),
             ),
           ],
-          SizedBox(height: 12.h),
+          const SizedBox(height: 12),
           Text(
             project.description,
-            style: TextStyle(color: AppColors.kTextSecond, fontSize: 13.sp),
+            style: AppTheme.bodySmall.copyWith(color: AppTheme.inkSecondary, height: 1.45),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
-          SizedBox(height: 16.h),
+          const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                '${project.currentCollaborators}/${project.collaboratorsRequired} members',
-                style: TextStyle(color: AppColors.kTextSecond, fontSize: 12.sp),
+              Row(
+                children: [
+                  const Icon(Icons.group_outlined, size: 16, color: AppTheme.inkSecondary),
+                  const SizedBox(width: 5),
+                  Text(
+                    '${project.currentCollaborators}/${project.collaboratorsRequired} members',
+                    style: AppTheme.metadataText,
+                  ),
+                ],
               ),
               _buildActionButton(context),
             ],
@@ -198,18 +236,15 @@ class _DiscoverCard extends StatelessWidget {
   Widget _buildActionButton(BuildContext context) {
     if (project.createdBy == currentUid) {
       return Container(
-        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: Colors.grey.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12.r),
+          color: AppTheme.groundMuted,
+          borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+          border: Border.all(color: AppTheme.rule),
         ),
         child: Text(
           'Your Project',
-          style: TextStyle(
-            color: Colors.grey,
-            fontWeight: FontWeight.bold,
-            fontSize: 12.sp,
-          ),
+          style: AppTheme.labelText.copyWith(color: AppTheme.inkSecondary),
         ),
       );
     }
@@ -218,36 +253,30 @@ class _DiscoverCard extends StatelessWidget {
         requestStatus == 'accepted' ||
         requestStatus == 'approved') {
       return Container(
-        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: AppColors.kSuccess.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12.r),
+          color: AppColors.dpSuccessBg,
+          borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+          border: Border.all(color: AppColors.dpSuccess.withOpacity(0.3)),
         ),
         child: Text(
           'Member',
-          style: TextStyle(
-            color: AppColors.kSuccess,
-            fontWeight: FontWeight.bold,
-            fontSize: 12.sp,
-          ),
+          style: AppTheme.labelText.copyWith(color: AppColors.dpSuccess),
         ),
       );
     }
 
     if (requestStatus == 'pending') {
       return Container(
-        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: Colors.amber.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12.r),
+          color: AppColors.dpWarningBg,
+          borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+          border: Border.all(color: AppColors.dpWarning.withOpacity(0.3)),
         ),
         child: Text(
-          'Request Sent',
-          style: TextStyle(
-            color: Colors.amber,
-            fontWeight: FontWeight.bold,
-            fontSize: 12.sp,
-          ),
+          'Request Pending',
+          style: AppTheme.labelText.copyWith(color: AppColors.dpWarning),
         ),
       );
     }
@@ -255,18 +284,15 @@ class _DiscoverCard extends StatelessWidget {
     final isFull = project.currentCollaborators >= project.collaboratorsRequired;
     if (!project.isOpenForRequests || isFull) {
       return Container(
-        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: Colors.grey.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12.r),
+          color: AppTheme.groundMuted,
+          borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+          border: Border.all(color: AppTheme.rule),
         ),
         child: Text(
-          'Not Accepting',
-          style: TextStyle(
-            color: Colors.grey,
-            fontWeight: FontWeight.bold,
-            fontSize: 12.sp,
-          ),
+          'Closed to Requests',
+          style: AppTheme.labelText.copyWith(color: AppTheme.inkSecondary),
         ),
       );
     }
@@ -274,17 +300,14 @@ class _DiscoverCard extends StatelessWidget {
     return ElevatedButton(
       onPressed: () => _showJoinRequestSheet(context),
       style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.kAccentBlue,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
-        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+        backgroundColor: AppTheme.accent,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMd)),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       ),
-      child: Text(
-        'Send Request',
-        style: TextStyle(
-          color: AppColors.kWhite,
-          fontSize: 12.sp,
-          fontWeight: FontWeight.w600,
-        ),
+      child: const Text(
+        'Request to Join',
+        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.white),
       ),
     );
   }
@@ -292,9 +315,11 @@ class _DiscoverCard extends StatelessWidget {
   void _showJoinRequestSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.kBgDeep,
+      backgroundColor: AppTheme.panel,
       isScrollControlled: true,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20.r))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (context) => _JoinRequestSheet(project: project),
     );
   }
@@ -310,6 +335,7 @@ class _JoinRequestSheet extends StatefulWidget {
 
 class _JoinRequestSheetState extends State<_JoinRequestSheet> {
   final _controller = TextEditingController();
+  bool _isSubmitting = false;
 
   @override
   void dispose() {
@@ -320,75 +346,137 @@ class _JoinRequestSheetState extends State<_JoinRequestSheet> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 24.w, right: 24.w, top: 24.h),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        left: 20,
+        right: 20,
+        top: 20,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Request to join ${widget.project.title}', style: TextStyle(color: AppColors.kTextPrimary, fontSize: 18.sp, fontWeight: FontWeight.w600)),
-          SizedBox(height: 8.h),
-          Row(
-            children: [
-              Text('Contact admin: ', style: TextStyle(color: AppColors.kTextSecond, fontSize: 13.sp)),
-              InkWell(
-                onTap: () => launchUrl(Uri.parse('mailto:${widget.project.contactEmail}')),
-                child: Text(widget.project.contactEmail, style: TextStyle(color: AppColors.kAccentLight, fontSize: 13.sp, decoration: TextDecoration.underline)),
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppTheme.rule,
+                borderRadius: BorderRadius.circular(2),
               ),
-            ],
+            ),
           ),
-          SizedBox(height: 24.h),
+          const SizedBox(height: 18),
+          Text(
+            'Request to Join',
+            style: AppTheme.heading2,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            widget.project.title,
+            style: AppTheme.bodySmall.copyWith(color: AppTheme.inkSecondary),
+          ),
+          const SizedBox(height: 12),
+          if (widget.project.contactEmail.isNotEmpty)
+            Row(
+              children: [
+                Text('Admin Contact: ', style: AppTheme.metadataText),
+                Flexible(
+                  child: InkWell(
+                    onTap: () => launchUrl(Uri.parse('mailto:${widget.project.contactEmail}')),
+                    child: Text(
+                      widget.project.contactEmail,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTheme.metadataText.copyWith(
+                        color: AppTheme.accent,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          const SizedBox(height: 18),
           TextField(
             controller: _controller,
             maxLines: 4,
             maxLength: 300,
-            style: TextStyle(color: AppColors.kTextPrimary, fontSize: 14.sp),
+            style: AppTheme.bodySmall.copyWith(color: AppTheme.ink),
             decoration: InputDecoration(
-              hintText: 'Introduce yourself and why you want to join...',
-              hintStyle: TextStyle(color: AppColors.kTextHint),
+              hintText: 'Introduce yourself, relevant skills, and why you would like to collaborate...',
+              hintStyle: AppTheme.bodySmall.copyWith(color: AppTheme.textMuted),
               filled: true,
-              fillColor: AppColors.kBgInput,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: BorderSide.none),
-              counterStyle: TextStyle(color: AppColors.kTextSecond),
+              fillColor: AppTheme.groundMuted,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                borderSide: const BorderSide(color: AppTheme.rule, width: 1),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                borderSide: const BorderSide(color: AppTheme.rule, width: 1),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                borderSide: const BorderSide(color: AppTheme.accent, width: 1.5),
+              ),
+              counterStyle: AppTheme.metadataText.copyWith(fontSize: 11),
             ),
           ),
-          SizedBox(height: 24.h),
+          const SizedBox(height: 18),
           Row(
             children: [
               Expanded(
-                child: TextButton(
+                child: OutlinedButton(
                   onPressed: () => Navigator.pop(context),
-                  child: Text('Cancel', style: TextStyle(color: AppColors.kTextSecond)),
+                  child: const Text('Cancel'),
                 ),
               ),
-              SizedBox(width: 16.w),
+              const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: () async {
-                    try {
-                      await ProjectService.instance.createJoinRequest(
-                        projectId: widget.project.id,
-                        message: _controller.text.trim(),
-                      );
-                      if (mounted) {
-                        Navigator.pop(context);
-                      }
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Request sent! Waiting for admin approval.'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.kAccentBlue),
-                  child: Text('Send Request', style: TextStyle(color: Colors.white)),
+                  onPressed: _isSubmitting
+                      ? null
+                      : () async {
+                          setState(() => _isSubmitting = true);
+                          try {
+                            await ProjectService.instance.createJoinRequest(
+                              projectId: widget.project.id,
+                              message: _controller.text.trim(),
+                            );
+                            if (mounted) {
+                              Navigator.pop(context);
+                            }
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Request sent successfully! Awaiting admin approval.'),
+                                backgroundColor: AppColors.dpSuccess,
+                              ),
+                            );
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Failed to submit request: $e')),
+                              );
+                            }
+                          } finally {
+                            if (mounted) setState(() => _isSubmitting = false);
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.accent,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Submit Request', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
                 ),
               ),
             ],
           ),
-          SizedBox(height: 24.h),
         ],
       ),
     );

@@ -58,6 +58,7 @@ class UserProfileService {
                 username: '',
                 name: authUser.displayName ?? 'User',
                 email: authUser.email ?? '',
+                photoUrl: authUser.photoURL ?? '',
                 projectsJoined: 0,
                 tasksCompleted: 0,
                 createdAt: DateTime.now(),
@@ -71,6 +72,7 @@ class UserProfileService {
                   ? data['name'] as String
                   : (authUser.displayName ?? 'User'),
               email: (data['email'] as String?) ?? authUser.email ?? '',
+              photoUrl: (data['photoUrl'] as String?) ?? authUser.photoURL ?? '',
               projectsJoined: (data['projectsJoined'] as int?) ?? 0,
               tasksCompleted: (data['tasksCompleted'] as int?) ?? 0,
               createdAt:
@@ -80,6 +82,27 @@ class UserProfileService {
         ),
       );
     });
+  }
+
+  /// Update current user photo URL
+  Future<void> updateCurrentUserPhoto(String photoUrl) async {
+    final authUser = _auth.currentUser;
+    final trimmedPhoto = photoUrl.trim();
+
+    if (authUser == null || trimmedPhoto.isEmpty) {
+      return;
+    }
+
+    try {
+      await authUser.updatePhotoURL(trimmedPhoto);
+      await _userService.updateUserProfile(
+        userId: authUser.uid,
+        photoUrl: trimmedPhoto,
+      );
+    } catch (e) {
+      print('⚠️ Failed to update photo URL: $e');
+      rethrow;
+    }
   }
 
   /// Update current user name

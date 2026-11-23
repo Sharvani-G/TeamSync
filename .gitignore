@@ -72,3 +72,4 @@ cmdline-tools.zip
 BUILD_REPORT.md
 functions/serviceAccountKey.json
 serviceAccountKey.json
+.tools/

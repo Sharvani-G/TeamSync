@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/shared_widgets.dart';
 
 class FaqPage extends StatelessWidget {
   const FaqPage({super.key});
@@ -8,45 +10,67 @@ class FaqPage extends StatelessWidget {
     final items = <_FaqItem>[
       const _FaqItem(
         'How do join requests work?',
-        'Project owners can accept or reject requests from the project page. Approved users are added as collaborators immediately.',
+        'Project owners can review, accept, or decline collaboration requests directly from the project admin page. Once approved, you are immediately enrolled as a project collaborator and gain access to the Idea Board, Team Channels, and Video Calls.',
       ),
       const _FaqItem(
         'Where do notifications appear?',
-        'Notifications are stored in the inbox and mirrored as unread badges in the shell.',
+        'Notifications appear in your real-time notification inbox and update the badge on the shell navigation bar. You will receive alerts when requests are accepted, meetings are scheduled, or teammates start calls.',
       ),
       const _FaqItem(
-        'How do I change my profile?',
-        'Open My Profile, tap edit name, or go into Settings for privacy controls.',
+        'How do I edit my profile or change privacy?',
+        'Navigate to My Profile in the bottom tab bar. Tap the edit icon next to your name to update your display name, or tap Privacy Controls to toggle visibility and active online status.',
       ),
       const _FaqItem(
-        'How do I log out?',
-        'Use the Logout button from My Profile. Your session is cleared locally.',
+        'What permissions do collaborators have vs project admins?',
+        'Admins manage core project settings, approve/reject incoming join requests, edit required skills, and delete workspaces. Collaborators have full access to create & edit idea board documents, message in chat channels, and join video calls.',
       ),
       const _FaqItem(
-        'What can collaborators do vs admin?',
-        'Admin manages project settings, approves requests, removes members. Collaborators use Chat, Idea Board, and Calls.',
+        'How do video meetings and calls work in TeamSync?',
+        'TeamSync features built-in instant meetings powered by Jitsi Meet alongside direct WebRTC video calls. You can schedule upcoming meetings with set dates and times or launch an instant conference room directly from the Calls workspace.',
       ),
     ];
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0B1220),
-      appBar: AppBar(title: const Text('FAQ')),
+      backgroundColor: AppTheme.ground,
+      appBar: const SimpleAppBar(title: 'Frequently Asked Questions'),
       body: ListView.separated(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         itemCount: items.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        separatorBuilder: (_, __) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
           final item = items[index];
-          return Card(
-            color: const Color(0xFF111827),
-            child: ExpansionTile(
-              iconColor: Colors.white70,
-              collapsedIconColor: Colors.white70,
-              title: Text(item.question, style: const TextStyle(color: Colors.white)),
-              childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              children: [
-                Text(item.answer, style: const TextStyle(color: Colors.white70, height: 1.4)),
-              ],
+          return Container(
+            decoration: BoxDecoration(
+              color: AppTheme.panel,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppTheme.rule, width: 1),
+            ),
+            child: Theme(
+              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                iconColor: AppTheme.accent,
+                collapsedIconColor: AppTheme.inkSecondary,
+                tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                title: Text(
+                  item.question,
+                  style: AppTheme.bodyFont(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.ink,
+                  ),
+                ),
+                children: [
+                  Text(
+                    item.answer,
+                    style: AppTheme.bodyFont(
+                      fontSize: 13,
+                      height: 1.5,
+                      color: AppTheme.inkSecondary,
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
         },

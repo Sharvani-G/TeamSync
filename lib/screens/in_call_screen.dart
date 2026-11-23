@@ -7,7 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../services/webrtc_client.dart';
 import '../services/webrtc_socket_service.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_theme.dart';
 
 class InCallScreen extends StatefulWidget {
   final String projectId;
@@ -126,23 +126,23 @@ class _InCallScreenState extends State<InCallScreen> {
           context: context,
           barrierDismissible: false,
           builder: (_) => AlertDialog(
-            title: const Text('Permission Required'),
-            content: Text('$e'),
+            title: Text('Permission Required', style: AppTheme.displayFont(fontSize: 18, fontWeight: FontWeight.w700)),
+            content: Text('$e', style: AppTheme.bodyFont(fontSize: 14)),
             actions: [
               TextButton(
                 onPressed: () {
-                  Navigator.pop(context); // close dialog
-                  Navigator.pop(context); // go back
-                  openAppSettings(); // from permission_handler
+                  Navigator.pop(context);
+                  Navigator.pop(context);
+                  openAppSettings();
                 },
-                child: const Text('Open Settings'),
+                child: Text('Open Settings', style: AppTheme.bodyFont(color: AppTheme.accent, fontWeight: FontWeight.w600)),
               ),
               TextButton(
                 onPressed: () {
-                  Navigator.pop(context); // close dialog
-                  Navigator.pop(context); // go back
+                  Navigator.pop(context);
+                  Navigator.pop(context);
                 },
-                child: const Text('Cancel'),
+                child: Text('Cancel', style: AppTheme.bodyFont(color: AppTheme.inkSecondary)),
               ),
             ],
           ),
@@ -180,21 +180,28 @@ class _InCallScreenState extends State<InCallScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.kBgDeep,
+      backgroundColor: AppTheme.field,
       appBar: AppBar(
-        backgroundColor: AppColors.kBgDeep,
+        backgroundColor: AppTheme.field,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new, color: AppColors.kTextPrimary, size: 20.sp),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18),
           onPressed: _endCall,
         ),
-        title: Text('Video Call', style: TextStyle(color: AppColors.kTextPrimary, fontSize: 18.sp, fontWeight: FontWeight.w600)),
+        title: Text(
+          'Video Call',
+          style: AppTheme.displayFont(
+            color: Colors.white,
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
       body: Column(
         children: [
           Expanded(
             child: !_initialized
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: CircularProgressIndicator(color: Colors.white))
                 : Stack(
                     children: [
                       // Remote Stream (Full Screen Tile)
@@ -207,23 +214,24 @@ class _InCallScreenState extends State<InCallScreen> {
                       // Local Stream (Small Floating Preview Tile)
                       if (_cameraOn && _client.localStream != null)
                         Positioned(
-                          bottom: 16,
-                          right: 16,
-                          width: 100,
-                          height: 140,
+                          bottom: 20,
+                          right: 20,
+                          width: 110,
+                          height: 155,
                           child: Container(
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.white24, width: 1.5),
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.black.withOpacity(0.5),
-                                  blurRadius: 8,
+                                  blurRadius: 12,
                                   offset: const Offset(0, 4),
                                 ),
                               ],
                             ),
                             child: ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(11),
                               child: RTCVideoView(
                                 _localRenderer,
                                 mirror: true,
@@ -235,18 +243,21 @@ class _InCallScreenState extends State<InCallScreen> {
                     ],
                   ),
           ),
-          Padding(
-            padding: EdgeInsets.only(bottom: 32.h, left: 16.w, right: 16.w),
-            child: Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 20.w,
+          // Call Control Bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+            decoration: const BoxDecoration(
+              color: AppTheme.field,
+              border: Border(top: BorderSide(color: Colors.white10)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 _CallAction(
-                  icon: _micOn ? Icons.mic : Icons.mic_off,
+                  icon: _micOn ? Icons.mic_rounded : Icons.mic_off_rounded,
                   label: _micOn ? 'Mute' : 'Unmute',
                   onTap: () {
-                    final audioTrack = _client.localStream
-                        ?.getAudioTracks().isNotEmpty == true
+                    final audioTrack = _client.localStream?.getAudioTracks().isNotEmpty == true
                         ? _client.localStream!.getAudioTracks().first
                         : null;
                     if (audioTrack != null) {
@@ -256,11 +267,10 @@ class _InCallScreenState extends State<InCallScreen> {
                   },
                 ),
                 _CallAction(
-                  icon: _cameraOn ? Icons.videocam : Icons.videocam_off,
-                  label: 'Video',
+                  icon: _cameraOn ? Icons.videocam_rounded : Icons.videocam_off_rounded,
+                  label: _cameraOn ? 'Camera On' : 'Camera Off',
                   onTap: () {
-                    final videoTrack = _client.localStream
-                        ?.getVideoTracks().isNotEmpty == true
+                    final videoTrack = _client.localStream?.getVideoTracks().isNotEmpty == true
                         ? _client.localStream!.getVideoTracks().first
                         : null;
                     if (videoTrack != null) {
@@ -270,11 +280,10 @@ class _InCallScreenState extends State<InCallScreen> {
                   },
                 ),
                 _CallAction(
-                  icon: Icons.flip_camera_ios,
+                  icon: Icons.flip_camera_ios_rounded,
                   label: 'Switch',
                   onTap: () async {
-                    final videoTrack = _client.localStream
-                        ?.getVideoTracks().isNotEmpty == true
+                    final videoTrack = _client.localStream?.getVideoTracks().isNotEmpty == true
                         ? _client.localStream!.getVideoTracks().first
                         : null;
                     if (videoTrack != null) {
@@ -283,49 +292,12 @@ class _InCallScreenState extends State<InCallScreen> {
                   },
                 ),
                 _CallAction(
-                  icon: Icons.call_end,
-                  label: 'End',
-                  color: AppColors.kDanger,
+                  icon: Icons.call_end_rounded,
+                  label: 'End Call',
+                  color: AppTheme.danger,
                   onTap: _endCall,
                 ),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _VideoTile extends StatelessWidget {
-  final String label;
-  final RTCVideoRenderer renderer;
-  const _VideoTile({required this.label, required this.renderer});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: EdgeInsets.all(8.w),
-      decoration: BoxDecoration(color: AppColors.kBlack, borderRadius: BorderRadius.circular(12.r)),
-      child: Stack(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12.r),
-            child: RTCVideoView(renderer, mirror: label == 'You', objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
-          ),
-          Positioned(
-            bottom: 8.h,
-            left: 8.w,
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(4.r),
-              ),
-              child: Text(
-                label,
-                style: TextStyle(color: Colors.white, fontSize: 10.sp, fontWeight: FontWeight.w600),
-              ),
             ),
           ),
         ],
@@ -340,23 +312,39 @@ class _CallAction extends StatelessWidget {
   final VoidCallback onTap;
   final Color? color;
 
-  const _CallAction({required this.icon, required this.label, required this.onTap, this.color});
+  const _CallAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         GestureDetector(
           onTap: onTap,
           child: Container(
-            width: 56.r,
-            height: 56.r,
-            decoration: BoxDecoration(color: color ?? AppColors.kBgElevated, shape: BoxShape.circle),
-            child: Icon(icon, color: AppColors.kWhite, size: 24.sp),
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: color ?? Colors.white.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: Colors.white, size: 24),
           ),
         ),
-        SizedBox(height: 8.h),
-        Text(label, style: TextStyle(color: AppColors.kTextSecond, fontSize: 11.sp)),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: AppTheme.bodyFont(
+            color: Colors.white70,
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ],
     );
   }

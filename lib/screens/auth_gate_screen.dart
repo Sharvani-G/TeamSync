@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../app/main_shell.dart';
 import '../models/models.dart';
 import 'entry_screen.dart';
+import '../theme/app_theme.dart';
 import '../services/user_profile_service.dart';
 import '../services/user_service.dart';
 import 'chat_channel_screen.dart';
@@ -199,6 +200,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
   Widget build(BuildContext context) {
     if (!_authBootstrapComplete) {
       return const Scaffold(
+        backgroundColor: AppTheme.ground,
         body: Center(child: CircularProgressIndicator()),
       );
     }
@@ -215,6 +217,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
 
               if (authUser == null) {
                 return const Scaffold(
+                  backgroundColor: AppTheme.ground,
                   body: Center(child: CircularProgressIndicator()),
                 );
               }

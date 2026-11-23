@@ -28,24 +28,31 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
       builder: (context, projectSnapshot) {
         final project = projectSnapshot.data;
         if (projectSnapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            backgroundColor: AppTheme.ground,
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
         if (project == null) {
-          return const Scaffold(body: Center(child: Text('Project not found')));
+          return const Scaffold(
+            backgroundColor: AppTheme.ground,
+            body: Center(child: Text('Project not found')),
+          );
         }
 
         final memberIds = <String>{project.createdBy, ...project.collaborators.keys}.toList();
 
         return Scaffold(
+          backgroundColor: AppTheme.ground,
           appBar: SimpleAppBar(
             title: 'Call • ${project.title}',
             actions: [
               IconButton(
-                icon: const Icon(Icons.event_available_outlined),
+                icon: const Icon(Icons.event_available_outlined, size: 20, color: AppTheme.inkSecondary),
                 onPressed: () => _showScheduleDialog(memberIds),
               ),
               IconButton(
-                icon: const Icon(Icons.history),
+                icon: const Icon(Icons.history_rounded, size: 20, color: AppTheme.inkSecondary),
                 onPressed: _showHistory,
               ),
             ],
@@ -56,69 +63,161 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
               final activeCall = callSnapshot.data;
 
               return ListView(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 children: [
+                  // Hero Call Room Card
                   Container(
-                    padding: const EdgeInsets.all(18),
+                    padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [AppTheme.primary, AppTheme.darkRed],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(20),
+                      color: AppTheme.panel,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppTheme.rule, width: 1),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.03),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Project Call Room',
-                          style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: (activeCall != null && activeCall.active)
+                                    ? const Color(0xFFDCFCE7)
+                                    : AppTheme.groundMuted,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: (activeCall != null && activeCall.active)
+                                      ? const Color(0xFF86EFAC)
+                                      : AppTheme.rule,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 7,
+                                    height: 7,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: (activeCall != null && activeCall.active)
+                                          ? const Color(0xFF16A34A)
+                                          : AppTheme.inkSecondary,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    activeCall == null ? 'IDLE' : 'LIVE ${activeCall.type.toUpperCase()}',
+                                    style: AppTheme.bodyFont(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: (activeCall != null && activeCall.active)
+                                          ? const Color(0xFF15803D)
+                                          : AppTheme.inkSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              '${project.collaboratorCount} collaborators',
+                              style: AppTheme.bodyFont(fontSize: 12, color: AppTheme.inkSecondary),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 14),
                         Text(
-                          activeCall == null ? 'No active call' : 'Live ${activeCall.type} call',
-                          style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w700),
+                          activeCall == null ? 'Project Call Room' : 'Active Conference Session',
+                          style: AppTheme.displayFont(
+                            color: AppTheme.ink,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Room state, invitations, participants, and call history are synchronized in Firestore.',
-                          style: TextStyle(color: Colors.white.withOpacity(0.78), height: 1.45),
-                        ),
-                        const SizedBox(height: 14),
-                        Wrap(
-                          spacing: 10,
-                          runSpacing: 10,
-                          children: [
-                            _InfoChip(icon: Icons.people_outline, label: '${project.collaboratorCount} collaborators'),
-                            _InfoChip(icon: Icons.videocam_outlined, label: activeCall?.active == true ? 'Active' : 'Idle'),
-                          ],
+                          'Realtime WebRTC peer room with instant audio, video, and screen sharing across collaborators.',
+                          style: AppTheme.bodyFont(
+                            color: AppTheme.inkSecondary,
+                            fontSize: 13,
+                            height: 1.45,
+                          ),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 16),
-                  OutlinedButton.icon(
-                    onPressed: () => _showScheduleDialog(memberIds),
-                    icon: const Icon(Icons.event_available_outlined),
-                    label: const Text('Schedule Call'),
-                  ),
-                  const SizedBox(height: 12),
+
                   if (activeCall == null) ...[
-                    ElevatedButton.icon(
-                      onPressed: () => _startCall(type: 'team'),
-                      icon: const Icon(Icons.groups_outlined),
-                      label: const Text('Start Team Call'),
+                    // Action Buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () => _startCall(type: 'team'),
+                            icon: const Icon(Icons.groups_rounded, size: 18),
+                            label: Text(
+                              'Start Team Call',
+                              style: AppTheme.bodyFont(fontWeight: FontWeight.w600, color: Colors.white),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.accent,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => _startSelectedCall(memberIds),
+                            icon: const Icon(Icons.person_add_alt_1_rounded, size: 18, color: AppTheme.ink),
+                            label: Text(
+                              'Select Members',
+                              style: AppTheme.bodyFont(fontWeight: FontWeight.w600, color: AppTheme.ink),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: AppTheme.rule),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     OutlinedButton.icon(
-                      onPressed: () => _startSelectedCall(memberIds),
-                      icon: const Icon(Icons.person_add_alt_1_outlined),
-                      label: const Text('Start Selected Call'),
+                      onPressed: () => _showScheduleDialog(memberIds),
+                      icon: const Icon(Icons.event_available_outlined, size: 18, color: AppTheme.accent),
+                      label: Text(
+                        'Schedule Upcoming Call',
+                        style: AppTheme.bodyFont(fontWeight: FontWeight.w600, color: AppTheme.accent),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppTheme.rule),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
                     ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Collaborators',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
+                    const SizedBox(height: 24),
+
+                    Text(
+                      'Team Members',
+                      style: AppTheme.displayFont(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.inkSecondary,
+                        letterSpacing: 0.2,
+                      ),
                     ),
                     const SizedBox(height: 10),
                     FutureBuilder<Map<String, AppUser>>(
@@ -135,12 +234,12 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
                             final username = user?.username.trim().isNotEmpty == true ? user!.username : '';
 
                             return Container(
-                              margin: const EdgeInsets.only(bottom: 10),
+                              margin: const EdgeInsets.only(bottom: 8),
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: AppTheme.panel,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: AppTheme.border),
+                                border: Border.all(color: AppTheme.rule, width: 1),
                               ),
                               child: Row(
                                 children: [
@@ -157,28 +256,29 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
                                       children: [
                                         Text(
                                           displayName,
-                                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                          style: AppTheme.bodyFont(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.ink),
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
                                           '@${username.isNotEmpty ? username : '?'}',
-                                          style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                                          style: AppTheme.bodyFont(fontSize: 12, color: AppTheme.inkSecondary),
                                         ),
                                       ],
                                     ),
                                   ),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                     decoration: BoxDecoration(
-                                      color: isAdmin ? AppTheme.primary.withOpacity(0.12) : AppTheme.primaryLight.withOpacity(0.12),
-                                      borderRadius: BorderRadius.circular(999),
+                                      color: isAdmin ? AppTheme.accent.withOpacity(0.08) : AppTheme.groundMuted,
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: isAdmin ? AppTheme.accent.withOpacity(0.2) : AppTheme.rule),
                                     ),
                                     child: Text(
-                                      isAdmin ? 'ADMIN' : 'Collaborator',
-                                      style: TextStyle(
+                                      isAdmin ? 'ADMIN' : 'COLLABORATOR',
+                                      style: AppTheme.bodyFont(
                                         fontSize: 10,
                                         fontWeight: FontWeight.w700,
-                                        color: isAdmin ? AppTheme.primary : AppTheme.primaryLight,
+                                        color: isAdmin ? AppTheme.accent : AppTheme.inkSecondary,
                                       ),
                                     ),
                                   ),
@@ -225,10 +325,15 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
                       onLeave: () => ProjectService.instance.leaveProjectCall(projectId: widget.projectId, callId: activeCall.id),
                       onEnd: () => ProjectService.instance.endProjectCall(projectId: widget.projectId, callId: activeCall.id),
                     ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Participants',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Connected Participants',
+                      style: AppTheme.displayFont(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.inkSecondary,
+                        letterSpacing: 0.2,
+                      ),
                     ),
                     const SizedBox(height: 10),
                     FutureBuilder<Map<String, AppUser>>(
@@ -236,8 +341,8 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
                       builder: (context, usersSnapshot) {
                         final users = usersSnapshot.data ?? {};
                         return Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
+                          spacing: 10,
+                          runSpacing: 10,
                           children: activeCall.participants.map((userId) {
                             final user = users[userId];
                             return _ParticipantTile(
@@ -249,59 +354,99 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
                         );
                       },
                     ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Upcoming Calls',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
-                    ),
-                    const SizedBox(height: 10),
-                    StreamBuilder<List<ProjectCallSchedule>>(
-                      stream: ProjectService.instance.watchProjectCallSchedules(widget.projectId),
-                      builder: (context, scheduleSnapshot) {
-                        final schedules = scheduleSnapshot.data ?? [];
-                        final upcoming = schedules.where((schedule) => schedule.status == 'scheduled').toList();
-                        if (upcoming.isEmpty) {
-                          return const Text(
-                            'No upcoming calls scheduled yet.',
-                            style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-                          );
-                        }
+                  ],
 
-                        return Column(
-                          children: upcoming.map((schedule) {
-                            return Container(
-                              width: double.infinity,
-                              margin: const EdgeInsets.only(bottom: 10),
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                border: Border.all(color: AppTheme.border),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(schedule.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Upcoming Calls',
+                    style: AppTheme.displayFont(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.inkSecondary,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  StreamBuilder<List<ProjectCallSchedule>>(
+                    stream: ProjectService.instance.watchProjectCallSchedules(widget.projectId),
+                    builder: (context, scheduleSnapshot) {
+                      final schedules = scheduleSnapshot.data ?? [];
+                      final upcoming = schedules.where((schedule) => schedule.status == 'scheduled').toList();
+                      if (upcoming.isEmpty) {
+                        return Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppTheme.panel,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppTheme.rule, width: 1),
+                          ),
+                          child: Text(
+                            'No upcoming calls scheduled yet. Tap "Schedule Upcoming Call" to create one.',
+                            style: AppTheme.bodyFont(fontSize: 13, color: AppTheme.inkSecondary),
+                          ),
+                        );
+                      }
+
+                      return Column(
+                        children: upcoming.map((schedule) {
+                          return Container(
+                            width: double.infinity,
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: AppTheme.panel,
+                              border: Border.all(color: AppTheme.rule, width: 1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      schedule.title,
+                                      style: AppTheme.bodyFont(fontSize: 14, fontWeight: FontWeight.w700, color: AppTheme.ink),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.accent.withOpacity(0.08),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        '${schedule.durationMinutes} min',
+                                        style: AppTheme.bodyFont(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.accent),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (schedule.agenda.isNotEmpty) ...[
                                   const SizedBox(height: 4),
-                                  Text(schedule.agenda, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
-                                  const SizedBox(height: 8),
                                   Text(
-                                    'When: ${_formatDateTime(schedule.scheduledAt)} • ${schedule.durationMinutes} min',
-                                    style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                                    schedule.agenda,
+                                    style: AppTheme.bodyFont(fontSize: 13, color: AppTheme.inkSecondary),
                                   ),
                                 ],
-                              ),
-                            );
-                          }).toList(),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Call participants share room state, chat, and notifications in realtime.',
-                      style: TextStyle(fontSize: 12, color: AppTheme.textSecondary, height: 1.45),
-                    ),
-                  ],
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.schedule_rounded, size: 14, color: AppTheme.inkSecondary),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      _formatDateTime(schedule.scheduledAt),
+                                      style: AppTheme.bodyFont(fontSize: 12, color: AppTheme.inkSecondary),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 24),
                 ],
               );
             },
@@ -322,7 +467,7 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}'), behavior: SnackBarBehavior.floating),
+        SnackBar(content: Text('Error: ${e.toString()}'), backgroundColor: AppTheme.field, behavior: SnackBarBehavior.floating),
       );
     }
   }
@@ -335,7 +480,13 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('Select Participants'),
+              backgroundColor: AppTheme.panel,
+              surfaceTintColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: AppTheme.rule),
+              ),
+              title: Text('Select Participants', style: AppTheme.displayFont(fontSize: 18, fontWeight: FontWeight.w700)),
               content: SizedBox(
                 width: double.maxFinite,
                 child: FutureBuilder<Map<String, AppUser>>(
@@ -349,6 +500,7 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
                         final label = user?.name ?? user?.username ?? userId;
                         return CheckboxListTile(
                           contentPadding: EdgeInsets.zero,
+                          activeColor: AppTheme.accent,
                           value: selected.contains(userId),
                           onChanged: (checked) {
                             setDialogState(() {
@@ -359,8 +511,8 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
                               }
                             });
                           },
-                          title: Text(label),
-                          subtitle: Text('@${user?.username.isNotEmpty == true ? user!.username : '?'}'),
+                          title: Text(label, style: AppTheme.bodyFont(fontSize: 14, fontWeight: FontWeight.w600)),
+                          subtitle: Text('@${user?.username.isNotEmpty == true ? user!.username : 'user'}', style: AppTheme.bodyFont(fontSize: 12, color: AppTheme.inkSecondary)),
                         );
                       }).toList(),
                     );
@@ -368,8 +520,19 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
                 ),
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
-                ElevatedButton(onPressed: () => Navigator.pop(dialogContext, selected), child: const Text('Start Call')),
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: Text('Cancel', style: AppTheme.bodyFont(color: AppTheme.inkSecondary)),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(dialogContext, selected),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.accent,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: Text('Start Call', style: AppTheme.bodyFont(fontWeight: FontWeight.w600, color: Colors.white)),
+                ),
               ],
             );
           },
@@ -392,7 +555,7 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}'), behavior: SnackBarBehavior.floating),
+        SnackBar(content: Text('Error: ${e.toString()}'), backgroundColor: AppTheme.field, behavior: SnackBarBehavior.floating),
       );
     }
   }
@@ -412,33 +575,59 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('Schedule Call'),
+              backgroundColor: AppTheme.panel,
+              surfaceTintColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: AppTheme.rule),
+              ),
+              title: Text('Schedule Call', style: AppTheme.displayFont(fontSize: 18, fontWeight: FontWeight.w700)),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     TextField(
                       controller: titleController,
-                      decoration: const InputDecoration(labelText: 'Call title'),
+                      style: AppTheme.bodyFont(fontSize: 14),
+                      decoration: InputDecoration(
+                        labelText: 'Call title',
+                        fillColor: AppTheme.groundMuted,
+                        filled: true,
+                      ),
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: agendaController,
-                      decoration: const InputDecoration(labelText: 'Agenda / topic'),
+                      style: AppTheme.bodyFont(fontSize: 14),
+                      decoration: InputDecoration(
+                        labelText: 'Agenda / topic',
+                        fillColor: AppTheme.groundMuted,
+                        filled: true,
+                      ),
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: descriptionController,
-                      decoration: const InputDecoration(labelText: 'Discussion description'),
-                      maxLines: 3,
+                      style: AppTheme.bodyFont(fontSize: 14),
+                      decoration: InputDecoration(
+                        labelText: 'Discussion description',
+                        fillColor: AppTheme.groundMuted,
+                        filled: true,
+                      ),
+                      maxLines: 2,
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: durationController,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Duration estimate (minutes)'),
+                      style: AppTheme.bodyFont(fontSize: 14),
+                      decoration: InputDecoration(
+                        labelText: 'Duration (minutes)',
+                        fillColor: AppTheme.groundMuted,
+                        filled: true,
+                      ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
                     Row(
                       children: [
                         Expanded(
@@ -446,10 +635,10 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
                             scheduledAt == null
                                 ? 'Choose date and time'
                                 : _formatDateTime(scheduledAt!),
-                            style: const TextStyle(fontSize: 12),
+                            style: AppTheme.bodyFont(fontSize: 13, color: scheduledAt == null ? AppTheme.inkSecondary : AppTheme.ink),
                           ),
                         ),
-                        TextButton(
+                        OutlinedButton(
                           onPressed: () async {
                             final date = await showDatePicker(
                               context: context,
@@ -475,14 +664,19 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
                               );
                             });
                           },
-                          child: const Text('Pick'),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: AppTheme.rule),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: Text('Pick Date/Time', style: AppTheme.bodyFont(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.accent)),
                         ),
                       ],
                     ),
                     const SizedBox(height: 10),
-                    SwitchListTile.adaptive(
+                    SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Invite all collaborators'),
+                      activeColor: AppTheme.accent,
+                      title: Text('Invite all collaborators', style: AppTheme.bodyFont(fontSize: 13, fontWeight: FontWeight.w600)),
                       value: inviteAll,
                       onChanged: (value) {
                         setDialogState(() {
@@ -493,41 +687,22 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
                         });
                       },
                     ),
-                    if (!inviteAll)
-                      FutureBuilder<Map<String, AppUser>>(
-                        future: UserService.instance.getUsersByIds(memberIds),
-                        builder: (context, usersSnapshot) {
-                          final users = usersSnapshot.data ?? {};
-                          return Column(
-                            children: memberIds.map((userId) {
-                              final user = users[userId];
-                              final label = user?.name ?? user?.username ?? userId;
-                              return CheckboxListTile(
-                                contentPadding: EdgeInsets.zero,
-                                value: invited.contains(userId),
-                                onChanged: (checked) {
-                                  setDialogState(() {
-                                    if (checked == true) {
-                                      invited.add(userId);
-                                    } else {
-                                      invited.remove(userId);
-                                    }
-                                  });
-                                },
-                                title: Text(label),
-                              );
-                            }).toList(),
-                          );
-                        },
-                      ),
                   ],
                 ),
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: Text('Cancel', style: AppTheme.bodyFont(color: AppTheme.inkSecondary)),
+                ),
                 ElevatedButton(
                   onPressed: scheduledAt == null ? null : () => Navigator.pop(dialogContext, true),
-                  child: const Text('Schedule'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.accent,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: Text('Schedule', style: AppTheme.bodyFont(fontWeight: FontWeight.w600, color: Colors.white)),
                 ),
               ],
             );
@@ -555,7 +730,7 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}'), behavior: SnackBarBehavior.floating),
+        SnackBar(content: Text('Error: ${e.toString()}'), backgroundColor: AppTheme.field, behavior: SnackBarBehavior.floating),
       );
     }
   }
@@ -580,8 +755,12 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
   Future<void> _showHistory() async {
     await showModalBottomSheet<void>(
       context: context,
+      backgroundColor: AppTheme.panel,
       isScrollControlled: true,
       showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (context) {
         return SafeArea(
           child: SizedBox(
@@ -593,7 +772,7 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
                 if (sessions.isEmpty) {
                   return const Center(
                     child: EmptyState(
-                      icon: Icons.history,
+                      icon: Icons.history_rounded,
                       title: 'No call history',
                       subtitle: 'Call sessions will appear here after they are started.',
                     ),
@@ -603,30 +782,45 @@ class _ProjectCallScreenState extends State<ProjectCallScreen> {
                 return ListView.separated(
                   padding: const EdgeInsets.all(16),
                   itemCount: sessions.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
                   itemBuilder: (context, index) {
                     final session = sessions[index];
                     return Container(
-                      padding: const EdgeInsets.all(14),
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        border: Border.all(color: AppTheme.border),
-                        borderRadius: BorderRadius.circular(14),
+                        color: AppTheme.panel,
+                        border: Border.all(color: AppTheme.rule, width: 1),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
                         children: [
-                          CircleAvatar(
-                            backgroundColor: session.active ? const Color(0xFFDCFCE7) : const Color(0xFFE5E7EB),
-                            child: Icon(session.active ? Icons.fiber_manual_record : Icons.history, size: 18, color: session.active ? const Color(0xFF15803D) : AppTheme.textSecondary),
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: session.active ? const Color(0xFFDCFCE7) : AppTheme.groundMuted,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              session.active ? Icons.fiber_manual_record : Icons.history_rounded,
+                              size: 16,
+                              color: session.active ? const Color(0xFF15803D) : AppTheme.inkSecondary,
+                            ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(session.type.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w700)),
+                                Text(
+                                  session.type.toUpperCase(),
+                                  style: AppTheme.bodyFont(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.ink),
+                                ),
                                 const SizedBox(height: 2),
-                                Text('Started by ${session.startedBy} · ${session.participants.length} participants', style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                                Text(
+                                  'Started by ${session.startedBy} · ${session.participants.length} participants',
+                                  style: AppTheme.bodyFont(fontSize: 12, color: AppTheme.inkSecondary),
+                                ),
                               ],
                             ),
                           ),
@@ -679,39 +873,9 @@ class _LiveCallPanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        GridView.count(
-          crossAxisCount: MediaQuery.of(context).size.width > 700 ? 3 : 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 1.1,
-          children: call.participants
-              .map(
-                (userId) => Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppTheme.border),
-                  ),
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.person, size: 36, color: AppTheme.primary),
-                        const SizedBox(height: 10),
-                        Text(userId, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  ),
-                ),
-              )
-              .toList(),
-        ),
-        const SizedBox(height: 16),
         Wrap(
-          spacing: 10,
-          runSpacing: 10,
+          spacing: 8,
+          runSpacing: 8,
           children: [
             _ControlButton(
               icon: audioEnabled ? Icons.mic : Icons.mic_off,
@@ -725,59 +889,51 @@ class _LiveCallPanel extends StatelessWidget {
             ),
             _ControlButton(
               icon: screenSharing ? Icons.stop_screen_share : Icons.screen_share,
-              label: screenSharing ? 'Stop share' : 'Share screen',
+              label: screenSharing ? 'Stop share' : 'Share',
               onPressed: onToggleScreenShare,
             ),
             _ControlButton(
               icon: Icons.meeting_room_outlined,
-              label: 'Room',
+              label: 'Full Room',
               onPressed: onOpenRoom,
-            ),
-            _ControlButton(
-              icon: Icons.login,
-              label: 'Join',
-              onPressed: onJoin,
-            ),
-            _ControlButton(
-              icon: Icons.logout,
-              label: 'Leave',
-              onPressed: onLeave,
             ),
             if (isHost)
               _ControlButton(
                 icon: Icons.call_end,
-                label: 'End call',
+                label: 'End',
                 destructive: true,
                 onPressed: onEnd,
               ),
           ],
         ),
         const SizedBox(height: 12),
-        // Large action buttons similar to mobile reference
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        Row(
           children: [
-            ElevatedButton.icon(
-              onPressed: onJoin,
-              icon: const Icon(Icons.open_in_new),
-              label: const Text('Join Room'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1E9B4A),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                textStyle: const TextStyle(fontWeight: FontWeight.w700),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: onJoin,
+                icon: const Icon(Icons.videocam_rounded, size: 18),
+                label: Text('Join Room', style: AppTheme.bodyFont(fontWeight: FontWeight.w600)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF16A34A),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
               ),
             ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: onLeave,
-              icon: const Icon(Icons.call_end, color: Color(0xFFDC2626)),
-              label: const Text('Leave Call', style: TextStyle(color: Color(0xFFDC2626))),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                side: const BorderSide(color: Color(0xFFDC2626)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: onLeave,
+                icon: const Icon(Icons.call_end, size: 18, color: AppTheme.danger),
+                label: Text('Leave', style: AppTheme.bodyFont(fontWeight: FontWeight.w600, color: AppTheme.danger)),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  side: const BorderSide(color: Color(0xFFFECDD3)),
+                  backgroundColor: const Color(0xFFFFF1F2),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
               ),
             ),
           ],
@@ -797,20 +953,20 @@ class _ParticipantTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 150,
-      padding: const EdgeInsets.all(14),
+      width: 130,
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: AppTheme.border),
-        borderRadius: BorderRadius.circular(16),
+        color: AppTheme.panel,
+        border: Border.all(color: AppTheme.rule, width: 1),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         children: [
-          UserAvatar(name: name, username: username, size: 44, imageUrl: imageUrl),
-          const SizedBox(height: 10),
-          Text(name, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          UserAvatar(name: name, username: username, size: 40, imageUrl: imageUrl),
+          const SizedBox(height: 8),
+          Text(name, textAlign: TextAlign.center, style: AppTheme.bodyFont(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.ink)),
           const SizedBox(height: 2),
-          Text('@$username', textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+          Text('@$username', textAlign: TextAlign.center, style: AppTheme.bodyFont(fontSize: 11, color: AppTheme.inkSecondary)),
         ],
       ),
     );
@@ -829,40 +985,14 @@ class _ControlButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return ElevatedButton.icon(
       onPressed: onPressed,
-      icon: Icon(icon, size: 18),
-      label: Text(label),
+      icon: Icon(icon, size: 16),
+      label: Text(label, style: AppTheme.bodyFont(fontSize: 12, fontWeight: FontWeight.w600)),
       style: ElevatedButton.styleFrom(
-        backgroundColor: destructive ? const Color(0xFFDC2626) : AppTheme.primary,
+        backgroundColor: destructive ? AppTheme.danger : AppTheme.accent,
         foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-      ),
-    );
-  }
-}
-
-class _InfoChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-
-  const _InfoChip({required this.icon, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withOpacity(0.12)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: Colors.white),
-          const SizedBox(width: 6),
-          Text(label, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
-        ],
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
     );
   }

@@ -277,6 +277,7 @@ class UserService {
     required String userId,
     String? name,
     String? username,
+    String? photoUrl,
   }) async {
     try {
       final updateData = <String, dynamic>{
@@ -287,9 +288,13 @@ class UserService {
         updateData['name'] = name.trim();
       }
 
-      final authPhoto = _auth.currentUser?.photoURL;
-      if (authPhoto != null && authPhoto.trim().isNotEmpty) {
-        updateData['photoUrl'] = authPhoto.trim();
+      if (photoUrl != null && photoUrl.trim().isNotEmpty) {
+        updateData['photoUrl'] = photoUrl.trim();
+      } else {
+        final authPhoto = _auth.currentUser?.photoURL;
+        if (authPhoto != null && authPhoto.trim().isNotEmpty) {
+          updateData['photoUrl'] = authPhoto.trim();
+        }
       }
 
       if (username != null && username.trim().isNotEmpty) {

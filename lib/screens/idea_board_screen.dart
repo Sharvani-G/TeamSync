@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/models.dart';
 import '../services/project_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_colors.dart';
 import '../widgets/shared_widgets.dart';
 
 class IdeaBoardScreen extends StatefulWidget {
@@ -30,20 +31,22 @@ class _IdeaBoardScreenState extends State<IdeaBoardScreen> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
+            backgroundColor: AppTheme.ground,
+            body: Center(child: CircularProgressIndicator(strokeWidth: 2.5)),
           );
         }
 
         if (snapshot.hasError) {
           return Scaffold(
+            backgroundColor: AppTheme.ground,
             appBar: const SimpleAppBar(title: 'Idea Board'),
-            body: Center(
+            body: const Center(
               child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  'You do not have access to this project or the project could not be loaded.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey[700]),
+                padding: EdgeInsets.all(24),
+                child: EmptyState(
+                  icon: Icons.lock_outline,
+                  title: 'Access Restricted',
+                  subtitle: 'You do not have access to this project or the idea board could not be loaded.',
                 ),
               ),
             ),
@@ -53,7 +56,13 @@ class _IdeaBoardScreenState extends State<IdeaBoardScreen> {
         final project = snapshot.data;
         if (project == null) {
           return const Scaffold(
-            body: Center(child: Text('Project not found')),
+            backgroundColor: AppTheme.ground,
+            appBar: SimpleAppBar(title: 'Idea Board'),
+            body: EmptyState(
+              icon: Icons.error_outline,
+              title: 'Project Not Found',
+              subtitle: 'The requested project could not be located.',
+            ),
           );
         }
 
@@ -62,41 +71,82 @@ class _IdeaBoardScreenState extends State<IdeaBoardScreen> {
             : ["Problem Statement", "Research", "Design", "Development", "Testing"];
 
         return Scaffold(
-          appBar: SimpleAppBar(title: project.title),
-          body: ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: sections.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final sectionTitle = sections[index];
-              // Use the title as the ID for now, or index.
-              // Since the blocks are stored with levelId, we need a stable ID.
-              // If we use index, reordering in Create Project will break existing blocks mapping.
-              // But if we use title, renaming a section will break it.
-              // The prompt says "store levels as an array of strings".
-              return Card(
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: AppTheme.primary.withValues(alpha: 0.12),
-                    foregroundColor: AppTheme.primary,
-                    child: Text('${index + 1}'),
-                  ),
-                  title: Text(sectionTitle),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.pushNamed(
-                    context,
-                    '/project/${widget.projectId}/idea-board/$sectionTitle',
-                  ),
-                ),
-              );
-            },
+          backgroundColor: AppTheme.ground,
+          appBar: SimpleAppBar(
+            title: '${project.title} • Idea Board',
+          ),
+          body: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 800),
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                itemCount: sections.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final sectionTitle = sections[index];
+
+                  return InkWell(
+                    onTap: () => Navigator.pushNamed(
+                      context,
+                      '/project/${widget.projectId}/idea-board/$sectionTitle',
+                    ),
+                    borderRadius: BorderRadius.circular(AppTheme.radiusPanel),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppTheme.panel,
+                        borderRadius: BorderRadius.circular(AppTheme.radiusPanel),
+                        border: Border.all(color: AppTheme.rule, width: AppTheme.borderHairline),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x0616191F),
+                            blurRadius: 6,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: AppColors.dpInfoBg,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppTheme.accent.withOpacity(0.2)),
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${index + 1}',
+                                style: AppTheme.labelText.copyWith(
+                                  color: AppTheme.accent,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Text(
+                              sectionTitle,
+                              style: AppTheme.heading3.copyWith(fontSize: 15.5),
+                            ),
+                          ),
+                          const Icon(
+                            Icons.chevron_right,
+                            color: AppTheme.inkSecondary,
+                            size: 20,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
           ),
         );
       },
     );
-  }
-
-  String _formatCreatedAt(DateTime createdAt) {
-    return 'Created ${createdAt.month}/${createdAt.day}/${createdAt.year}';
   }
 }

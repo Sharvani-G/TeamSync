@@ -1,42 +1,59 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_colors.dart';
 
+/// Clean, authoritative AppBar following the TeamSync visual design system
 class SimpleAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final List<Widget>? actions;
-  final bool showBack;
+  final bool? showBack;
+  final VoidCallback? onBack;
 
   const SimpleAppBar({
     super.key,
     required this.title,
     this.actions,
-    this.showBack = true,
+    this.showBack,
+    this.onBack,
   });
 
   @override
   Widget build(BuildContext context) {
+    final canPop = Navigator.of(context).canPop();
+    final shouldShowBack = (showBack ?? canPop) && (canPop || onBack != null);
+
     return AppBar(
-      title: Text(title),
-      leading: showBack
+      title: Text(
+        title,
+        style: AppTheme.heading2,
+      ),
+      centerTitle: false,
+      backgroundColor: AppTheme.panel,
+      foregroundColor: AppTheme.ink,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      leading: shouldShowBack
           ? IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new, size: 18),
-              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.arrow_back_ios_new, size: 18, color: AppTheme.ink),
+              tooltip: 'Back',
+              onPressed: onBack ?? () => Navigator.of(context).maybePop(),
             )
           : null,
-      automaticallyImplyLeading: showBack,
+      automaticallyImplyLeading: shouldShowBack,
       actions: actions,
       bottom: const PreferredSize(
         preferredSize: Size.fromHeight(1),
-        child: Divider(height: 1),
+        child: Divider(height: 1, color: AppTheme.rule),
       ),
     );
   }
 
   @override
-  Size get preferredSize => const Size.fromHeight(57);
+  Size get preferredSize => const Size.fromHeight(56);
 }
 
+/// Standard Project Card with clean white surface and hairline border
 class ProjectCard extends StatelessWidget {
   final String title;
   final String description;
@@ -57,54 +74,66 @@ class ProjectCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(title,
-                        style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.textPrimary)),
+      borderRadius: BorderRadius.circular(AppTheme.radiusPanel),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppTheme.panel,
+          borderRadius: BorderRadius.circular(AppTheme.radiusPanel),
+          border: Border.all(color: AppTheme.rule, width: AppTheme.borderHairline),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0616191F),
+              blurRadius: 6,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: AppTheme.heading3,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  _VisibilityBadge(isPrivate: isPrivate),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(description,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: 13,
-                      color: AppTheme.textSecondary,
-                      height: 1.4)),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  const Icon(Icons.people_outline,
-                      size: 14, color: AppTheme.textMuted),
-                  const SizedBox(width: 4),
-                  Text('$collaborators collaborators',
-                      style: const TextStyle(
-                          fontSize: 12, color: AppTheme.textMuted)),
-                  const Spacer(),
-                  const Icon(Icons.access_time,
-                      size: 14, color: AppTheme.textMuted),
-                  const SizedBox(width: 4),
-                  Text(lastUpdated,
-                      style: const TextStyle(
-                          fontSize: 12, color: AppTheme.textMuted)),
-                ],
-              ),
-            ],
-          ),
+                ),
+                const SizedBox(width: 8),
+                _VisibilityBadge(isPrivate: isPrivate),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              description,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTheme.bodySmall,
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                const Icon(Icons.people_outline, size: 15, color: AppTheme.inkSecondary),
+                const SizedBox(width: 5),
+                Text(
+                  '$collaborators collaborators',
+                  style: AppTheme.metadataText,
+                ),
+                const Spacer(),
+                const Icon(Icons.access_time, size: 14, color: AppTheme.inkSecondary),
+                const SizedBox(width: 5),
+                Text(
+                  lastUpdated,
+                  style: AppTheme.metadataText,
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -120,24 +149,25 @@ class _VisibilityBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: isPrivate ? const Color(0xFFF3F4F6) : const Color(0xFFDCFCE7),
+        color: isPrivate ? AppTheme.groundMuted : AppColors.dpSuccessBg,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isPrivate ? AppTheme.rule : AppColors.dpSuccess.withOpacity(0.2),
+          width: 1,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (isPrivate) ...[
-            const Icon(Icons.lock_outline,
-                size: 11, color: AppTheme.textSecondary),
+            const Icon(Icons.lock_outline, size: 11, color: AppTheme.inkSecondary),
             const SizedBox(width: 3),
           ],
           Text(
             isPrivate ? 'Private' : 'Public',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color:
-                  isPrivate ? AppTheme.textSecondary : const Color(0xFF15803D),
+            style: AppTheme.labelText.copyWith(
+              color: isPrivate ? AppTheme.inkSecondary : AppColors.dpSuccess,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -146,6 +176,7 @@ class _VisibilityBadge extends StatelessWidget {
   }
 }
 
+/// Circular User Avatar with initials or network image
 class UserAvatar extends StatelessWidget {
   final String name;
   final String? username;
@@ -175,43 +206,43 @@ class UserAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = color ?? AppTheme.primary.withOpacity(0.15);
+    final bgColor = color ?? AppColors.dpInfoBg;
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
-            child: ClipOval(
+      decoration: BoxDecoration(
+        color: bgColor,
+        shape: BoxShape.circle,
+        border: Border.all(color: AppTheme.rule, width: 1),
+      ),
+      child: ClipOval(
         child: imageUrl != null && imageUrl!.trim().isNotEmpty
             ? CachedNetworkImage(
                 imageUrl: imageUrl!,
                 fit: BoxFit.cover,
                 placeholder: (_, __) => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                errorWidget: (_, __, ___) => Center(
-                  child: Text(
-                    initials,
-                    style: TextStyle(
-                      fontSize: size * 0.35,
-                      fontWeight: FontWeight.w600,
-                      color: color != null ? AppTheme.textPrimary : AppTheme.primary,
-                    ),
-                  ),
-                ),
+                errorWidget: (_, __, ___) => _buildInitials(),
               )
-            : Center(
-                child: Text(
-                  initials,
-                  style: TextStyle(
-                    fontSize: size * 0.35,
-                    fontWeight: FontWeight.w600,
-                    color: color != null ? AppTheme.textPrimary : AppTheme.primary,
-                  ),
-                ),
-              ),
+            : _buildInitials(),
+      ),
+    );
+  }
+
+  Widget _buildInitials() {
+    return Center(
+      child: Text(
+        initials,
+        style: AppTheme.hostGrotesk(
+          fontSize: size * 0.38,
+          fontWeight: FontWeight.w700,
+          color: color != null ? AppTheme.ink : AppTheme.accent,
+        ),
       ),
     );
   }
 }
 
+/// Uppercase section header label with consistent tracking
 class SectionHeader extends StatelessWidget {
   final String title;
   const SectionHeader({super.key, required this.title});
@@ -222,26 +253,30 @@ class SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(
         title.toUpperCase(),
-        style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.textMuted,
-            letterSpacing: 0.6),
+        style: AppTheme.labelText.copyWith(
+          letterSpacing: 0.8,
+          fontWeight: FontWeight.w700,
+          color: AppTheme.inkSecondary,
+        ),
       ),
     );
   }
 }
 
+/// Clean empty state with circular icon, title, and subtitle
 class EmptyState extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
+  final Widget? action;
 
-  const EmptyState(
-      {super.key,
-      required this.icon,
-      required this.title,
-      required this.subtitle});
+  const EmptyState({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.action,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -252,26 +287,79 @@ class EmptyState extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 80,
-              height: 80,
-              decoration: const BoxDecoration(
-                  color: Color(0xFFF3F4F6), shape: BoxShape.circle),
-              child: Icon(icon, size: 36, color: AppTheme.textMuted),
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: AppTheme.groundMuted,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppTheme.rule, width: 1),
+              ),
+              child: Icon(icon, size: 32, color: AppTheme.inkSecondary),
             ),
             const SizedBox(height: 16),
-            Text(title,
-                style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: AppTheme.textPrimary)),
-            const SizedBox(height: 4),
-            Text(subtitle,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontSize: 13, color: AppTheme.textSecondary)),
+            Text(
+              title,
+              style: AppTheme.heading3,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: AppTheme.bodySmall,
+            ),
+            if (action != null) ...[
+              const SizedBox(height: 18),
+              action!,
+            ],
           ],
         ),
       ),
     );
+  }
+}
+
+/// Authoritative Card Container
+class AppCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final Color? backgroundColor;
+  final VoidCallback? onTap;
+
+  const AppCard({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+    this.backgroundColor,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cardContent = Container(
+      decoration: BoxDecoration(
+        color: backgroundColor ?? AppTheme.panel,
+        borderRadius: BorderRadius.circular(AppTheme.radiusPanel),
+        border: Border.all(color: AppTheme.rule, width: AppTheme.borderHairline),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0616191F),
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: padding,
+      child: child,
+    );
+
+    if (onTap != null) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppTheme.radiusPanel),
+        child: cardContent,
+      );
+    }
+    return cardContent;
   }
 }

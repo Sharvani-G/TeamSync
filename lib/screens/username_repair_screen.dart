@@ -55,7 +55,11 @@ class _UsernameRepairScreenState extends State<UsernameRepairScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), behavior: SnackBarBehavior.floating),
+        SnackBar(
+          content: Text(e.toString(), style: AppTheme.bodyFont(color: Colors.white)),
+          backgroundColor: AppTheme.field,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     } finally {
       if (mounted) {
@@ -69,80 +73,124 @@ class _UsernameRepairScreenState extends State<UsernameRepairScreen> {
     final profile = widget.existingUser;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppTheme.ground,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 460),
-            child: Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    UserAvatar(
-                      name: profile?.name ?? widget.authUser.displayName ?? 'User',
-                      username: profile?.username,
-                      size: 72,
-                      imageUrl: profile?.photoUrl ?? widget.authUser.photoURL,
-                      color: AppTheme.primary,
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppTheme.panel,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppTheme.rule, width: 1),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 18,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  UserAvatar(
+                    name: profile?.name ?? widget.authUser.displayName ?? 'User',
+                    username: profile?.username,
+                    size: 64,
+                    color: AppTheme.accent,
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Choose your username',
+                    style: AppTheme.displayFont(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.ink,
                     ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Choose your username',
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
-                      textAlign: TextAlign.center,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Your account needs a unique username handle before you can collaborate on projects.',
+                    style: AppTheme.bodyFont(
+                      fontSize: 13,
+                      height: 1.45,
+                      color: AppTheme.inkSecondary,
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Your account needs a valid username before you can continue.',
-                      style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 20),
-                    Form(
-                      key: _formKey,
-                      child: TextFormField(
-                        controller: _usernameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Username',
-                          hintText: 'Start with a letter',
-                          prefixIcon: Icon(Icons.alternate_email),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Username',
+                          style: AppTheme.bodyFont(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.ink,
+                          ),
                         ),
-                        validator: (value) {
-                          final text = value?.trim() ?? '';
-                          if (text.isEmpty) {
-                            return 'Please enter a username';
-                          }
-                          if (!UserService.isValidUsernameFormat(text)) {
-                            return 'Username must start with a letter.';
-                          }
-                          return null;
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _isSaving ? null : _submit,
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: _usernameController,
+                          style: AppTheme.bodyFont(fontSize: 14, color: AppTheme.ink),
+                          decoration: InputDecoration(
+                            hintText: 'e.g. alex_rivera',
+                            prefixIcon: const Icon(Icons.alternate_email_rounded, size: 20),
+                            fillColor: AppTheme.groundMuted,
+                            filled: true,
+                          ),
+                          validator: (value) {
+                            final text = value?.trim() ?? '';
+                            if (text.isEmpty) {
+                              return 'Please enter a username';
+                            }
+                            if (!UserService.isValidUsernameFormat(text)) {
+                              return 'Username must start with a letter and contain 3-20 characters.';
+                            }
+                            return null;
+                          },
                         ),
-                        child: _isSaving
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                              )
-                            : const Text('Continue'),
-                      ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 22),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: ElevatedButton(
+                      onPressed: _isSaving ? null : _submit,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.accent,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: _isSaving
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : Text(
+                              'Save and Continue',
+                              style: AppTheme.bodyFont(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

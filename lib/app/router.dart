@@ -53,7 +53,9 @@ Route<dynamic> generateRoute(RouteSettings settings) {
           .firstMatch(name);
   if (workspaceMatch != null) {
     final tab = workspaceMatch.group(2);
-    final initialTabIndex = switch (tab) {
+    final args = settings.arguments as Map<String, dynamic>?;
+    final isJoinReq = args?['type'] == 'join_request';
+    final initialTabIndex = isJoinReq ? 3 : switch (tab) {
       'chat' => 1,
       'calls' => 2,
       _ => 0,

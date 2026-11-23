@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import '../../models/models.dart';
 import '../../services/notification_service.dart';
 import '../../widgets/notification_item_widget.dart';
-import '../../theme/app_colors.dart';
+import '../../widgets/shared_widgets.dart';
+import '../../theme/app_theme.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -25,51 +26,59 @@ class _NotificationsPageState extends State<NotificationsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.kBgDeep,
-      appBar: AppBar(
-        title: const Text('Notifications'),
-        centerTitle: false,
-        backgroundColor: AppColors.kBgElevated,
-        elevation: 0,
+      backgroundColor: AppTheme.ground,
+      appBar: SimpleAppBar(
+        title: 'Notifications',
+        showBack: false,
         actions: [
           TextButton(
-            onPressed: NotificationService.instance.markAllNotificationsRead,
-            child: const Text('Mark all read'),
+            onPressed: () async {
+              await NotificationService.instance.markAllNotificationsRead();
+            },
+            child: Text(
+              'Mark all read',
+              style: AppTheme.bodyFont(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.accent,
+              ),
+            ),
           ),
         ],
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
+              // Filter Chips
+              Row(
                 children: [
-                  FilterChip(
+                  _buildFilterChip(
+                    label: 'All',
                     selected: !_showUnreadOnly,
-                    label: const Text('All'),
-                    onSelected: (_) => setState(() => _showUnreadOnly = false),
+                    onTap: () => setState(() => _showUnreadOnly = false),
                   ),
-                  FilterChip(
+                  const SizedBox(width: 8),
+                  _buildFilterChip(
+                    label: 'Unread only',
                     selected: _showUnreadOnly,
-                    label: const Text('Unread only'),
-                    onSelected: (_) => setState(() => _showUnreadOnly = true),
+                    onTap: () => setState(() => _showUnreadOnly = true),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
+
               Expanded(
                 child: StreamBuilder<List<ProjectNotificationItem>>(
                   stream: _notificationsStream,
                   builder: (context, snapshot) {
                     if (snapshot.hasError) {
-                      return const Center(
+                      return Center(
                         child: Text(
                           'Unable to load notifications',
-                          style: TextStyle(color: Colors.white),
+                          style: AppTheme.bodyFont(color: AppTheme.danger),
                         ),
                       );
                     }
@@ -83,11 +92,10 @@ class _NotificationsPageState extends State<NotificationsPage> {
                         .toList();
 
                     if (items.isEmpty) {
-                      return const Center(
-                        child: Text(
-                          'Nothing here yet',
-                          style: TextStyle(color: Colors.white70),
-                        ),
+                      return const EmptyState(
+                        icon: Icons.notifications_none_rounded,
+                        title: 'No notifications',
+                        subtitle: 'You are all caught up! New updates from your teams will appear here.',
                       );
                     }
 
@@ -128,6 +136,36 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? AppTheme.accent : AppTheme.panel,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? AppTheme.accent : AppTheme.rule,
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: AppTheme.bodyFont(
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            color: selected ? Colors.white : AppTheme.inkSecondary,
           ),
         ),
       ),

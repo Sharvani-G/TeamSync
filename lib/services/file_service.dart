@@ -6,8 +6,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:file_picker/file_picker.dart' as picker;
 
-import 'user_service.dart';
-
 typedef PlatformFile = picker.PlatformFile;
 
 
@@ -60,6 +58,36 @@ class FileService {
     );
     await task;
     return ref.getDownloadURL();
+  }
+
+  /// Upload a profile photo to Firebase Storage
+  /// Returns the download URL
+  Future<String> uploadProfilePhoto({
+    required String userId,
+    required PlatformFile file,
+  }) async {
+    try {
+      final bytes = await _resolveBytes(file);
+      final ext = file.extension?.toLowerCase().replaceAll('.', '') ?? 'jpg';
+      final mimeType = ext == 'png'
+          ? 'image/png'
+          : (ext == 'webp' ? 'image/webp' : 'image/jpeg');
+      final storagePath =
+          'user_avatars/$userId/profile_${DateTime.now().millisecondsSinceEpoch}.$ext';
+
+      final downloadUrl = await uploadBytes(
+        storagePath: storagePath,
+        bytes: bytes,
+        contentType: mimeType,
+        metadata: {
+          'userId': userId,
+          'uploadedAt': DateTime.now().toIso8601String(),
+        },
+      );
+      return downloadUrl;
+    } catch (e) {
+      throw Exception('Failed to upload profile photo: ${e.toString()}');
+    }
   }
 
   /// Upload a single file to Firebase Storage
