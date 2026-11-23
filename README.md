@@ -11,6 +11,28 @@ student and professional teams a single workspace to manage projects, communicat
 channel-based chat, share files, track progress, and conduct video meetings - without switching
 between multiple tools.
 
+## 📱 Download Android APK
+
+[![Download TeamSync APK](https://img.shields.io/badge/Download-TeamSync%20APK%20(42.88%20MB)-success?style=for-the-badge&logo=android)](https://github.com/Sharvani-G/TeamSync/raw/main/dist/android/TeamSync-Android-Testing.apk)
+
+Direct link: [**TeamSync-Android-Testing.apk** (v1.0.0)](https://github.com/Sharvani-G/TeamSync/raw/main/dist/android/TeamSync-Android-Testing.apk)
+
+### APK Specifications
+| Specification | Value |
+| :--- | :--- |
+| **Application Name** | **TeamSync** |
+| **Package / Target** | Android Release (`arm64-v8a`) |
+| **File Size** | **42.88 MB** (Split ABI Optimized) |
+| **Minimum OS** | Android 5.0+ (API Level 21) |
+| **Target OS** | Android 14 (API Level 34) |
+| **SHA-256** | `6C666B3A21B9EF3DD63A98559514070FFA35335CF2C20D1E474D320B5ADB33F1` |
+
+### Quick Installation Guide
+1. Tap the **[Download TeamSync APK](https://github.com/Sharvani-G/TeamSync/raw/main/dist/android/TeamSync-Android-Testing.apk)** badge on your Android device.
+2. Once downloaded, open the `.apk` file from your notification bar or Downloads folder.
+3. If prompted by Android Security, tap **Settings** and toggle **Allow from this source**.
+4. Tap **Install** and launch TeamSync.
+
 ## Features
 
 - **Authentication** - Email/password login, password recovery, and email verification

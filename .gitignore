@@ -31,12 +31,12 @@ node_modules/
 
 # Outputs / Artifacts
 *.apk
+!dist/android/TeamSync-Android-Testing.apk
 *.aab
 *.ipa
 *.app
 *.xcarchive
 release/
-dist/
 
 # Logs
 *.log
